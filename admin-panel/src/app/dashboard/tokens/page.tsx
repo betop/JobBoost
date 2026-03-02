@@ -211,7 +211,7 @@ export default function TokensPage() {
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setGeneratedToken(null); }} title="Generate Access Token">
         {generatedToken ? (
           <div className="p-6">
-            <p className="text-sm text-gray-600 mb-4">Token generated successfully! Copy it now as it won't be shown again.</p>
+            <p className="text-sm text-gray-600 mb-4">Token generated successfully! Copy it now as it won&apos;t be shown again.</p>
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
               <code className="text-sm break-all">{generatedToken}</code>
             </div>

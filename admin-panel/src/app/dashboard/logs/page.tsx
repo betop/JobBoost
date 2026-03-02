@@ -373,7 +373,7 @@ export default function LogsPage() {
   }
 
   // Processed (search → sort → paginate)
-  const allRows: GenerationLog[] = logsData?.items ?? [];
+  const allRows: GenerationLog[] = useMemo(() => logsData?.items ?? [], [logsData?.items]);
 
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
