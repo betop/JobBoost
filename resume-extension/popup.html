@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resume Generator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <div class="popup-header">
+        <h1>Resume Generator</h1>
+      </div>
+
+      <div class="popup-content">
+        <div class="status-section">
+          <h2>Status</h2>
+          <div id="statusInfo" class="status-info">
+            <p>Loading...</p>
+          </div>
+        </div>
+
+        <div class="instructions">
+          <h3>How to use:</h3>
+          <ol>
+            <li>Select job description text on any webpage</li>
+            <li>Right-click and choose "Generate Resume and Cover Letter"</li>
+            <li>Wait for PDFs to be generated and downloaded</li>
+          </ol>
+        </div>
+
+        <div class="provider-section">
+          <h3>AI Provider</h3>
+          <div class="provider-toggle">
+            <button id="providerOpenAI" class="provider-btn" data-provider="openai">
+              <span>&#129302;</span> OpenAI
+            </button>
+            <button id="providerClaude" class="provider-btn active" data-provider="claude">
+              <span>&#129760;</span> Claude
+            </button>
+          </div>
+          <p id="providerLabel" class="provider-label">Using: Claude 4.5 Haiku</p>
+        </div>
+
+        <div class="actions">
+          <button id="refreshBtn" class="btn-secondary">Refresh Status</button>
+        </div>
+      </div>
+
+      <div class="popup-footer">
+        <p>Version 1.0.0</p>
+      </div>
+    </div>
+
+    <!-- Load fonts BEFORE popup.js so they're available in global context -->
+    <script src="resume_fonts.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

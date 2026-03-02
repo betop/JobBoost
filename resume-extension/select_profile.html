@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Select Profile</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .profile-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 16px 0;
+        max-height: 220px;
+        overflow-y: auto;
+      }
+
+      .profile-option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+        background: #fff;
+      }
+
+      .profile-option:hover {
+        border-color: #3b82f6;
+        background: #eff6ff;
+      }
+
+      .profile-option.selected {
+        border-color: #2563eb;
+        background: #dbeafe;
+      }
+
+      .profile-option input[type="radio"] {
+        accent-color: #2563eb;
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+
+      .profile-option-name {
+        font-size: 14px;
+        font-weight: 500;
+        color: #111827;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Resume Generator</h1>
+        <p>Select a Profile</p>
+      </div>
+
+      <div class="content">
+        <h2>Multiple profiles available</h2>
+        <p class="info-text">Choose which profile to use for generating resumes and cover letters.</p>
+
+        <div class="profile-list" id="profileList">
+          <p style="color:#6b7280;font-size:13px;">Loading profiles…</p>
+        </div>
+
+        <button id="confirmBtn" class="btn-primary" disabled>Use Selected Profile</button>
+      </div>
+    </div>
+
+    <script src="select_profile.js"></script>
+  </body>
+</html>
