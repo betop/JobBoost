@@ -370,7 +370,19 @@ class PDFGenerator {
 
     if (isHtmlString) {
       // Render HTML cover letter as legacy text (plain text extraction)
-      this._renderLegacyText(doc, inputStr.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+      const stripped = inputStr
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<\/div>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+        .replace(/\r\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      this._renderLegacyText(doc, stripped);
       return { dataUri: doc.output("datauristring"), filename };
     }
 
@@ -392,23 +404,39 @@ class PDFGenerator {
       // HTML cover letter — strip tags, normalise whitespace, render as paragraphs
       try {
         const plainText = coverLetter
+          // Remove entire <style>, <head>, <script> blocks including their content
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+          // Block-level tags → newlines
           .replace(/<br\s*\/?>/gi, "\n")
           .replace(/<\/p>/gi, "\n\n")
           .replace(/<\/div>/gi, "\n")
           .replace(/<\/li>/gi, "\n")
           .replace(/<li[^>]*>/gi, "\u2022 ")
+          // Strip all remaining tags (body, html, span, etc.)
           .replace(/<[^>]+>/g, "")
-          .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
+          // Decode HTML entities
+          .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/&#39;/g, "'").replace(/&quot;/g, '"')
           .replace(/\r\n/g, "\n")
           .trim();
 
-        // Split on any blank line (one or more empty lines between content)
-        // Also treat a single \n followed by a capital letter or "Dear"/"I " as a new paragraph
+        // Split on blank lines to get paragraphs
         const rawParas = plainText.split(/\n{2,}/);
         const paragraphs = [];
         for (const block of rawParas) {
           const trimmed = block.trim();
-          if (trimmed) paragraphs.push(trimmed.replace(/\n/g, " "));
+          if (!trimmed) continue;
+          // Preserve internal line breaks for signature blocks (short lines like "Best regards,\nName")
+          // A block is a "signature block" if it has \n and all lines are short (< 60 chars)
+          const lines = trimmed.split("\n").map(l => l.trim()).filter(Boolean);
+          const isSignatureBlock = lines.length > 1 && lines.every(l => l.length < 60);
+          if (isSignatureBlock) {
+            // Push each line as its own paragraph so they render on separate lines
+            lines.forEach(l => paragraphs.push(l));
+          } else {
+            paragraphs.push(trimmed.replace(/\n/g, " "));
+          }
         }
 
         this._renderCoverLetterTemplate(doc, { paragraphs }, resumeData);
@@ -1612,7 +1640,14 @@ class PDFGenerator {
     // ── Body paragraphs ───────────────────────────────────────────────────────
     // AI response already includes salutation, body, and closing — render as-is.
     // Paragraphs may contain **bold** markers; render with inline bold support.
-    const paragraphs = cl.paragraphs || cl.body || [];
+    // Filter out standalone phone/email lines — they're already shown in the header.
+    const phoneRegex = /^[\d\s\+\-\(\)\.]{7,20}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const allParagraphs = cl.paragraphs || cl.body || [];
+    const paragraphs = allParagraphs.filter(p => {
+      const t = (p || "").trim();
+      return !phoneRegex.test(t) && !emailRegex.test(t);
+    });
     paragraphs.forEach((para) => {
       if (!para || !para.trim()) return;
       const trimmed = para.trim();

@@ -1,6 +1,5 @@
-// Generate resume and cover letter for a job description (stateless)
-// OPTIMIZED FOR SPEED: single AI call, reduced max_tokens, optimized substrings
-// v3: clean rewrite, raw token lookup, correct field names
+// Generate resume and cover letter for a job description
+// v4: clean rewrite, system prompt from DB rules
 query "resume/generate" verb=POST {
   api_group = "resume"
 
@@ -8,7 +7,6 @@ query "resume/generate" verb=POST {
     uuid profile_id?
     text job_description?
     text token?
-    text ai_provider?
     text job_url?
   }
 
@@ -68,7 +66,6 @@ query "resume/generate" verb=POST {
       error = "Profile not found"
     }
   
-    // Load education, work experience, rules
     db.query education {
       where = $db.education.profile_id == $prof.id
       sort = {education.start_date: "asc"}
@@ -125,57 +122,20 @@ query "resume/generate" verb=POST {
       }
     }
   
-    // Build rules text
-    var $rules_text {
+    // Build system prompt from active rules in DB
+    var $system_prompt {
       value = ""
     }
   
     foreach ($rules) {
       each as $r {
-        var.update $rules_text {
-          value = $rules_text ~ $r.sentence ~ " "
+        var.update $system_prompt {
+          value = $system_prompt ~ $r.sentence ~ " "
         }
       }
     }
   
-    // Determine AI provider
-    var $provider {
-      value = "claude"
-    }
-  
-    conditional {
-      if ($input.ai_provider == "openai") {
-        var.update $provider {
-          value = "openai"
-        }
-      }
-    }
-  
-    var $openai_auth {
-      value = "Authorization: Bearer " ~ $env.OPENAI_API_KEY
-    }
-  
-    var $claude_auth {
-      value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
-    }
-  
-    // Build prompt — 3 states: skip (not remote), mismatch (domain), match
-    // Includes full profile: name, contact, experience, education
-    var $system_prompt {
-      value = "You are an expert resume writer. Evaluate the job description in two steps and return ONLY a single valid JSON object. The resume field must be a structured JSON object following the exact schema provided — NOT an HTML string."
-    }
-  
-    // Schema objects — built as real objects so json_encode produces clean JSON
-    var $skip_schema {
-      value = {}
-        |set:"status":"skip"
-        |set:"reason":"Job requires relocation or at least 1 day in office — not 100% remote"
-        |set:"resume":""
-        |set:"cover_letter":""
-        |set:"position_title":""
-        |set:"company_name":""
-    }
-  
+    // Build resume schema object for JSON examples
     var $resume_schema {
       value = {}
         |set:"header":({}
@@ -200,11 +160,11 @@ query "resume/generate" verb=POST {
           |push:({}
             |set:"company":"Name"
             |set:"title":"Most Recent Title"
-            |set:"date_range":"Mon YYYY – Mon YYYY"
+            |set:"date_range":"Mon YYYY - Mon YYYY"
             |set:"location":"Remote|Onsite|Hybrid"
-            |set:"company_summary":"italic company description with **bold** tools inline."
+            |set:"company_summary":"italic company description with bold tools inline."
             |set:"highlights":([]
-              |push:"bullet **tool** action result."
+              |push:"bullet tool action result."
             )
             |set:"tech_stack":"Tool1, Tool2"
           )
@@ -226,28 +186,28 @@ query "resume/generate" verb=POST {
         |set:"key_projects":([]
           |push:({}
             |set:"name":"Name: Subtitle"
-            |set:"context":"Company  |  Year"
-            |set:"description":"Narrative **bold** terms."
+            |set:"context":"Company | Year"
+            |set:"description":"Narrative bold terms."
             |set:"tech":"Tool1, Tool2"
           )
         )
         |set:"awards_recognition":([]
           |push:({}
             |set:"name":"Award: Subtitle"
-            |set:"context":"Company  |  Year"
-            |set:"description":"One sentence **bold** impact."
+            |set:"context":"Company | Year"
+            |set:"description":"One sentence bold impact."
           )
         )
     }
   
-    var $mismatch_schema {
+    var $skip_schema {
       value = {}
-        |set:"status":"mismatch"
-        |set:"reason":"<explain why domain does not align>"
-        |set:"resume":$resume_schema
-        |set:"cover_letter":"<full tailored cover letter as HTML — required even for mismatch>"
-        |set:"position_title":"<title>"
-        |set:"company_name":"<company>"
+        |set:"status":"skip"
+        |set:"reason":"<reason>"
+        |set:"resume":""
+        |set:"cover_letter":""
+        |set:"position_title":""
+        |set:"company_name":""
     }
   
     var $match_schema {
@@ -260,11 +220,25 @@ query "resume/generate" verb=POST {
         |set:"company_name":"<company>"
     }
   
-    var $user_prompt {
-      value = "STEP 1 — REMOTE CHECK:\nIf the job requires relocation, mentions hybrid, onsite, in-office, visiting office, or specifies ANY number of days/weeks/months in office, return status=skip immediately. Do NOT generate resume or cover letter.\n\nSTEP 2 — DOMAIN MATCH (only if 100% remote):\nIf the job domain does NOT align with the candidate target category, return status=mismatch AND still generate a full tailored resume + cover letter as HTML.\nIf the job domain DOES align, return status=match AND generate a full tailored resume + cover letter as HTML.\n\nRules applied to all resumes: " ~ $rules_text ~ "\n\n=== CANDIDATE PROFILE ===\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\nSummary: " ~ $prof.summary ~ "\n\n=== WORK EXPERIENCE ===\n" ~ $work_text ~ "\n\n=== EDUCATION ===\n" ~ $edu_text ~ "\n\n=== JOB DESCRIPTION ===\n" ~ ($input.job_description|substr:0:2000) ~ "\n\nReturn exactly ONE of these JSON schemas:\nIf skip: " ~ ($skip_schema|json_encode) ~ "\nIf mismatch: " ~ ($mismatch_schema|json_encode) ~ "\nIf match: " ~ ($match_schema|json_encode)
+    var $mismatch_schema {
+      value = {}
+        |set:"status":"mismatch"
+        |set:"reason":"<explain why domain does not align>"
+        |set:"resume":$resume_schema
+        |set:"cover_letter":"<full tailored cover letter as HTML>"
+        |set:"position_title":"<title>"
+        |set:"company_name":"<company>"
     }
   
-    // Output variables
+    // Build user prompt with candidate profile and job description
+    var $user_prompt {
+      value = "STEP 1 - REMOTE CHECK:\n\nIf job description mentions relocation, hybrid, onsite, in-office, or required office days, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch.\n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\nSummary: " ~ $prof.summary ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+    }
+  
+    var $claude_auth {
+      value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
+    }
+  
     // is_matched: 1=match, 0=mismatch, 2=skip
     var $is_matched {
       value = 1
@@ -302,77 +276,38 @@ query "resume/generate" verb=POST {
       value = ""
     }
   
-    // Single AI call
     try_catch {
       try {
-        conditional {
-          if ($provider == "claude") {
-            api.request {
-              url = "https://api.anthropic.com/v1/messages"
-              method = "POST"
-              params = {}
-                |set:"model":"claude-haiku-4-5"
-                |set:"max_tokens":6000
-                |set:"messages":([]
-                  |push:({}
-                    |set:"role":"user"
-                    |set:"content":$system_prompt ~ "\n\n" ~ $user_prompt
-                  )
-                )
-              headers = []
-                |push:"Content-Type: application/json"
-                |push:$claude_auth
-                |push:"anthropic-version: 2023-06-01"
-              timeout = 300
-            } as $ai_resp
-          
-            var.update $response_text {
-              value = $ai_resp.response.result.content|first|get:"text"
-            }
-          
-            var.update $input_tokens {
-              value = `($ai_resp.response.result.usage|get:"input_tokens") + 0`
-            }
-          
-            var.update $output_tokens {
-              value = `($ai_resp.response.result.usage|get:"output_tokens") + 0`
-            }
-          }
-        
-          else {
-            api.request {
-              url = "https://api.openai.com/v1/chat/completions"
-              method = "POST"
-              params = {}
-                |set:"model":"gpt-4o-mini"
-                |set:"max_tokens":5000
-                |set:"messages":([]
-                  |push:({}
-                    |set:"role":"user"
-                    |set:"content":$system_prompt ~ "\n\n" ~ $user_prompt
-                  )
-                )
-              headers = []
-                |push:"Content-Type: application/json"
-                |push:$openai_auth
-              timeout = 300
-            } as $openai_resp
-          
-            var.update $response_text {
-              value = $openai_resp.response.result.choices
-                |first
-                |get:"message"
-                |get:"content"
-            }
-          
-            var.update $input_tokens {
-              value = `($openai_resp.response.result.usage|get:"prompt_tokens") + 0`
-            }
-          
-            var.update $output_tokens {
-              value = `($openai_resp.response.result.usage|get:"completion_tokens") + 0`
-            }
-          }
+        api.request {
+          url = "https://api.anthropic.com/v1/messages"
+          method = "POST"
+          params = {}
+            |set:"model":"claude-haiku-4-5"
+            |set:"max_tokens":6000
+            |set:"system":$system_prompt
+            |set:"messages":([]
+              |push:({}
+                |set:"role":"user"
+                |set:"content":$user_prompt
+              )
+            )
+          headers = []
+            |push:"Content-Type: application/json"
+            |push:$claude_auth
+            |push:"anthropic-version: 2023-06-01"
+          timeout = 300
+        } as $ai_resp
+      
+        var.update $response_text {
+          value = $ai_resp.response.result.content|first|get:"text"
+        }
+      
+        var.update $input_tokens {
+          value = `($ai_resp.response.result.usage|get:"input_tokens") + 0`
+        }
+      
+        var.update $output_tokens {
+          value = `($ai_resp.response.result.usage|get:"output_tokens") + 0`
         }
       
         // Parse JSON response
@@ -387,7 +322,6 @@ query "resume/generate" verb=POST {
           value = $clean_response|json_decode
         }
       
-        // status=skip: not remote — stop immediately, no resume/cover letter
         conditional {
           if ($parsed_response.status == "skip") {
             var.update $is_matched {
@@ -400,7 +334,6 @@ query "resume/generate" verb=POST {
           }
         }
       
-        // status=mismatch: domain mismatch — still generate resume+cover_letter
         conditional {
           if ($parsed_response.status == "mismatch") {
             var.update $is_matched {
@@ -429,7 +362,6 @@ query "resume/generate" verb=POST {
           }
         }
       
-        // status=match: domain match — generate resume+cover_letter
         conditional {
           if ($parsed_response.status == "match") {
             var.update $is_matched {
@@ -505,7 +437,7 @@ query "resume/generate" verb=POST {
         job_url                : $job_url_val
         job_description_snippet: $job_description_snippet
         job_description        : $input.job_description
-        ai_provider            : $provider
+        ai_provider            : "claude"
         input_tokens           : $input_tokens
         output_tokens          : $output_tokens
         resume_filename        : $resume_filename
