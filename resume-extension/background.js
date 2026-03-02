@@ -1,4 +1,4 @@
-// Background service worker for Resume Generator Extension
+// Background service worker for SwiftCV Extension
 // PDF generation is handled by the offscreen document (offscreen.html/offscreen.js)
 
 // Xano API base URLs per group
@@ -18,7 +18,7 @@ let extensionState = {
 
 // Load extension state on startup
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log("Resume Generator Extension installed");
+  console.log("SwiftCV Extension installed");
   await loadExtensionState();
 
   if (!extensionState.token) {
@@ -351,7 +351,7 @@ function showNotification(message) {
   chrome.notifications.create({
     type: "basic",
     iconUrl: "icons/icon128.png",
-    title: "Resume Generator",
+    title: "SwiftCV",
     message: message,
   });
 }

@@ -77,7 +77,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-600 mt-2">
-          Welcome to the Resume Generator Admin Panel
+          Welcome to Fostar Hunters HQ
         </p>
       </div>
 

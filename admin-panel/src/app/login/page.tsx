@@ -59,9 +59,9 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Resume Generator
+              Fostar Hunters HQ
             </h1>
-            <p className="text-gray-600">Admin Panel Login</p>
+            <p className="text-gray-600">Admin Login</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -100,7 +100,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          © 2026 Resume Generator. All rights reserved.
+          © 2026 Fostar Hunters HQ. All rights reserved.
         </p>
       </div>
     </div>

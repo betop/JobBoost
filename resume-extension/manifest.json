@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Resume Generator",
+  "name": "SwiftCV",
   "version": "1.0.0",
   "description": "Generate customized resumes and cover letters from job descriptions",
   "permissions": [

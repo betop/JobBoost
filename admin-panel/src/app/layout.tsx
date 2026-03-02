@@ -6,7 +6,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Resume Generator - Admin Panel",
+  title: "Fostar Hunters HQ",
   description: "Manage profiles, bidders, tokens, and rules",
 };
 
