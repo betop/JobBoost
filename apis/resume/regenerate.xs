@@ -120,7 +120,7 @@ query "resume/regenerate" verb=POST {
   
     // Build prompt — 3 states: skip (not remote), mismatch (domain), match
     var $system_prompt {
-      value = "You are an expert resume writer. Evaluate the job description in two steps and return ONLY a single valid JSON object. The resume field must be a structured JSON object following the exact schema provided — NOT an HTML string."
+      value = "You are an expert resume writer. Evaluate the job description in two steps and return ONLY a single valid JSON object. The resume field must be a structured JSON object following the exact schema provided — NOT an HTMLstring."
     }
   
     var $skip_schema {
