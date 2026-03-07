@@ -1,4 +1,4 @@
-// Update bidder — supports one or more profiles via profile_ids array
+// Update bidder — supports one or more profiles via profile_ids array (v2)
 query "bidders/{id}" verb=PUT {
   api_group = "bidders"
   auth = "admin"
@@ -68,21 +68,21 @@ query "bidders/{id}" verb=PUT {
       data = $payload
     } as $b
   
-    var $profile_name {
-      value = null
+    var $profile_names {
+      value = []
     }
   
-    conditional {
-      if ($b.profile_id != null) {
+    foreach ($b.profile_ids) {
+      each as $pid {
         db.get profile {
           field_name = "id"
-          field_value = $b.profile_id
+          field_value = $pid
         } as $prof
       
         conditional {
           if ($prof != null) {
-            var.update $profile_name {
-              value = $prof.full_name
+            var.update $profile_names {
+              value = $profile_names|push:$prof.full_name
             }
           }
         }
@@ -91,12 +91,12 @@ query "bidders/{id}" verb=PUT {
   }
 
   response = {
-    id          : $b.id
-    full_name   : $b.full_name
-    email       : $b.email
-    profile_id  : $b.profile_id
-    profile_name: $profile_name
-    is_active   : $b.is_active
-    created_at  : $b.created_at
+    id           : $b.id
+    full_name    : $b.full_name
+    email        : $b.email
+    profile_ids  : $b.profile_ids
+    profile_names: $profile_names
+    is_active    : $b.is_active
+    created_at   : $b.created_at
   }
 }

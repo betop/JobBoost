@@ -11,6 +11,8 @@ import Input from "@/components/Input";
 import Textarea from "@/components/Textarea";
 import Button from "@/components/Button";
 import JobCategoryInput from "@/components/JobCategoryInput";
+import ResumeAutofill from "@/components/ResumeAutofill";
+import type { CreateProfileInput } from "@/services/profileService";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
 const educationSchema = z.object({
@@ -55,6 +57,7 @@ export default function NewProfilePage() {
     register,
     control,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<ProfileFormData>({
     // controller used for JobCategoryInput
@@ -64,6 +67,27 @@ export default function NewProfilePage() {
       work_experience: [{ job_title: "", start_date: "" }],
     },
   });
+
+  /** Merge parsed resume data into the form only (no auto-save) */
+  function handleAutofill(parsed: CreateProfileInput) {
+    populateFormFromAI(parsed);
+    showToast("Profile form auto-filled. Review and click Create Profile to save.", "success");
+  }
+
+  function populateFormFromAI(data: CreateProfileInput) {
+    reset({
+      full_name: data.full_name || "",
+      email: data.email || "",
+      phone: data.phone || "",
+      location: data.location || "",
+      linkedin: data.linkedin || "",
+      github: data.github || "",
+      summary: data.summary || "",
+      job_category: data.job_category || "",
+      education: Array.isArray(data.education) && data.education.length ? data.education : [{ degree: "", field_of_study: "", start_date: "" }],
+      work_experience: Array.isArray(data.work_experience) && data.work_experience.length ? data.work_experience : [{ job_title: "", start_date: "" }],
+    });
+  }
 
   const {
     fields: educationFields,
@@ -84,7 +108,7 @@ export default function NewProfilePage() {
       router.push("/dashboard/profiles");
     },
     onError: () => {
-      showToast("Failed to create profile", "error");
+      showToast("Profile creation failed. Please review form data and try again.", "error");
     },
   });
 
@@ -111,6 +135,9 @@ export default function NewProfilePage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-8">
+        {/* ── Autofill ── */}
+        <ResumeAutofill onParsed={handleAutofill} />
+
         <div>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Basic Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

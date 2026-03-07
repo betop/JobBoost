@@ -495,9 +495,10 @@ export default function LogsPage() {
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
               value={filters.date_from || ""}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, date_from: e.target.value }))
-              }
+              onChange={(e) => {
+                setFilters((f) => ({ ...f, date_from: e.target.value }));
+                setPage(1);
+              }}
             />
           </div>
           <div>
@@ -506,9 +507,10 @@ export default function LogsPage() {
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
               value={filters.date_to || ""}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, date_to: e.target.value }))
-              }
+              onChange={(e) => {
+                setFilters((f) => ({ ...f, date_to: e.target.value }));
+                setPage(1);
+              }}
             />
           </div>
         </div>

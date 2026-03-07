@@ -1,5 +1,13 @@
 import api from "./api";
 
+function toStartOfDayISO(dateString: string): string {
+  return new Date(`${dateString}T00:00:00`).toISOString();
+}
+
+function toEndOfDayISO(dateString: string): string {
+  return new Date(`${dateString}T23:59:59.999`).toISOString();
+}
+
 export interface GenerationLog {
   id: string;
   created_at: string;
@@ -68,8 +76,8 @@ export const logsService = {
     const params = new URLSearchParams();
     if (filters.profile_id) params.set("profile_id", filters.profile_id);
     if (filters.bidder_id) params.set("bidder_id", filters.bidder_id);
-    if (filters.date_from) params.set("date_from", filters.date_from);
-    if (filters.date_to) params.set("date_to", filters.date_to);
+    if (filters.date_from) params.set("date_from", toStartOfDayISO(filters.date_from));
+    if (filters.date_to) params.set("date_to", toEndOfDayISO(filters.date_to));
     if (filters.period && filters.period !== "custom") params.set("period", filters.period);
     if (filters.is_matched !== undefined) params.set("is_matched", filters.is_matched);
     const response = await api.get(`/logs/list?${params.toString()}`);
