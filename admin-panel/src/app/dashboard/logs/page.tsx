@@ -318,8 +318,16 @@ function StatCard({
 
 export default function LogsPage() {
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<LogsFilters>({ period: "month" });
-  const [statsPeriod, setStatsPeriod] = useState("month");
+  
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0];
+  
+  const [filters, setFilters] = useState<LogsFilters>({ 
+    period: "custom",
+    date_from: today,
+    date_to: today
+  });
+  const [statsPeriod, setStatsPeriod] = useState("today");
 
   // Table state
   const [search, setSearch]         = useState("");
@@ -346,8 +354,13 @@ export default function LogsPage() {
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: profileService.getAll });
 
   function resetFilters() {
-    setFilters({ period: "month" });
-    setStatsPeriod("month");
+    const today = new Date().toISOString().split('T')[0];
+    setFilters({ 
+      period: "custom",
+      date_from: today,
+      date_to: today
+    });
+    setStatsPeriod("today");
     setSearch("");
     setPage(1);
   }
