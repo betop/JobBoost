@@ -1,0 +1,121 @@
+body {
+  margin: 0;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color: #111;
+  background: #f6f6f7;
+}
+
+.container {
+  width: 360px;
+  padding: 12px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e6e6e9;
+  border-radius: 10px;
+  padding: 10px;
+  margin: 0 0 10px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field {
+  display: block;
+  margin: 10px 0;
+}
+
+.label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 8px;
+  border: 1px solid #d9d9de;
+  border-radius: 8px;
+}
+
+.num {
+  width: 72px !important;
+}
+
+.btn {
+  border: 1px solid #d0d0d6;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.muted {
+  color: #666;
+}
+
+.error {
+  color: #b00020;
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+.summary {
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+}
+
+.log {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fafafa;
+}
+
+.logline {
+  font-size: 12px;
+  padding: 2px 0;
+  white-space: pre-wrap;
+}
+
+.logline.error {
+  color: #b00020;
+}
+
+.link {
+  color: #111;
+  text-decoration: underline;
+  font-size: 12px;
+}

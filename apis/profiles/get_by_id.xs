@@ -65,7 +65,6 @@ query "profiles/{id}" verb=GET {
             location       : $w.location
             start_date     : $w.start_date
             end_date       : $w.end_date
-            description    : $w.description
           }
         }
       }
@@ -80,7 +79,6 @@ query "profiles/{id}" verb=GET {
         location       : $p.location
         linkedin       : $p.linkedin_url
         github         : $p.github_url
-        summary        : $p.summary
         job_category   : $p.job_category
         resume_template: $p.resume_template
         created_at     : $p.created_at

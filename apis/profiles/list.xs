@@ -27,7 +27,6 @@ query profiles verb=GET {
             location       : $p.location
             linkedin       : $p.linkedin_url
             github         : $p.github_url
-            summary        : $p.summary
             job_category   : $p.job_category
             created_at     : $p.created_at
             education      : []

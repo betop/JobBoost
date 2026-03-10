@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { ruleService, type Rule } from "@/services/ruleService";
@@ -9,7 +10,8 @@ import Modal from "@/components/Modal";
 import Select from "@/components/Select";
 import Textarea from "@/components/Textarea";
 import ToggleSwitch from "@/components/ToggleSwitch";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import PasswordConfirmModal from "@/components/PasswordConfirmModal";
+import { Plus, Edit, Trash2, Lock, Unlock } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useState } from "react";
 import { useUIStore } from "@/store/uiStore";
@@ -27,13 +29,26 @@ const targetSectionOptions = [
 export default function RulesPage() {
   const router = useRouter();
   const showToast = useUIStore((state) => state.showToast);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
+  const [showActionConfirm, setShowActionConfirm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'update' | 'delete'; data?: any; id?: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [lockedRules, setLockedRules] = useState<Set<string>>(new Set());
+  const [isModalContentLocked, setIsModalContentLocked] = useState(true);
+
+  useEffect(() => {
+    if (!isPasswordVerified) {
+      setShowPasswordConfirm(true);
+    }
+  }, [isPasswordVerified]);
 
   const { data: rules = [], isLoading, refetch } = useQuery({
     queryKey: ["rules"],
     queryFn: ruleService.getAll,
+    enabled: isPasswordVerified,
   });
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
@@ -86,10 +101,26 @@ export default function RulesPage() {
 
   const onSubmit = (data: any) => {
     if (editingRule) {
-      updateMutation.mutate({ id: editingRule.id, data });
+      setPendingAction({ type: 'update', id: editingRule.id, data });
     } else {
-      createMutation.mutate(data);
+      setPendingAction({ type: 'create', data });
     }
+    setShowActionConfirm(true);
+  };
+
+  const executePendingAction = async () => {
+    if (!pendingAction) return;
+    
+    if (pendingAction.type === 'create') {
+      createMutation.mutate(pendingAction.data);
+    } else if (pendingAction.type === 'update') {
+      updateMutation.mutate({ id: pendingAction.id!, data: pendingAction.data });
+    } else if (pendingAction.type === 'delete') {
+      await deleteMutation.mutateAsync(pendingAction.id!);
+    }
+    
+    setPendingAction(null);
+    setShowActionConfirm(false);
   };
 
   const handleEdit = (rule: Rule) => {
@@ -97,22 +128,48 @@ export default function RulesPage() {
     setValue("sentence", rule.sentence);
     setValue("target_section", rule.target_section);
     setValue("is_active", rule.is_active);
+    setIsModalContentLocked(true);
     setIsModalOpen(true);
   };
 
   const handleDelete = async (id: string) => {
-    await deleteMutation.mutateAsync(id);
+    setPendingAction({ type: 'delete', id });
+    setShowActionConfirm(true);
   };
 
   const columns = [
     {
       key: "sentence",
       label: "Rule Sentence",
-      render: (value: string) => (
-        <div className="max-w-md truncate" title={value}>
-          {value}
-        </div>
-      ),
+      render: (value: string, row: Rule) => {
+        const isLocked = !lockedRules.has(row.id);
+        return (
+          <div className="flex items-center gap-2 max-w-md">
+            <button
+              onClick={() => {
+                const newLocked = new Set(lockedRules);
+                if (isLocked) {
+                  newLocked.add(row.id);
+                } else {
+                  newLocked.delete(row.id);
+                }
+                setLockedRules(newLocked);
+              }}
+              className="p-1 text-gray-600 hover:text-gray-900 flex-shrink-0"
+              title={isLocked ? "Unlock to view" : "Lock to hide"}
+            >
+              {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+            </button>
+            <div className="truncate" title={isLocked ? "Locked" : value}>
+              {isLocked ? (
+                <span className="text-gray-400 italic">Locked</span>
+              ) : (
+                value
+              )}
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: "target_section",
@@ -163,16 +220,53 @@ export default function RulesPage() {
 
   return (
     <>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Rules</h1>
-          <p className="text-gray-600 mt-2">Manage resume improvement rules</p>
+      <PasswordConfirmModal
+        isOpen={showPasswordConfirm}
+        onClose={() => {
+          setShowPasswordConfirm(false);
+        }}
+        onConfirm={() => {
+          setIsPasswordVerified(true);
+          setShowPasswordConfirm(false);
+        }}
+        title="Access Rules"
+        description="Please confirm your password to access the Rules page"
+      />
+
+      <PasswordConfirmModal
+        isOpen={showActionConfirm}
+        onClose={() => {
+          setShowActionConfirm(false);
+          setPendingAction(null);
+        }}
+        onConfirm={executePendingAction}
+        title="Confirm Action"
+        description={
+          pendingAction?.type === 'delete'
+            ? "Please confirm your password to delete this rule"
+            : "Please confirm your password to save this rule"
+        }
+      />
+
+      {!isPasswordVerified ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-gray-300 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Verifying password...</p>
+          </div>
         </div>
-        <Button onClick={() => { setIsModalOpen(true); setEditingRule(null); reset(); }}>
-          <Plus className="w-5 h-5" />
-          Create Rule
-        </Button>
-      </div>
+      ) : (
+        <>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Rules</h1>
+              <p className="text-gray-600 mt-2">Manage resume improvement rules</p>
+            </div>
+            <Button onClick={() => { setIsModalOpen(true); setEditingRule(null); setIsModalContentLocked(false); reset(); }}>
+              <Plus className="w-5 h-5" />
+              Create Rule
+            </Button>
+          </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <DataTable
@@ -190,24 +284,56 @@ export default function RulesPage() {
         title={editingRule ? "Edit Rule" : "Create New Rule"}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-          <Textarea
-            label="Rule Sentence"
-            rows={4}
-            helperText="Max 20000 characters"
-            {...register("sentence", { required: true, maxLength: 20000 })}
-            required
-          />
-          <Select
-            label="Target Section"
-            options={targetSectionOptions}
-            {...register("target_section")}
-            required
-          />
-          <ToggleSwitch
-            label="Active"
-            checked={isActive}
-            onChange={(checked) => setValue("is_active", checked)}
-          />
+          {editingRule && (
+            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <button
+                type="button"
+                onClick={() => setIsModalContentLocked(!isModalContentLocked)}
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+              >
+                {isModalContentLocked ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>Unlock to edit</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    <span>Lock content</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+          
+          {editingRule && isModalContentLocked ? (
+            <div className="p-8 text-center">
+              <Lock className="w-12 h-12 mx-auto text-gray-400 mb-3" />
+              <p className="text-gray-500 font-medium">Content is locked</p>
+              <p className="text-sm text-gray-400 mt-1">Click the unlock button above to view and edit</p>
+            </div>
+          ) : (
+            <>
+              <Textarea
+                label="Rule Sentence"
+                rows={4}
+                helperText="Max 20000 characters"
+                {...register("sentence", { required: true, maxLength: 20000 })}
+                required
+              />
+              <Select
+                label="Target Section"
+                options={targetSectionOptions}
+                {...register("target_section")}
+                required
+              />
+              <ToggleSwitch
+                label="Active"
+                checked={isActive}
+                onChange={(checked) => setValue("is_active", checked)}
+              />
+            </>
+          )}
           <div className="flex gap-4 pt-4">
             <Button type="submit" loading={createMutation.isPending || updateMutation.isPending} className="flex-1">
               {editingRule ? "Update Rule" : "Create Rule"}
@@ -228,6 +354,8 @@ export default function RulesPage() {
         confirmText="Delete"
         variant="danger"
       />
+        </>
+      )}
     </>
   );
 }

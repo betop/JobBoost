@@ -8,7 +8,6 @@ export interface Profile {
   location?: string;
   linkedin?: string;
   github?: string;
-  summary?: string;
   job_category?: string;
   resume_template?: number;
   created_at: string;
@@ -34,7 +33,6 @@ export interface WorkExperience {
   location?: string;
   start_date: string;
   end_date?: string;
-  description?: string;
 }
 
 export interface CreateProfileInput {
@@ -44,7 +42,6 @@ export interface CreateProfileInput {
   location?: string;
   linkedin?: string;
   github?: string;
-  summary?: string;
   job_category?: string;
   resume_template?: number;
   education: Omit<Education, "id">[];

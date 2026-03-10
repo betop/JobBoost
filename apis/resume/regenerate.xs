@@ -87,7 +87,7 @@ query "resume/regenerate" verb=POST {
         }
       
         var.update $work_text {
-          value = $work_text ~ $w.job_title ~ " at " ~ $w.company_name ~ " (" ~ $w.start_date ~ " - " ~ $end_label ~ ") " ~ $w.description ~ " "
+          value = $work_text ~ $w.job_title ~ " at " ~ $w.company_name ~ " (" ~ $w.start_date ~ " - " ~ $end_label ~ ") "
         }
       }
     }
@@ -217,7 +217,7 @@ query "resume/regenerate" verb=POST {
     }
   
     var $consolidated_prompt {
-      value = "STEP 1 — REMOTE CHECK:\nIf the job requires relocation, mentions hybrid, onsite, in-office, visiting office, or specifies ANY number of days/weeks/months in office, return status=skip immediately. Do NOT generate a resume.\n\nSTEP 2 — DOMAIN MATCH (only if 100% remote):\nIf the job domain does NOT align with the candidate target category, return status=mismatch AND still generate a full tailored resume as HTML.\nIf the job domain DOES align, return status=match AND generate a full tailored resume as HTML.\n\nRules applied to all resumes: " ~ $rules_text ~ "\n\n=== CANDIDATE PROFILE ===\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\nSummary: " ~ $prof.summary ~ "\n\n=== WORK EXPERIENCE ===\n" ~ $work_text ~ "\n\n=== EDUCATION ===\n" ~ $edu_text ~ "\n\n=== JOB DESCRIPTION ===\n" ~ ($job_description|substr:0:2000) ~ "\n\nReturn exactly ONE of these JSON schemas:\nIf skip: " ~ ($skip_schema|json_encode) ~ "\nIf mismatch: " ~ ($mismatch_schema|json_encode) ~ "\nIf match: " ~ ($match_schema|json_encode)
+      value = "STEP 1 — REMOTE CHECK:\nIf the job requires relocation, mentions hybrid, onsite, in-office, visiting office, or specifies ANY number of days/weeks/months in office, return status=skip immediately. Do NOT generate a resume.\n\nSTEP 2 — DOMAIN MATCH (only if 100% remote):\nIf the job domain does NOT align with the candidate target category, return status=mismatch AND still generate a full tailored resume as HTML.\nIf the job domain DOES align, return status=match AND generate a full tailored resume as HTML.\n\nRules applied to all resumes: " ~ $rules_text ~ "\n\n=== CANDIDATE PROFILE ===\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\n=== WORK EXPERIENCE ===\n" ~ $work_text ~ "\n\n=== EDUCATION ===\n" ~ $edu_text ~ "\n\n=== JOB DESCRIPTION ===\n" ~ ($job_description|substr:0:2000) ~ "\n\nReturn exactly ONE of these JSON schemas:\nIf skip: " ~ ($skip_schema|json_encode) ~ "\nIf mismatch: " ~ ($mismatch_schema|json_encode) ~ "\nIf match: " ~ ($match_schema|json_encode)
     }
   
     var $user_prompt {

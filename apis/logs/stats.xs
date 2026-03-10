@@ -8,9 +8,19 @@ query "logs/stats" verb=GET {
     text period?=month
     uuid profile_id?
     uuid bidder_id?
+    timestamp date_from?
+    timestamp date_to?
   }
 
   stack {
+    var $resolved_from {
+      value = $input.date_from
+    }
+  
+    var $resolved_to {
+      value = $input.date_to
+    }
+  
     var $secs_back {
       value = 2592000
     }
@@ -33,13 +43,25 @@ query "logs/stats" verb=GET {
       value = 0 - $secs_back
     }
   
-    var $date_from {
-      value = now|add_secs_to_timestamp:$neg_secs
+    conditional {
+      if ($resolved_from == null) {
+        var.update $resolved_from {
+          value = now|add_secs_to_timestamp:$neg_secs
+        }
+      }
+    }
+  
+    var $has_from {
+      value = $resolved_from != null
+    }
+  
+    var $has_to {
+      value = $resolved_to != null
     }
   
     // Fetch all logs in period — UUID filters applied below in XanoScript to avoid 22P02
     db.query generation_log {
-      where = $db.generation_log.created_at >= $date_from
+      where = (($has_from == false || $db.generation_log.created_at >= $resolved_from) && ($has_to == false || $db.generation_log.created_at <= $resolved_to))
       return = {type: "list"}
     } as $period_logs_raw
   

@@ -8,7 +8,6 @@ import { z } from "zod";
 import { profileService, type Profile } from "@/services/profileService";
 import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
-import Textarea from "@/components/Textarea";
 import Button from "@/components/Button";
 import JobCategoryInput from "@/components/JobCategoryInput";
 import TemplatePicker from "@/components/TemplatePicker";
@@ -33,7 +32,6 @@ const workExperienceSchema = z.object({
   location: z.string().optional(),
   start_date: z.string().min(1, "Start date is required"),
   end_date: z.string().optional(),
-  description: z.string().optional(),
 });
 
 const profileSchema = z.object({
@@ -43,7 +41,6 @@ const profileSchema = z.object({
   location: z.string().optional(),
   linkedin: z.string().url("Invalid URL").optional().or(z.literal("")),
   github: z.string().url("Invalid URL").optional().or(z.literal("")),
-  summary: z.string().optional(),
   job_category: z.string().optional(),
   resume_template: z.number().int().min(1).max(10).optional().default(1),
   education: z.array(educationSchema).min(1, "At least one education entry is required"),
@@ -75,7 +72,6 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       location: profile.location ?? "",
       linkedin: profile.linkedin ?? "",
       github: profile.github ?? "",
-      summary: profile.summary ?? "",
       job_category: profile.job_category ?? "",
       resume_template: profile.resume_template ?? 1,
       education: profile.education?.length
@@ -125,7 +121,6 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       github: data.github || undefined,
       phone: data.phone || undefined,
       location: data.location || undefined,
-      summary: data.summary || undefined,
       job_category: data.job_category || undefined,
       resume_template: data.resume_template ?? 1,
     };
@@ -156,9 +151,6 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
               />
             )}
           />
-        </div>
-        <div className="mt-4">
-          <Textarea label="Summary" rows={4} error={errors.summary?.message} {...register("summary")} />
         </div>
       </div>
 
@@ -238,9 +230,6 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
                 <Input label="Location" error={errors.work_experience?.[index]?.location?.message} {...register(`work_experience.${index}.location`)} />
                 <Input label="Start Date" type="month" error={errors.work_experience?.[index]?.start_date?.message} {...register(`work_experience.${index}.start_date`)} required />
                 <Input label="End Date" type="month" error={errors.work_experience?.[index]?.end_date?.message} {...register(`work_experience.${index}.end_date`)} />
-              </div>
-              <div className="mt-4">
-                <Textarea label="Description" rows={3} error={errors.work_experience?.[index]?.description?.message} {...register(`work_experience.${index}.description`)} />
               </div>
             </div>
           ))}

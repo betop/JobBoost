@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gmail AI Auto-Triage — Options</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Options</h1>
+
+      <div class="card">
+        <div class="label">Configuration</div>
+        <div class="muted">
+          This extension reads backend API settings from <code>config.json</code> at the extension root.
+          Edit that file and then reload the extension in <code>chrome://extensions</code>.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">AI Backend</div>
+        <div class="muted">
+          Set <code>backendApiUrl</code> to your Xano endpoint (for example
+          <code>/public/gmail-analyze</code>). The backend calls Claude Haiku 4.5 using your server-side Anthropic key.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">Google OAuth</div>
+        <div class="muted">
+          This extension uses <code>chrome.identity</code>. You must set your Google OAuth Client ID in
+          <code>manifest.json</code> (<code>oauth2.client_id</code>) and keep the scope
+          <code>https://www.googleapis.com/auth/gmail.modify</code> enabled.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

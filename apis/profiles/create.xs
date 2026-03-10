@@ -10,7 +10,6 @@ query profiles verb=POST {
     text location?
     text linkedin?
     text github?
-    text summary?
     text job_category?
     json education
     json work_experience
@@ -26,7 +25,6 @@ query profiles verb=POST {
         location    : $input.location
         linkedin_url: $input.linkedin
         github_url  : $input.github
-        summary     : $input.summary
         job_category: $input.job_category
         updated_at  : now
       }
@@ -46,7 +44,7 @@ query profiles verb=POST {
             location       : $e.location
             updated_at     : now
           }
-        }
+        } as $new_education
       }
     }
   
@@ -63,10 +61,9 @@ query profiles verb=POST {
             start_date     : $w.start_date
             end_date       : $w.end_date
             is_current     : ($w.end_date == null || $w.end_date == "")
-            description    : $w.description
             updated_at     : now
           }
-        }
+        } as $new_work
       }
     }
   
@@ -117,7 +114,6 @@ query profiles verb=POST {
             location       : $wk.location
             start_date     : $wk.start_date
             end_date       : $wk.end_date
-            description    : $wk.description
           }
         }
       }
@@ -132,7 +128,6 @@ query profiles verb=POST {
         location       : $p.location
         linkedin       : $p.linkedin_url
         github         : $p.github_url
-        summary        : $p.summary
         created_at     : $p.created_at
         education      : $education_out
         work_experience: $work_out
