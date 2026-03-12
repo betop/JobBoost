@@ -3,6 +3,7 @@
   "name": "Gmail AI Auto-Triage",
   "version": "0.1.0",
   "description": "Auto-triage unread Gmail messages locally in your browser (no backend).",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtaV2rGOsP3kseE6jyjprQ1E/wJVr3+u1ISTl/5LhVj5/7uYevZluIYWksQ6bLHmlJ2s/jBefFEDgN8u3ufsE3o4ORZUV2Rxq+8W50Th4twdPDkvctm5FdX7flpLscVgo5M/6ifwQCCi3h8dzhSXfELV+4RHxp38ckPDB9xec4OGRzon9Xkpb4WI2R3vLydMaSnr3btcLbZq7MzwhOubSylmAyHYzyOUSEHia3p/7Wv7TSqFGF+KOAQJ2CAl5fmiHsA6aRlWpT5yargbaEaFVu3gM/iltxy5U74TbxFZahbChVTkeCp7AOAYPXsZ7+dKJWtk1ke2j/BE956PpwkVrhwIDAQAB",
   "action": {
     "default_title": "Gmail AI Auto-Triage"
   },
