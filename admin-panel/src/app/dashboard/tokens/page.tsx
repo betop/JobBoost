@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { tokenService, type Token } from "@/services/tokenService";
@@ -9,7 +10,8 @@ import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Select from "@/components/Select";
 import Input from "@/components/Input";
-import { Plus, Copy, XCircle, Trash2, CalendarClock } from "lucide-react";
+import PasswordConfirmModal from "@/components/PasswordConfirmModal";
+import { Plus, Copy, XCircle, Trash2, CalendarClock, Eye, EyeOff } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useState } from "react";
 import { useUIStore } from "@/store/uiStore";
@@ -18,14 +20,26 @@ import { useForm } from "react-hook-form";
 export default function TokensPage() {
   const router = useRouter();
   const showToast = useUIStore((state) => state.showToast);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
+  const [showActionConfirm, setShowActionConfirm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'generate' | 'revoke' | 'delete' | 'extend'; id?: string; data?: any } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [extendToken, setExtendToken] = useState<Token | null>(null);
   const [extendDate, setExtendDate] = useState("");
+  const [hiddenTokens, setHiddenTokens] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!isPasswordVerified) {
+      setShowPasswordConfirm(true);
+    }
+  }, [isPasswordVerified]);
 
   const { data: tokens = [], isLoading, refetch } = useQuery({
     queryKey: ["tokens"],
     queryFn: tokenService.getAll,
+    enabled: isPasswordVerified,
   });
 
   const { data: bidders = [] } = useQuery({
@@ -87,7 +101,25 @@ export default function TokensPage() {
   const onSubmit = (data: any) => {
     const payload: any = { bidder_id: data.bidder_id };
     if (data.expiration_date) payload.expiration_date = data.expiration_date;
-    generateMutation.mutate(payload);
+    setPendingAction({ type: 'generate', data: payload });
+    setShowActionConfirm(true);
+  };
+
+  const executePendingAction = async () => {
+    if (!pendingAction) return;
+    
+    if (pendingAction.type === 'generate') {
+      generateMutation.mutate(pendingAction.data);
+    } else if (pendingAction.type === 'revoke') {
+      revokeMutation.mutate(pendingAction.id!);
+    } else if (pendingAction.type === 'delete') {
+      deleteMutation.mutate(pendingAction.id!);
+    } else if (pendingAction.type === 'extend') {
+      extendMutation.mutate({ id: pendingAction.id!, expiration_date: pendingAction.data });
+    }
+    
+    setPendingAction(null);
+    setShowActionConfirm(false);
   };
 
   const copyToClipboard = (token: string) => {
@@ -111,18 +143,39 @@ export default function TokensPage() {
   const columns = [
     {
       key: "token",
-      label: "Token",
-      render: (value: string) => (
-        <div className="flex items-center gap-2">
-          <code className="text-sm bg-gray-100 px-2 py-1 rounded">{value.substring(0, 20)}...</code>
-          <button
-            onClick={() => copyToClipboard(value)}
-            className="p-1 text-gray-600 hover:text-gray-900"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-        </div>
-      ),
+      label: "Key",
+      render: (value: string, row: Token) => {
+        const isHidden = !hiddenTokens.has(row.id);
+        return (
+          <div className="flex items-center gap-2">
+            <code className="text-sm bg-gray-100 px-2 py-1 rounded">
+              {isHidden ? '••••••••••••••••••••' : value.substring(0, 20) + '...'}
+            </code>
+            <button
+              onClick={() => {
+                const newHidden = new Set(hiddenTokens);
+                if (isHidden) {
+                  newHidden.add(row.id);
+                } else {
+                  newHidden.delete(row.id);
+                }
+                setHiddenTokens(newHidden);
+              }}
+              className="p-1 text-gray-600 hover:text-gray-900"
+              title={isHidden ? "Show key" : "Hide key"}
+            >
+              {isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => copyToClipboard(value)}
+              className="p-1 text-gray-600 hover:text-gray-900"
+              title="Copy to clipboard"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      },
     },
     { key: "bidder_name", label: "Bidder" },
     { key: "issued_date", label: "Issued", render: (value: string) => formatDate(value) },
@@ -166,7 +219,10 @@ export default function TokensPage() {
           </button>
           {row.is_active && (
             <button
-              onClick={() => revokeMutation.mutate(row.id)}
+              onClick={() => {
+                setPendingAction({ type: 'revoke', id: row.id });
+                setShowActionConfirm(true);
+              }}
               className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
               title="Revoke"
             >
@@ -174,7 +230,10 @@ export default function TokensPage() {
             </button>
           )}
           <button
-            onClick={() => deleteMutation.mutate(row.id)}
+            onClick={() => {
+              setPendingAction({ type: 'delete', id: row.id });
+              setShowActionConfirm(true);
+            }}
             className="p-1.5 text-red-600 hover:bg-red-50 rounded"
             title="Delete"
           >
@@ -187,14 +246,55 @@ export default function TokensPage() {
 
   return (
     <>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Access Tokens</h1>
-          <p className="text-gray-600 mt-2">Manage bidder access tokens</p>
+      <PasswordConfirmModal
+        isOpen={showPasswordConfirm}
+        onClose={() => {
+          setShowPasswordConfirm(false);
+        }}
+        onConfirm={() => {
+          setIsPasswordVerified(true);
+          setShowPasswordConfirm(false);
+        }}
+        title="Access Keys"
+        description="Please confirm your password to access the Keys page"
+      />
+
+      <PasswordConfirmModal
+        isOpen={showActionConfirm}
+        onClose={() => {
+          setShowActionConfirm(false);
+          setPendingAction(null);
+        }}
+        onConfirm={executePendingAction}
+        title="Confirm Action"
+        description={
+          pendingAction?.type === 'delete'
+            ? "Please confirm your password to delete this key"
+            : pendingAction?.type === 'revoke'
+            ? "Please confirm your password to revoke this key"
+            : pendingAction?.type === 'extend'
+            ? "Please confirm your password to extend this key"
+            : "Please confirm your password to generate a new key"
+        }
+      />
+      
+      {!isPasswordVerified ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-gray-300 border-t-primary-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Verifying password...</p>
+          </div>
         </div>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Plus className="w-5 h-5" />
-          Generate Token
+      ) : (
+        <>
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Access Keys</h1>
+              <p className="text-gray-600 mt-2">Manage bidder access keys</p>
+            </div>
+            <Button onClick={() => setIsModalOpen(true)}>
+              <Plus className="w-5 h-5" />
+          Generate Key
         </Button>
       </div>
 
@@ -203,15 +303,15 @@ export default function TokensPage() {
           data={tokens}
           columns={columns}
           searchable
-          searchPlaceholder="Search tokens..."
+          searchPlaceholder="Search keys..."
           loading={isLoading}
         />
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setGeneratedToken(null); }} title="Generate Access Token">
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setGeneratedToken(null); }} title="Generate Access Key">
         {generatedToken ? (
           <div className="p-6">
-            <p className="text-sm text-gray-600 mb-4">Token generated successfully! Copy it now as it won&apos;t be shown again.</p>
+            <p className="text-sm text-gray-600 mb-4">Key generated successfully! Copy it now as it won&apos;t be shown again.</p>
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
               <code className="text-sm break-all">{generatedToken}</code>
             </div>
@@ -258,7 +358,10 @@ export default function TokensPage() {
           </div>
           <div className="flex gap-3">
             <Button
-              onClick={() => extendMutation.mutate({ id: extendToken!.id, expiration_date: extendDate || undefined })}
+              onClick={() => {
+                setPendingAction({ type: 'extend', id: extendToken!.id, data: extendDate || undefined });
+                setShowActionConfirm(true);
+              }}
               loading={extendMutation.isPending}
               className="flex-1"
             >
@@ -270,6 +373,8 @@ export default function TokensPage() {
           </div>
         </div>
       </Modal>
+        </>
+      )}
     </>
   );
 }

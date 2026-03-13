@@ -11,7 +11,6 @@ query "profiles/{id}" verb=PUT {
     text location?
     text linkedin?
     text github?
-    text summary?
     text job_category?
     int resume_template?
     json education?
@@ -82,14 +81,6 @@ query "profiles/{id}" verb=PUT {
     }
   
     conditional {
-      if ($input.summary != null) {
-        var.update $payload.summary {
-          value = $input.summary
-        }
-      }
-    }
-  
-    conditional {
       if ($input.job_category != null) {
         var.update $payload.job_category {
           value = $input.job_category
@@ -145,7 +136,7 @@ query "profiles/{id}" verb=PUT {
                 location       : $ed.location
                 updated_at     : now
               }
-            }
+            } as $new_education
           }
         }
       }
@@ -184,10 +175,9 @@ query "profiles/{id}" verb=PUT {
                 start_date     : $wk.start_date
                 end_date       : $wk.end_date
                 is_current     : $is_current
-                description    : $wk.description
                 updated_at     : now
               }
-            }
+            } as $new_work
           }
         }
       }
@@ -240,7 +230,6 @@ query "profiles/{id}" verb=PUT {
             location       : $wk.location
             start_date     : $wk.start_date
             end_date       : $wk.end_date
-            description    : $wk.description
           }
         }
       }
@@ -255,7 +244,6 @@ query "profiles/{id}" verb=PUT {
     location       : $p.location
     linkedin       : $p.linkedin_url
     github         : $p.github_url
-    summary        : $p.summary
     job_category   : $p.job_category
     resume_template: $p.resume_template
     created_at     : $p.created_at

@@ -1,11 +1,44 @@
 import api from "./api";
 
+type LogsPeriod = "today" | "week" | "month" | "custom";
+
 function toStartOfDayISO(dateString: string): string {
   return new Date(`${dateString}T00:00:00`).toISOString();
 }
 
 function toEndOfDayISO(dateString: string): string {
   return new Date(`${dateString}T23:59:59.999`).toISOString();
+}
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDateRangeForPeriod(period?: LogsPeriod): { dateFrom?: string; dateTo?: string } {
+  if (!period || period === "custom") {
+    return {};
+  }
+
+  const now = new Date();
+  const today = formatLocalDate(now);
+
+  if (period === "today") {
+    return { dateFrom: today, dateTo: today };
+  }
+
+  if (period === "week") {
+    const dayOfWeek = now.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() + mondayOffset);
+    return { dateFrom: formatLocalDate(weekStart), dateTo: today };
+  }
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  return { dateFrom: formatLocalDate(monthStart), dateTo: today };
 }
 
 export interface GenerationLog {
@@ -58,7 +91,7 @@ export interface LogsFilters {
   bidder_id?: string;
   date_from?: string;
   date_to?: string;
-  period?: "today" | "week" | "month" | "custom";
+  period?: LogsPeriod;
   is_matched?: "1" | "0" | "2";
   is_regenerated?: "1" | "0";
 }
@@ -74,20 +107,38 @@ export interface RegenerateResponse {
 export const logsService = {
   list: async (filters: LogsFilters = {}): Promise<LogsListResponse> => {
     const params = new URLSearchParams();
+    const periodRange = getDateRangeForPeriod(filters.period);
+    const effectiveDateFrom = filters.date_from ?? periodRange.dateFrom;
+    const effectiveDateTo = filters.date_to ?? periodRange.dateTo;
+
     if (filters.profile_id) params.set("profile_id", filters.profile_id);
     if (filters.bidder_id) params.set("bidder_id", filters.bidder_id);
-    if (filters.date_from) params.set("date_from", toStartOfDayISO(filters.date_from));
-    if (filters.date_to) params.set("date_to", toEndOfDayISO(filters.date_to));
-    if (filters.period && filters.period !== "custom") params.set("period", filters.period);
+    if (effectiveDateFrom) params.set("date_from", toStartOfDayISO(effectiveDateFrom));
+    if (effectiveDateTo) params.set("date_to", toEndOfDayISO(effectiveDateTo));
+    if (!effectiveDateFrom && !effectiveDateTo && filters.period && filters.period !== "custom") {
+      params.set("period", filters.period);
+    }
     if (filters.is_matched !== undefined) params.set("is_matched", filters.is_matched);
     const response = await api.get(`/logs/list?${params.toString()}`);
     return response.data;
   },
 
-  stats: async (period: string = "month", profile_id?: string, bidder_id?: string): Promise<LogsStatsResponse> => {
+  stats: async (
+    period: LogsPeriod = "month",
+    profile_id?: string,
+    bidder_id?: string,
+    date_from?: string,
+    date_to?: string,
+  ): Promise<LogsStatsResponse> => {
     const params = new URLSearchParams({ period });
+    const periodRange = getDateRangeForPeriod(period);
+    const effectiveDateFrom = date_from ?? periodRange.dateFrom;
+    const effectiveDateTo = date_to ?? periodRange.dateTo;
+
     if (profile_id) params.set("profile_id", profile_id);
     if (bidder_id) params.set("bidder_id", bidder_id);
+    if (effectiveDateFrom) params.set("date_from", toStartOfDayISO(effectiveDateFrom));
+    if (effectiveDateTo) params.set("date_to", toEndOfDayISO(effectiveDateTo));
     const response = await api.get(`/logs/stats?${params.toString()}`);
     return response.data;
   },

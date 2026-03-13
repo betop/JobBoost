@@ -46,7 +46,6 @@ export default function ProfileViewPage() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">{profile.full_name}</h2>
-          <p className="text-gray-600 mt-2">{profile.summary}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -112,7 +111,6 @@ export default function ProfileViewPage() {
                 </p>
                 {exp.employment_type && <p className="text-sm text-gray-600">{exp.employment_type}</p>}
                 {exp.location && <p className="text-sm text-gray-600">{exp.location}</p>}
-                {exp.description && <p className="text-gray-700 mt-2">{exp.description}</p>}
               </div>
             ))}
           </div>

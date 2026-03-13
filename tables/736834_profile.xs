@@ -10,7 +10,6 @@ table profile {
     text location?
     text linkedin_url?
     text github_url?
-    text summary?
     text job_category?
     int resume_template?=1
     timestamp updated_at?

@@ -3,7 +3,10 @@ table work_experience {
 
   schema {
     uuid id
-    timestamp created_at?=now
+    timestamp created_at?=now {
+      visibility = "private"
+    }
+  
     uuid profile_id? {
       table = "profile"
     }
@@ -15,7 +18,6 @@ table work_experience {
     date start_date?
     date end_date?
     bool is_current?
-    text description?
     timestamp updated_at?
   }
 

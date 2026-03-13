@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gmail AI Auto-Triage</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Gmail AI Auto-Triage</h1>
+
+      <div id="auth" class="card">
+        <div class="row">
+          <div>
+            <div class="label">Google OAuth</div>
+            <div id="authStatus" class="muted">Checking…</div>
+          </div>
+          <button id="btnAuth" class="btn">Authenticate</button>
+        </div>
+        <div id="authError" class="error"></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="margin-bottom: 8px">
+          <label class="inline">
+            From:
+            <input type="date" id="fromDate" />
+          </label>
+          <label class="inline">
+            To:
+            <input type="date" id="toDate" />
+          </label>
+        </div>
+
+        <div class="row">
+          <button id="btnCheck" class="btn primary">Check</button>
+          <a class="link" href="#" id="openOptions">Options</a>
+        </div>
+
+        <div id="runStatus" class="muted"></div>
+        <div id="summary" class="summary"></div>
+      </div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

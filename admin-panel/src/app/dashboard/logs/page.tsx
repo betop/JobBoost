@@ -33,6 +33,7 @@ import {
 
 type SortField = "created_at" | "bidder_name" | "profile_name" | "position_title" | "company_name";
 type SortDir = "asc" | "desc";
+type LogsPeriod = "today" | "week" | "month" | "custom";
 
 // Pricing per 1M tokens (USD)
 const PRICING = {
@@ -53,10 +54,10 @@ function formatCost(usd: number): string {
 
 const PERIOD_OPTIONS = [
   { label: "Today", value: "today" },
-  { label: "Last 7 days", value: "week" },
-  { label: "Last 30 days", value: "month" },
+  { label: "This week", value: "week" },
+  { label: "This month", value: "month" },
   { label: "Custom range", value: "custom" },
-];
+] as const satisfies ReadonlyArray<{ label: string; value: LogsPeriod }>;
 
 // Job Details Modal
 function JobDetailsModal({
@@ -327,7 +328,7 @@ export default function LogsPage() {
     date_from: today,
     date_to: today
   });
-  const [statsPeriod, setStatsPeriod] = useState("today");
+  const [statsPeriod, setStatsPeriod] = useState<LogsPeriod>("today");
 
   // Table state
   const [search, setSearch]         = useState("");
@@ -346,26 +347,21 @@ export default function LogsPage() {
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["logs-stats", statsPeriod, filters.profile_id, filters.bidder_id],
-    queryFn: () => logsService.stats(statsPeriod, filters.profile_id, filters.bidder_id),
+    queryKey: ["logs-stats", statsPeriod, filters.profile_id, filters.bidder_id, filters.date_from, filters.date_to],
+    queryFn: () => logsService.stats(statsPeriod, filters.profile_id, filters.bidder_id, filters.date_from, filters.date_to),
   });
 
   const { data: bidders } = useQuery({ queryKey: ["bidders"], queryFn: bidderService.getAll });
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: profileService.getAll });
 
-  function resetFilters() {
-    const today = new Date().toISOString().split('T')[0];
-    setFilters({ 
-      period: "custom",
-      date_from: today,
-      date_to: today
-    });
-    setStatsPeriod("today");
-    setSearch("");
-    setPage(1);
+  async function refreshData() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["generation-logs"] }),
+      queryClient.invalidateQueries({ queryKey: ["logs-stats"] }),
+    ]);
   }
 
-  function applyPeriod(period: string) {
+  function applyPeriod(period: LogsPeriod) {
     setStatsPeriod(period);
     setPage(1);
     if (period !== "custom") {
@@ -474,11 +470,11 @@ export default function LogsPage() {
           </p>
         </div>
         <button
-          onClick={resetFilters}
+          onClick={refreshData}
           className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
         >
           <RotateCcw className="w-4 h-4" />
-          Reset
+          Refresh
         </button>
       </div>
 

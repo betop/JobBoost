@@ -8,7 +8,6 @@ import { useMutation } from "@tanstack/react-query";
 import { profileService } from "@/services/profileService";
 import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
-import Textarea from "@/components/Textarea";
 import Button from "@/components/Button";
 import JobCategoryInput from "@/components/JobCategoryInput";
 import ResumeAutofill from "@/components/ResumeAutofill";
@@ -31,7 +30,6 @@ const workExperienceSchema = z.object({
   location: z.string().optional(),
   start_date: z.string().min(1, "Start date is required"),
   end_date: z.string().optional(),
-  description: z.string().optional(),
 });
 
 const profileSchema = z.object({
@@ -41,7 +39,6 @@ const profileSchema = z.object({
   location: z.string().optional(),
   linkedin: z.string().url("Invalid URL").optional().or(z.literal("")),
   github: z.string().url("Invalid URL").optional().or(z.literal("")),
-  summary: z.string().optional(),
   job_category: z.string().optional(),
   education: z.array(educationSchema).min(1, "At least one education entry is required"),
   work_experience: z.array(workExperienceSchema).min(1, "At least one work experience is required"),
@@ -82,7 +79,6 @@ export default function NewProfilePage() {
       location: data.location || "",
       linkedin: data.linkedin || "",
       github: data.github || "",
-      summary: data.summary || "",
       job_category: data.job_category || "",
       education: Array.isArray(data.education) && data.education.length ? data.education : [{ degree: "", field_of_study: "", start_date: "" }],
       work_experience: Array.isArray(data.work_experience) && data.work_experience.length ? data.work_experience : [{ job_title: "", start_date: "" }],
@@ -119,7 +115,6 @@ export default function NewProfilePage() {
       github: data.github || undefined,
       phone: data.phone || undefined,
       location: data.location || undefined,
-      summary: data.summary || undefined,
       job_category: data.job_category || undefined,
     };
     createMutation.mutate(payload);
@@ -160,9 +155,6 @@ export default function NewProfilePage() {
                 />
               )}
             />
-          </div>
-          <div className="mt-4">
-            <Textarea label="Summary" rows={4} error={errors.summary?.message} {...register("summary")} />
           </div>
         </div>
 
@@ -298,14 +290,6 @@ export default function NewProfilePage() {
                     type="month"
                     error={errors.work_experience?.[index]?.end_date?.message}
                     {...register(`work_experience.${index}.end_date`)}
-                  />
-                </div>
-                <div className="mt-4">
-                  <Textarea
-                    label="Description"
-                    rows={3}
-                    error={errors.work_experience?.[index]?.description?.message}
-                    {...register(`work_experience.${index}.description`)}
                   />
                 </div>
               </div>
