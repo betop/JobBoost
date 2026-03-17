@@ -57,7 +57,7 @@ export default function Sidebar() {
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-gray-800">
             <h1 className={cn("font-bold transition-all", sidebarCollapsed ? "text-sm" : "text-xl")}>
-              {sidebarCollapsed ? "RG" : "Resume Gen"}
+              HHQ
             </h1>
           </div>
 

@@ -6,7 +6,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Fostar Hunters HQ",
+  title: "HHQ",
   description: "Manage profiles, bidders, tokens, and rules",
 };
 
