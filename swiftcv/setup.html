@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SwiftCV v0.1.0 – Setup</title>
+    <title>SwiftCV v0.1.1 – Setup</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -24,6 +24,11 @@
         padding: 36px 32px;
         width: 100%;
         max-width: 420px;
+      }
+
+      :root {
+        --button-height: 50px;
+        --key-input-height: 60px;
       }
 
       .logo {
@@ -64,30 +69,78 @@
         line-height: 1.5;
       }
 
+      .field-group {
+        margin-bottom: 8px;
+      }
+
       label {
         display: block;
         font-size: 13px;
         font-weight: 600;
         color: #374151;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
       }
 
       input[type="text"] {
         width: 100%;
-        padding: 10px 14px;
-        border: 1.5px solid #e2e8f0;
-        border-radius: 8px;
-        font-size: 14px;
+        height: var(--key-input-height);
+        padding: 14px 18px;
+        border: 1.5px solid #d1d5db;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 500;
         color: #1e293b;
         outline: none;
-        transition: border-color 0.15s;
+        transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
         font-family: monospace;
-        letter-spacing: 0.03em;
+        letter-spacing: 0.02em;
+        background: #fff;
+      }
+
+      input[type="text"]:hover {
+        border-color: #94a3b8;
       }
 
       input[type="text"]:focus {
         border-color: #6366f1;
         box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+      }
+
+      input#tokenInput {
+        display: block;
+        width: 100%;
+        height: var(--button-height);
+        padding: 11px 16px;
+        border-width: 2px;
+        border-color: #cbd5e1;
+        border-radius: 12px;
+        background: #f8fafc;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+      }
+
+      input#tokenInput::placeholder {
+        color: #94a3b8;
+        font-weight: 500;
+      }
+
+      input#tokenInput:hover {
+        border-color: #94a3b8;
+        background: #f1f5f9;
+      }
+
+      input#tokenInput:focus {
+        border-color: #6366f1;
+        background: #ffffff;
+        box-shadow: 0 0 0 4px rgba(99,102,241,0.14);
+      }
+
+      .token-hint {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #64748b;
+        line-height: 1.45;
       }
 
       .error-msg {
@@ -119,8 +172,9 @@
       .btn {
         display: block;
         width: 100%;
+        height: var(--button-height);
         margin-top: 20px;
-        padding: 11px;
+        padding: 11px 16px;
         background: linear-gradient(135deg, #6366f1, #8b5cf6);
         color: #fff;
         border: none;
@@ -147,29 +201,32 @@
     <div class="card">
       <div class="logo">
         <div class="logo-icon">📄</div>
-        <h1>SwiftCV <span style="font-size:0.6em;opacity:0.6;font-weight:400;">v0.1.0</span></h1>
+        <h1>SwiftCV <span style="font-size:0.6em;opacity:0.6;font-weight:400;">v0.1.1</span></h1>
       </div>
 
-      <h2>Welcome! Enter Your Token</h2>
+      <h2>Welcome! Enter Your Key</h2>
       <p class="subtitle">
-        Paste the access token provided by your administrator to activate the extension.
+        Paste the key provided by your administrator to activate the extension.
       </p>
 
-      <label for="tokenInput">Access Token</label>
-      <input
-        type="text"
-        id="tokenInput"
-        placeholder="Paste your token here…"
-        autocomplete="off"
-        spellcheck="false"
-      />
+      <div class="field-group">
+        <label for="tokenInput">Key</label>
+        <input
+          type="text"
+          id="tokenInput"
+          placeholder="Paste your full key here"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <p class="token-hint">Tip: click once in this field and press <strong>⌘ + V</strong> (Mac) to paste your key.</p>
+      </div>
 
       <div id="errorMsg" class="error-msg"></div>
       <div id="successMsg" class="success-msg"></div>
 
       <button id="saveBtn" class="btn">Validate &amp; Save</button>
 
-      <p class="hint">Your token is stored locally in Chrome and never shared.</p>
+      <p class="hint">Your key is stored locally in Chrome and never shared.</p>
     </div>
 
     <script src="setup.js"></script>

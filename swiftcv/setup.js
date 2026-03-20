@@ -1,4 +1,4 @@
-// setup.js — Token entry page for first-time setup
+// setup.js — Key entry page for first-time setup
 
 const XANO_PUBLIC_URL = "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1";
 
@@ -28,7 +28,7 @@ saveBtn.addEventListener("click", async () => {
   const token = tokenInput.value.trim();
 
   if (!token) {
-    showError("Please enter a token.");
+    showError("Please enter a key.");
     return;
   }
 
@@ -44,7 +44,7 @@ saveBtn.addEventListener("click", async () => {
     });
 
     if (!response.ok) {
-      let msg = "Invalid token. Please check and try again.";
+      let msg = "Invalid key. Please check and try again.";
       try {
         const data = await response.json();
         msg = data?.message || data?.error || msg;
@@ -57,7 +57,7 @@ saveBtn.addEventListener("click", async () => {
 
     const data = await response.json();
 
-    // Save token and profile data to chrome.storage
+    // Save key and profile data to chrome.storage
     await chrome.storage.local.set({
       token,
       profileIds:   data.profile_ids   || [],
@@ -67,7 +67,7 @@ saveBtn.addEventListener("click", async () => {
       profileName:  null,
     });
 
-    showSuccess("Token validated! Setting up your profile…");
+    showSuccess("Key validated! Setting up your profile…");
     saveBtn.textContent = "Saved ✓";
 
     // Let background script finish setup (profile selection / confirm)

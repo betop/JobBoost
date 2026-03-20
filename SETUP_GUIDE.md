@@ -1,4 +1,4 @@
-# Resume Generator - Setup Guide
+# SwiftCV - Setup Guide
 
 Complete setup guide for both the Admin Panel and Browser Extension.
 
@@ -64,7 +64,7 @@ Password: (set in backend)
 Convert SVG icons to PNG (see `icons/ICON_INSTRUCTIONS.md`):
 
 ```bash
-cd resume-extension/icons
+cd swiftcv/icons
 # Use ImageMagick, online tool, or design software
 ```
 
@@ -80,13 +80,13 @@ const API_BASE_URL = "https://your-backend-url.com/api";
 1. Open Chrome and go to `chrome://extensions/`
 2. Enable "Developer mode" (top right toggle)
 3. Click "Load unpacked"
-4. Select the `resume-extension` folder
+4. Select the `swiftcv` folder
 5. Extension should appear in your extensions list
 
 ### 4. Add Access Token
 
 1. Get a token from the Admin Panel (Tokens page)
-2. Open `resume-extension/token.json`
+2. Open `swiftcv/token.json`
 3. Add your token:
 ```json
 {

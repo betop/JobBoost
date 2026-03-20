@@ -187,12 +187,12 @@ For this project, we focus tests on:
 - Token validation
 - Resume generation happy-path + common error paths
 
-## 11) Project conventions (Resume Generator)
+## 11) Project conventions (SwiftCV)
 
 ### API contract sources
 
 - Admin Panel contract: `admin-panel/src/services/*`
-- Extension contract: `resume-extension/background.js`
+- Extension contract: `swiftcv/background.js`
 
 ### Auth models
 

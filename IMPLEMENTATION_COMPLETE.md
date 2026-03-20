@@ -81,7 +81,7 @@ resume extension/
 │   ├── tailwind.config.ts
 │   └── README.md
 │
-├── resume-extension/               ✅ COMPLETE
+├── swiftcv/               ✅ COMPLETE
 │   ├── manifest.json              # Extension config
 │   ├── token.json                 # User token storage
 │   ├── background.js              # Service worker
@@ -117,13 +117,13 @@ npm run dev
 
 ### Browser Extension
 ```bash
-cd resume-extension
+cd swiftcv
 # 1. Convert SVG icons to PNG (see icons/ICON_INSTRUCTIONS.md)
 # 2. Edit background.js with backend URL
 # 3. Open chrome://extensions/
 # 4. Enable Developer mode
 # 5. Click "Load unpacked"
-# 6. Select resume-extension folder
+# 6. Select swiftcv folder
 # 7. Add token to token.json
 # 8. Reload extension
 ```
@@ -267,7 +267,7 @@ Created comprehensive documentation:
 - ✅ FRONTEND_README.md - Complete frontend overview
 - ✅ SETUP_GUIDE.md - Step-by-step setup instructions
 - ✅ admin-panel/README.md - Admin panel documentation
-- ✅ resume-extension/README.md - Extension documentation
+- ✅ swiftcv/README.md - Extension documentation
 - ✅ icons/ICON_INSTRUCTIONS.md - Icon conversion guide
 - ✅ .env.example - Environment configuration template
 
@@ -356,10 +356,10 @@ The frontend is **completely implemented** and ready to be connected to a backen
 
 ## 🙏 Thank You!
 
-This is a complete, production-ready frontend implementation for the Resume Generator Application. 
+This is a complete, production-ready frontend implementation for the SwiftCV Application. 
 
 **Total Development Time Equivalent:** Several days of professional development work
 **Total Value:** Enterprise-grade application suite
 
-Enjoy your new Resume Generator system! 🚀
+Enjoy your new SwiftCV system! 🚀
 

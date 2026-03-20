@@ -1,4 +1,4 @@
-# Resume Generator – Backend Technical Specification (Xano – Final Stateless Version)
+# SwiftCV – Backend Technical Specification (Xano – Final Stateless Version)
 
 ## 1. System Overview
 

@@ -4,6 +4,7 @@
 // Xano API base URLs per group
 const XANO_PUBLIC_URL = "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1";
 const XANO_RESUME_URL = "https://x8ki-letl-twmt.n7.xano.io/api:caf8Eo15:v1";
+const PROFILE_REFRESH_MAX_AGE_MS = 10 * 60 * 1000;
 
 let extensionState = {
   token: null,
@@ -12,9 +13,11 @@ let extensionState = {
   profileIds: [],
   profileNames: [],
   isConfirmed: false,
-  aiProvider: "claude",
   resumeTemplate: 1,
 };
+
+let lastProfilesSyncAt = 0;
+let profileRefreshInFlight = null;
 
 // Load extension state on startup
 chrome.runtime.onInstalled.addListener(async () => {
@@ -30,14 +33,14 @@ chrome.runtime.onInstalled.addListener(async () => {
       height: 560,
     });
   } else {
-    await validateToken();
+    await refreshProfilesIfNeeded({ force: true });
   }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await loadExtensionState();
-  if (extensionState.token && !extensionState.isConfirmed) {
-    await validateToken();
+  if (extensionState.token) {
+    await refreshProfilesIfNeeded();
   }
 });
 
@@ -51,9 +54,9 @@ async function loadExtensionState() {
       "profileIds",
       "profileNames",
       "isConfirmed",
-      "aiProvider",
       "resumeTemplate",
       "resumeTemplates",
+      "lastProfilesSyncAt",
     ]);
 
     if (stored.token)            extensionState.token          = stored.token;
@@ -62,95 +65,208 @@ async function loadExtensionState() {
     if (stored.profileIds)       extensionState.profileIds     = stored.profileIds;
     if (stored.profileNames)     extensionState.profileNames   = stored.profileNames;
     if (stored.isConfirmed)      extensionState.isConfirmed    = stored.isConfirmed;
-    if (stored.aiProvider)       extensionState.aiProvider     = stored.aiProvider;
     if (stored.resumeTemplate)   extensionState.resumeTemplate = stored.resumeTemplate;
+    if (stored.lastProfilesSyncAt) lastProfilesSyncAt = stored.lastProfilesSyncAt;
   } catch (error) {
     console.error("Error loading extension state:", error);
   }
 }
 
-// Validate token with backend
-async function validateToken() {
+function isProfileDataStale(maxAgeMs = PROFILE_REFRESH_MAX_AGE_MS) {
+  if (!lastProfilesSyncAt) return true;
+  return (Date.now() - lastProfilesSyncAt) > maxAgeMs;
+}
+
+async function fetchTokenProfiles(endpoint = "token-profiles") {
   if (!extensionState.token) {
     console.log("No token found");
+    return null;
+  }
+
+  const response = await fetch(`${XANO_PUBLIC_URL}/public/${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ token: extensionState.token }),
+  });
+
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const data = await response.json();
+      message = data?.message || data?.error || message;
+    } catch (_) {
+      // ignore
+    }
+    throw new Error(message || "Token validation failed");
+  }
+
+  return response.json();
+}
+
+function getTemplateForProfile(profileId, ids, templates) {
+  const profileIdx = ids.indexOf(profileId);
+  return profileIdx >= 0 && templates[profileIdx] ? templates[profileIdx] : 1;
+}
+
+async function applyProfilesData(data, { openDialogs = true } = {}) {
+  const ids = data.profile_ids || [];
+  const names = data.profile_names || [];
+  const templates = data.resume_templates || [];
+
+  extensionState.profileIds = ids;
+  extensionState.profileNames = names;
+
+  const previousProfileId = extensionState.profileId;
+  const previousSelectionStillValid = previousProfileId && ids.includes(previousProfileId);
+
+  if (ids.length === 1) {
+    extensionState.profileId = ids[0];
+    extensionState.profileName = names[0] || "";
+    extensionState.resumeTemplate = templates[0] || 1;
+  } else if (previousSelectionStillValid) {
+    extensionState.profileId = previousProfileId;
+    extensionState.profileName = names[ids.indexOf(previousProfileId)] || extensionState.profileName || "";
+    extensionState.resumeTemplate = getTemplateForProfile(previousProfileId, ids, templates);
+  } else {
+    extensionState.profileId = null;
+    extensionState.profileName = null;
+    extensionState.resumeTemplate = 1;
+    extensionState.isConfirmed = false;
+  }
+
+  await chrome.storage.local.set({
+    profileIds: ids,
+    profileNames: names,
+    resumeTemplates: templates,
+    profileId: extensionState.profileId,
+    profileName: extensionState.profileName,
+    resumeTemplate: extensionState.resumeTemplate,
+    isConfirmed: extensionState.isConfirmed,
+  });
+
+  if (extensionState.profileId && extensionState.isConfirmed) {
+    setupContextMenu();
+  }
+
+  if (!openDialogs) {
     return;
   }
 
+  if (ids.length === 1 && !extensionState.isConfirmed) {
+    chrome.windows.create({
+      url: "confirm.html",
+      type: "popup",
+      width: 400,
+      height: 300,
+    });
+  } else if (ids.length > 1 && !extensionState.profileId) {
+    chrome.windows.create({
+      url: "select_profile.html",
+      type: "popup",
+      width: 420,
+      height: 420,
+    });
+  }
+}
+
+async function refreshProfilesFromBackend(options = {}) {
   try {
-    const response = await fetch(`${XANO_PUBLIC_URL}/public/validate-token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ token: extensionState.token }),
+    const data = await fetchTokenProfiles("token-profiles");
+    if (!data) return null;
+    await applyProfilesData(data, options);
+    lastProfilesSyncAt = Date.now();
+    await chrome.storage.local.set({ lastProfilesSyncAt });
+    return data;
+  } catch (error) {
+    console.error("Error refreshing token profiles:", error);
+    if (options.notify !== false) {
+      showNotification(error.message || "Could not refresh profiles.");
+    }
+    throw error;
+  }
+}
+
+async function refreshProfilesIfNeeded(options = {}) {
+  const {
+    force = false,
+    maxAgeMs = PROFILE_REFRESH_MAX_AGE_MS,
+    openDialogs = false,
+    notify = false,
+  } = options;
+
+  if (!extensionState.token) {
+    return null;
+  }
+
+  if (!force && !isProfileDataStale(maxAgeMs)) {
+    return null;
+  }
+
+  if (profileRefreshInFlight) {
+    return profileRefreshInFlight;
+  }
+
+  profileRefreshInFlight = refreshProfilesFromBackend({ openDialogs, notify })
+    .finally(() => {
+      profileRefreshInFlight = null;
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      const ids = data.profile_ids || [];
-      const names = data.profile_names || [];
-      const templates = data.resume_templates || [];
+  return profileRefreshInFlight;
+}
 
-      // Store the full list
-      extensionState.profileIds = ids;
-      extensionState.profileNames = names;
-
-      await chrome.storage.local.set({
-        profileIds: ids,
-        profileNames: names,
-        resumeTemplates: templates,
-      });
-
-      if (ids.length === 1) {
-        // Auto-select the only profile
-        extensionState.profileId = ids[0];
-        extensionState.profileName = names[0] || "";
-        const template = templates[0] || 1;
-        extensionState.resumeTemplate = template;
-        await chrome.storage.local.set({
-          profileId: ids[0],
-          profileName: names[0] || "",
-          resumeTemplate: template,
-        });
-        console.log("[BG] Resume template loaded from profile:", template);
-
-        // Show confirmation window
-        if (!extensionState.isConfirmed) {
-          chrome.windows.create({
-            url: "confirm.html",
-            type: "popup",
-            width: 400,
-            height: 300,
-          });
-        } else {
-          setupContextMenu();
-        }
-      } else {
-        // Multiple profiles — always show picker so user can choose / switch
-        extensionState.isConfirmed = false;
-        await chrome.storage.local.set({ isConfirmed: false });
-        chrome.windows.create({
-          url: "select_profile.html",
-          type: "popup",
-          width: 420,
-          height: 420,
-        });
-      }
-    } else {
-      let message = response.statusText;
-      try {
-        const data = await response.json();
-        message = data?.message || data?.error || message;
-      } catch (_) {
-        // ignore
-      }
-      console.error("Token validation failed:", message);
-      showNotification(message || "Token validation failed. Please check your token.");
-    }
-  } catch (error) {
-    console.error("Error validating token:", error);
-    showNotification("Error connecting to server.");
+async function syncProfilesFromGenerateResponse(data) {
+  if (!data || typeof data !== "object") {
+    return;
   }
+
+  const hasProfileArrays = Array.isArray(data.profile_ids) && data.profile_ids.length > 0;
+
+  if (hasProfileArrays) {
+    await applyProfilesData(
+      {
+        profile_ids: data.profile_ids,
+        profile_names: Array.isArray(data.profile_names) ? data.profile_names : extensionState.profileNames,
+        resume_templates: Array.isArray(data.resume_templates) ? data.resume_templates : [],
+      },
+      { openDialogs: false }
+    );
+
+    lastProfilesSyncAt = Date.now();
+    await chrome.storage.local.set({ lastProfilesSyncAt });
+    return;
+  }
+
+  const maybeProfileId = data.profile_id ?? data.current_profile_id;
+  const maybeProfileName = data.profile_name ?? data.current_profile_name;
+  const maybeResumeTemplate = data.resume_template ?? data.current_resume_template;
+
+  if (
+    maybeProfileId == null &&
+    maybeProfileName == null &&
+    maybeResumeTemplate == null
+  ) {
+    return;
+  }
+
+  if (maybeProfileId != null) {
+    extensionState.profileId = maybeProfileId;
+  }
+  if (maybeProfileName != null) {
+    extensionState.profileName = maybeProfileName;
+  }
+  if (maybeResumeTemplate != null) {
+    extensionState.resumeTemplate = maybeResumeTemplate;
+  }
+
+  lastProfilesSyncAt = Date.now();
+  await chrome.storage.local.set({
+    profileId: extensionState.profileId,
+    profileName: extensionState.profileName,
+    resumeTemplate: extensionState.resumeTemplate,
+    lastProfilesSyncAt,
+  });
 }
 
 // Setup context menu
@@ -176,6 +292,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     // Service worker may have gone idle — reload state from storage before checking
     await loadExtensionState();
+    await refreshProfilesIfNeeded({ openDialogs: false, notify: true, maxAgeMs: 2 * 60 * 1000 });
 
     if (!extensionState.isConfirmed) {
       showNotification("Please confirm your profile first.");
@@ -232,7 +349,7 @@ async function generateResume(jobDescription, jobUrl = "") {
         profile_id: extensionState.profileId,
         job_description: jobDescription,
         token: extensionState.token,
-        ai_provider: extensionState.aiProvider,
+        ai_provider: "claude",
         job_url: jobUrl,
       }),
     });
@@ -248,6 +365,8 @@ async function generateResume(jobDescription, jobUrl = "") {
 
     const data = await response.json();
     console.log("Xano response:", JSON.stringify(data));
+
+    await syncProfilesFromGenerateResponse(data);
 
     // If job is not 100% remote (is_matched === 2), inform the user via the progress window
     if (data.skipped === true || data.is_matched === 2) {
@@ -381,26 +500,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.set({ isConfirmed: true });
     setupContextMenu();
     sendResponse({ success: true });
-  } else if (request.action === "setAiProvider") {
-    extensionState.aiProvider = request.provider;
-    chrome.storage.local.set({ aiProvider: request.provider });
-    sendResponse({ success: true });
   } else if (request.action === "tokenSaved") {
     // Called by setup.js after token is validated and stored
     extensionState.token = request.token;
-    validateToken().then(() => sendResponse({ success: true }));
+    refreshProfilesIfNeeded({ force: true }).then(() => sendResponse({ success: true }));
     return true;
   } else if (request.action === "switchProfile") {
     // Called from popup when user wants to switch profile
     extensionState.isConfirmed = false;
     chrome.storage.local.set({ isConfirmed: false });
-    chrome.windows.create({
-      url: "select_profile.html",
-      type: "popup",
-      width: 420,
-      height: 420,
-    });
-    sendResponse({ success: true });
+    refreshProfilesIfNeeded({ force: true, openDialogs: true, notify: true })
+      .then(() => sendResponse({ success: true }))
+      .catch((error) => sendResponse({ success: false, error: error.message || String(error) }));
+    return true;
   } else if (request.action === "enterToken") {
     // Called from popup when user clicks "Enter Token"
     chrome.windows.create({

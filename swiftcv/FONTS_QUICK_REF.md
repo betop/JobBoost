@@ -37,7 +37,7 @@ doc.text("• Important point", 15, 60);
 
 ### Step 1: Convert TTF to JS
 ```bash
-cd /Users/administrator/Documents/Work/resume\ extension/resume-extension
+cd /Users/administrator/Documents/Work/resume\ extension/swiftcv
 node convert-fonts.js fonts/Inter/static/Inter_18pt-SemiBold.ttf Inter-SemiBold Inter-SemiBold normal
 ```
 
@@ -56,11 +56,11 @@ doc.text("Semi-bold text", 10, 50);
 
 | File | Location | Purpose |
 |------|----------|---------|
-| Script | `resume-extension/convert-fonts.js` | TTF → JS converter |
-| Font: Regular | `resume-extension/fonts/Inter/static/Inter-Regular-normal.js` | Body text |
-| Font: Bold | `resume-extension/fonts/Inter/static/Inter-Bold-normal.js` | Headings |
-| HTML | `resume-extension/offscreen.html` | Font loader |
-| PDF Gen | `resume-extension/pdfGenerator.js` | PDF generation |
+| Script | `swiftcv/convert-fonts.js` | TTF → JS converter |
+| Font: Regular | `swiftcv/fonts/Inter/static/Inter-Regular-normal.js` | Body text |
+| Font: Bold | `swiftcv/fonts/Inter/static/Inter-Bold-normal.js` | Headings |
+| HTML | `swiftcv/offscreen.html` | Font loader |
+| PDF Gen | `swiftcv/pdfGenerator.js` | PDF generation |
 | Guide | `FONT_CONVERSION_GUIDE.md` | Full documentation |
 
 ## Quick Copy-Paste Templates

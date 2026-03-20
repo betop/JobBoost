@@ -13,7 +13,7 @@ Added conversion method to transform base64 → binary string format that jsPDF 
 
 ## Code Changes
 
-### Location: `resume-extension/pdfGenerator.js`
+### Location: `swiftcv/pdfGenerator.js`
 
 ### BEFORE (Lines ~229-262)
 ```javascript

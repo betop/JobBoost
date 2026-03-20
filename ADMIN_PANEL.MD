@@ -1,4 +1,4 @@
-# Resume Generator – Admin Panel (Frontend Specification)
+# SwiftCV – Admin Panel (Frontend Specification)
 
 ## Overview
 

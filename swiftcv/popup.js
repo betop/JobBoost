@@ -2,7 +2,6 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
   const statusInfoEl = document.getElementById("statusInfo");
-  const refreshBtn = document.getElementById("refreshBtn");
 
   // Load and display status
   async function updateStatus() {
@@ -55,29 +54,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Provider toggle
-  const providerOpenAI = document.getElementById("providerOpenAI");
-  const providerClaude = document.getElementById("providerClaude");
-  const providerLabel = document.getElementById("providerLabel");
-
-  function setProvider(provider) {
-    providerOpenAI.classList.toggle("active", provider === "openai");
-    providerClaude.classList.toggle("active", provider === "claude");
-    providerLabel.textContent = provider === "claude" ? "Using: Claude 4.5 Haiku" : "Using: GPT-4o mini";
-    chrome.runtime.sendMessage({ action: "setAiProvider", provider });
-  }
-
-  // Load current provider from state
-  chrome.runtime.sendMessage({ action: "getState" }, (response) => {
-    if (response?.aiProvider) setProvider(response.aiProvider);
-  });
-
-  providerOpenAI.addEventListener("click", () => setProvider("openai"));
-  providerClaude.addEventListener("click", () => setProvider("claude"));
-
   // Initial load
   updateStatus();
-
-  // Refresh button
-  refreshBtn.addEventListener("click", updateStatus);
 });

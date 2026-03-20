@@ -1,4 +1,4 @@
-# Gmail AI Auto-Triage Chrome Extension
+# Mail Traige Chrome Extension
 
 ---
 
@@ -29,7 +29,7 @@ Chrome Extension (Manifest v3)
 - Xano public analyze API
 
 ### Storage
-- `chrome.storage.local` (API keys and user preferences only)
+- `chrome.storage.local` (user preferences only)
 
 ---
 
@@ -38,9 +38,7 @@ Chrome Extension (Manifest v3)
 1. User installs extension
 2. User authenticates via Google OAuth
 3. Extension retrieves emails in the selected date range
-4. If using OpenAI (default):
-  - Uploads all emails into a Vector Store as a text file
-  - Asks the Assistants API to classify IDs in batches of 50 (no email bodies are sent in the per-batch question)
+4. Extension sends a backend analyze request with email subject/body metadata
 5. AI returns classifications
 6. Extension modifies Gmail labels accordingly
 
@@ -59,7 +57,7 @@ Notes:
 - This extension uses `chrome.identity.getAuthToken()`.
 - You must set your OAuth Client ID in `manifest.json` at `oauth2.client_id`.
 
-### AI Provider
+### AI Backend
 - Backend uses Claude Haiku 4.5 via Anthropic API
 - Anthropic key is stored server-side in Xano env (`ANTHROPIC_API_KEY`)
 

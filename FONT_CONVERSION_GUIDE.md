@@ -38,13 +38,13 @@ Successfully converted and created:
 - **Purpose**: Body text, regular paragraphs
 - **Font Family**: `Inter-Regular`
 - **Font Style**: `normal`
-- **Location**: `resume-extension/fonts/Inter/static/Inter-Regular-normal.js`
+- **Location**: `swiftcv/fonts/Inter/static/Inter-Regular-normal.js`
 
 #### `Inter-Bold-normal.js` (448.12 KB)
 - **Purpose**: Section headings, emphasis text
 - **Font Family**: `Inter-Bold`
 - **Font Style**: `normal`
-- **Location**: `resume-extension/fonts/Inter/static/Inter-Bold-normal.js`
+- **Location**: `swiftcv/fonts/Inter/static/Inter-Bold-normal.js`
 
 ## File Structure of Generated Modules
 

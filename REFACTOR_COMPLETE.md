@@ -159,7 +159,7 @@ jsPDF.API.events.push(['addFonts', callAddFont])
 ## File Locations Reference
 
 ```
-resume-extension/
+swiftcv/
 ├── manifest.json                    (✅ Updated)
 ├── offscreen.html                   (✅ Updated)
 ├── offscreen.js                     (✅ Updated)
