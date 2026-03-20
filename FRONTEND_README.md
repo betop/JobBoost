@@ -1,10 +1,10 @@
-# Resume Generator Application - Frontend Implementation
+# SwiftCV Application - Frontend Implementation
 
 A comprehensive system for generating customized resumes and cover letters based on professional profiles and job descriptions.
 
 ## Overview
 
-This repository contains the **frontend implementation** of the Resume Generator Application, consisting of two main components:
+This repository contains the **frontend implementation** of the SwiftCV Application, consisting of two main components:
 
 1. **Admin Panel** - Web-based management interface (Next.js)
 2. **Browser Extension** - Chrome extension for end-users (Manifest V3)
@@ -54,7 +54,7 @@ npm run dev
 
 See [admin-panel/README.md](./admin-panel/README.md) for detailed documentation.
 
-### 2. Browser Extension (`resume-extension/`)
+### 2. Browser Extension (`swiftcv/`)
 
 **Technology:**
 - Chrome Extension Manifest V3
@@ -75,7 +75,7 @@ See [admin-panel/README.md](./admin-panel/README.md) for detailed documentation.
 3. Load unpacked extension
 4. Configure `token.json` with your access token
 
-See [resume-extension/README.md](./resume-extension/README.md) for detailed documentation.
+See [swiftcv/README.md](./swiftcv/README.md) for detailed documentation.
 
 ## 🚀 Getting Started
 
@@ -99,7 +99,7 @@ npm run dev
 
 2. **Browser Extension:**
 ```bash
-cd resume-extension
+cd swiftcv
 # Edit token.json with your access token
 # Load in Chrome as unpacked extension
 ```
@@ -301,7 +301,7 @@ npm start
 ## 📚 Documentation
 
 - [Admin Panel Documentation](./admin-panel/README.md)
-- [Browser Extension Documentation](./resume-extension/README.md)
+- [Browser Extension Documentation](./swiftcv/README.md)
 - [Backend API Specification](./BACKEND.MD)
 - [Database Schema](./DATABASE.MD)
 
@@ -317,7 +317,7 @@ This is a complete frontend implementation. To extend:
 
 ## 📄 License
 
-Part of the Resume Generator Application system.
+Part of the SwiftCV Application system.
 
 ## 🎯 Key Features Summary
 

@@ -1,4 +1,4 @@
-# Resume Generator Application - System Summary
+# SwiftCV Application - System Summary
 
 ## 1. Purpose
 

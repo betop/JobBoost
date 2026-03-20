@@ -206,53 +206,6 @@ body {
   margin-bottom: 6px;
 }
 
-/* AI Provider selector */
-.provider-section {
-  margin-bottom: 16px;
-}
-
-.provider-section h3 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #333;
-}
-
-.provider-toggle {
-  display: flex;
-  gap: 8px;
-}
-
-.provider-btn {
-  flex: 1;
-  padding: 8px 10px;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  background: white;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  color: #666;
-  transition: all 0.15s ease;
-}
-
-.provider-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
-}
-
-.provider-btn.active {
-  border-color: #667eea;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.provider-label {
-  margin-top: 6px;
-  font-size: 11px;
-  color: #999;
-}
-
 .actions {
   margin-top: 16px;
 }

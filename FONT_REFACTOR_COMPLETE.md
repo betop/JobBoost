@@ -114,7 +114,7 @@ Download PDF [Time: 50-110ms for fonts]
 
 ### Modified Files
 ```
-resume-extension/
+swiftcv/
 ├── manifest.json ............................ ✅
 ├── offscreen.html ........................... ✅
 ├── pdfGenerator.js .......................... ✅ (major refactor)
@@ -141,7 +141,7 @@ QUICK_REFERENCE.md ........... (Updated with font info)
 - Go to `chrome://extensions/`
 - Enable "Developer mode" (top right)
 - Click "Load unpacked"
-- Select your `resume-extension` folder
+- Select your `swiftcv` folder
 
 ### 2. Test PDF Generation
 - Open the extension popup

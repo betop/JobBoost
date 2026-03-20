@@ -1,4 +1,4 @@
-# Resume Generator – Database Structure
+# SwiftCV – Database Structure
 
 ## Overview
 

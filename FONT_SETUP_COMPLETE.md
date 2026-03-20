@@ -45,7 +45,7 @@ doc.text("Senior Developer | Tech Corp (2020-Present)", 18, 58);
 ## File Structure
 
 ```
-resume-extension/
+swiftcv/
 ├── convert-fonts.js                          ← Font converter script
 ├── offscreen.html                            ← Updated with font imports
 ├── pdfGenerator.js                           ← Updated to use Inter fonts
@@ -104,13 +104,13 @@ Then:
 
 Run this to verify fonts are ready:
 ```bash
-ls -lh resume-extension/fonts/Inter/static/*-normal.js
+ls -lh swiftcv/fonts/Inter/static/*-normal.js
 # Should show: Inter-Regular-normal.js and Inter-Bold-normal.js
 ```
 
 Check `offscreen.html` has imports:
 ```bash
-grep "type=\"module\"" resume-extension/offscreen.html
+grep "type=\"module\"" swiftcv/offscreen.html
 # Should show font script imports
 ```
 

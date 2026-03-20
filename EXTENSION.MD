@@ -1,4 +1,4 @@
-# Resume Generator Browser Extension – Technical Specification (PDF Generated in Frontend)
+# SwiftCV Browser Extension – Technical Specification (PDF Generated in Frontend)
 
 ## Overview
 
@@ -31,7 +31,7 @@ Backend remains stateless.
 # 2. Project Structure
 
 ```
-resume-extension/
+swiftcv/
 │
 ├── manifest.json
 ├── token.json

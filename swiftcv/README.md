@@ -1,10 +1,10 @@
-# Resume Generator - Browser Extension
+# SwiftCV - Browser Extension
 
 A Chrome browser extension that generates customized resumes and cover letters from job descriptions using AI, with PDF generation happening entirely in the browser.
 
 ## Features
 
-- 🔐 **Secure Token Authentication** - Token-based access for bidders
+- 🔐 **Secure Key Authentication** - Key-based access for bidders
 - 📄 **PDF Generation** - Client-side PDF generation using jsPDF
 - 🎯 **Context Menu Integration** - Right-click to generate resumes
 - 💾 **No Server Storage** - PDFs generated and downloaded locally
@@ -18,12 +18,12 @@ A Chrome browser extension that generates customized resumes and cover letters f
 1. Open Chrome and navigate to `chrome://extensions/`
 2. Enable "Developer mode" in the top right
 3. Click "Load unpacked"
-4. Select the `resume-extension` folder
+4. Select the `swiftcv` folder
 
-### Configure Your Token
+### Configure Your Key
 
 1. Open the `token.json` file in the extension folder
-2. Add your access token:
+2. Add your key:
 ```json
 {
   "token": "YOUR_ACCESS_TOKEN_HERE"
@@ -57,9 +57,9 @@ A Chrome browser extension that generates customized resumes and cover letters f
 ## File Structure
 
 ```
-resume-extension/
+swiftcv/
 ├── manifest.json           # Extension configuration
-├── token.json             # User's access token (configured by user)
+├── token.json             # User's key (configured by user)
 ├── background.js          # Background service worker
 ├── content.js             # Content script for PDF generation
 ├── pdfGenerator.js        # Enhanced PDF formatting
@@ -76,8 +76,8 @@ resume-extension/
 
 ## How It Works
 
-### 1. Token Validation
-- Extension reads token from `token.json`
+### 1. Key Validation
+- Extension reads key from `token.json`
 - Sends token to backend for validation
 - Stores profile information locally
 
@@ -90,7 +90,7 @@ resume-extension/
 - User selects job description text
 - Right-click menu triggers generation
 - Background script sends request to backend with:
-  - Access token
+  - Key
   - Profile ID
   - Job description
 - Backend returns:
@@ -141,7 +141,7 @@ The extension requires the following permissions:
 ## Privacy & Security
 
 ### What's Stored Locally
-- Access token (in token.json)
+- Key (in token.json)
 - Profile ID
 - Profile name
 - Confirmation status
@@ -230,4 +230,4 @@ For issues or questions:
 
 ## License
 
-Part of the Resume Generator Application system.
+Part of the SwiftCV Application system.

@@ -2,7 +2,7 @@
 
 ## Changes Made
 
-### File: `resume-extension/pdfGenerator.js`
+### File: `swiftcv/pdfGenerator.js`
 
 #### 1. Added Helper Method (Line 229-240)
 ```javascript
@@ -74,7 +74,7 @@ jsPDF PubSub Error: Cannot read properties of undefined (reading 'Unicode')
    - Open `chrome://extensions/`
    - Enable "Developer mode"
    - Click "Load unpacked"
-   - Select the `resume-extension` folder
+   - Select the `swiftcv` folder
 
 2. **Test PDF Generation:**
    - Open the extension popup
@@ -98,7 +98,7 @@ jsPDF PubSub Error: Cannot read properties of undefined (reading 'Unicode')
 
 ## Files Changed
 
-- ✅ `resume-extension/pdfGenerator.js` - Added converter, updated registration
+- ✅ `swiftcv/pdfGenerator.js` - Added converter, updated registration
 
 ## Files Unaffected
 

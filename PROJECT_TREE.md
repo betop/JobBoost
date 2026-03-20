@@ -104,7 +104,7 @@ resume extension/
 │           └── 📄 dateUtils.ts          # Date formatting
 │
 │
-└── 📁 resume-extension/                 # ✅ CHROME EXTENSION
+└── 📁 swiftcv/                 # ✅ CHROME EXTENSION
     │
     ├── 📄 manifest.json                 # Extension manifest (Manifest V3)
     ├── 📄 token.json                    # User token storage
@@ -165,7 +165,7 @@ Total: 2 files
 ```
 Total: 2 files
 - admin-panel/src/app/globals.css (global styles)
-- resume-extension/styles.css (extension styles)
+- swiftcv/styles.css (extension styles)
 ```
 
 ### Configuration Files
@@ -190,7 +190,7 @@ Total: 9 files
 - SETUP_GUIDE.md (setup guide)
 - QUICK_REFERENCE.md (quick reference)
 - admin-panel/README.md (admin docs)
-- resume-extension/README.md (extension docs)
+- swiftcv/README.md (extension docs)
 - icons/ICON_INSTRUCTIONS.md (icon guide)
 - ADMIN_PANEL.MD (specs)
 - EXTENSION.MD (specs)
@@ -358,15 +358,15 @@ find . -path "*/services/*.ts"
 → `admin-panel/src/app/[page-name]/page.tsx`
 
 **Want to modify PDF generation?**
-→ `resume-extension/pdfGenerator.js`
-→ `resume-extension/content.js`
+→ `swiftcv/pdfGenerator.js`
+→ `swiftcv/content.js`
 
 **Want to change extension flow?**
-→ `resume-extension/background.js`
+→ `swiftcv/background.js`
 
 **Want to update UI styling?**
 → `admin-panel/tailwind.config.ts`
-→ `resume-extension/styles.css`
+→ `swiftcv/styles.css`
 
 ---
 

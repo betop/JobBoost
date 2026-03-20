@@ -1,4 +1,4 @@
-# Resume Generator - Admin Panel
+# SwiftCV - Admin Panel
 
 A modern, responsive admin panel built with Next.js, TypeScript, and Tailwind CSS for managing profiles, bidders, tokens, and rules.
 
@@ -200,4 +200,4 @@ TypeScript strict mode is enabled for maximum type safety.
 
 ## License
 
-This project is part of the Resume Generator Application system.
+This project is part of the SwiftCV Application system.

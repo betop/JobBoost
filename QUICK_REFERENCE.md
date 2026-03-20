@@ -21,7 +21,7 @@ cp .env.example .env.local
 
 ```bash
 # Setup
-cd resume-extension
+cd swiftcv
 # Edit token.json with access token
 # Edit background.js with API URL
 
@@ -29,7 +29,7 @@ cd resume-extension
 # 1. Open chrome://extensions/
 # 2. Enable Developer mode
 # 3. Click "Load unpacked"
-# 4. Select resume-extension folder
+# 4. Select swiftcv folder
 
 # Convert icons (if needed)
 cd icons
@@ -48,7 +48,7 @@ admin-panel/src/
 ├── store/            # Zustand global state
 └── utils/            # Helper functions
 
-resume-extension/
+swiftcv/
 ├── background.js      # Service worker (API calls)
 ├── content.js         # Content script (PDF generation)
 ├── popup.html/js      # Extension popup

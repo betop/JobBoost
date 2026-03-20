@@ -204,7 +204,7 @@ console.log('║  • Bold rendering: ✅ Enabled                               
 console.log('║                                                                            ║');
 console.log('║  NEXT STEP: Test in Chrome browser                                        ║');
 console.log('║  1. chrome://extensions                                                   ║');
-console.log('║  2. Load unpacked → select resume-extension folder                        ║');
+console.log('║  2. Load unpacked → select swiftcv folder                        ║');
 console.log('║  3. Open DevTools (F12) → Console tab                                      ║');
 console.log('║  4. Navigate to any job listing                                           ║');
 console.log('║  5. Right-click job description → Generate Resume                         ║');

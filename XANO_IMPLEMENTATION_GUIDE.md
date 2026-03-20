@@ -1,6 +1,6 @@
 # Xano Implementation Guide - Complete Walkthrough with Screenshots
 
-This guide walks you through every single click, button, and configuration needed to build the Resume Generator backend in Xano.
+This guide walks you through every single click, button, and configuration needed to build the SwiftCV backend in Xano.
 
 ---
 
@@ -24,7 +24,7 @@ This guide walks you through every single click, button, and configuration neede
 1. After login, you'll see dashboard
 2. Click **"Create New Workspace"** button (center or top left)
 3. Enter workspace details:
-   - **Name**: `Resume Generator`
+   - **Name**: `SwiftCV`
    - **Region**: Select closest to you (e.g., US East, EU West)
 4. Click **"Create"**
 5. Wait for workspace to initialize (~10 seconds)
@@ -1434,7 +1434,7 @@ Generate a tailored resume and cover letter for this job. Return ONLY valid JSON
 ### Step 10.2: Test Browser Extension
 
 1. **Setup Token:**
-   - Go to `resume-extension` folder
+   - Go to `swiftcv` folder
    - Open `token.json`
    - Replace content:
      ```json
@@ -1449,7 +1449,7 @@ Generate a tailored resume and cover letter for this job. Return ONLY valid JSON
    - Go to `chrome://extensions/`
    - Enable "Developer mode" (top right toggle)
    - Click "Load unpacked"
-   - Select the `resume-extension` folder
+   - Select the `swiftcv` folder
    - Extension should load
 
 3. **Test Token Validation:**
@@ -1641,7 +1641,7 @@ https://xxxxx-xxxxx.xano.io/api:v1
 
 ---
 
-**Congratulations!** You now have a fully functional backend for the Resume Generator application. 🎉
+**Congratulations!** You now have a fully functional backend for the SwiftCV application. 🎉
 
 Your backend handles:
 ✅ Admin authentication & authorization

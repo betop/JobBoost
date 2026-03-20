@@ -25,7 +25,7 @@ jsPDF's `addFileToVFS()` method requires font data as **binary strings**, not ra
 Created a conversion function that transforms base64 font data into jsPDF's expected binary string format.
 
 ### Files Modified
-- **`resume-extension/pdfGenerator.js`** - Only file changed
+- **`swiftcv/pdfGenerator.js`** - Only file changed
   - Added: `_base64ToVfsString()` method (12 lines)
   - Modified: `_registerFontsOnDocument()` method (1 line changed)
 
@@ -136,7 +136,7 @@ This will now work correctly now that fonts are properly registered.
    - Open `chrome://extensions`
    - Enable Developer mode
    - Click "Load unpacked"
-   - Select `resume-extension` folder
+   - Select `swiftcv` folder
 
 2. **Test PDF generation**
    - Open extension popup

@@ -79,7 +79,7 @@ Complete documentation for the Next.js admin panel.
 
 ### Browser Extension
 
-#### [resume-extension/README.md](./resume-extension/README.md) 🔌 EXTENSION DOCS
+#### [swiftcv/README.md](./swiftcv/README.md) 🔌 EXTENSION DOCS
 Complete documentation for the Chrome browser extension.
 - Features overview
 - Installation
@@ -90,7 +90,7 @@ Complete documentation for the Chrome browser extension.
 - Privacy & security
 - Troubleshooting
 
-#### [resume-extension/icons/ICON_INSTRUCTIONS.md](./resume-extension/icons/ICON_INSTRUCTIONS.md) 🎨 ICON GUIDE
+#### [swiftcv/icons/ICON_INSTRUCTIONS.md](./swiftcv/icons/ICON_INSTRUCTIONS.md) 🎨 ICON GUIDE
 Instructions for converting SVG icons to PNG format.
 - Conversion methods
 - Online tools
@@ -137,7 +137,7 @@ Install & Configure    Quick Commands
     ↓                    ↓
 Admin Panel       Browser Extension
     ↓                    ↓
-admin-panel/      resume-extension/
+admin-panel/      swiftcv/
 README.md         README.md
     ↓                    ↓
     └─────────┬──────────┘
@@ -204,10 +204,10 @@ README.md         README.md
 → [admin-panel/README.md](./admin-panel/README.md)
 
 **Learn about extension features?**
-→ [resume-extension/README.md](./resume-extension/README.md)
+→ [swiftcv/README.md](./swiftcv/README.md)
 
 **Convert extension icons?**
-→ [resume-extension/icons/ICON_INSTRUCTIONS.md](./resume-extension/icons/ICON_INSTRUCTIONS.md)
+→ [swiftcv/icons/ICON_INSTRUCTIONS.md](./swiftcv/icons/ICON_INSTRUCTIONS.md)
 
 **See API endpoints needed?**
 → [BACKEND.MD](./BACKEND.MD) (reference only)
@@ -228,7 +228,7 @@ README.md         README.md
 | PROJECT_TREE.md | File structure | Finding files |
 | CHECKLIST.md | Progress tracking | Project management |
 | admin-panel/README.md | Admin panel docs | Admin development |
-| resume-extension/README.md | Extension docs | Extension development |
+| swiftcv/README.md | Extension docs | Extension development |
 | icons/ICON_INSTRUCTIONS.md | Icon conversion | Before publishing |
 | README.MD | Original specs | Reference |
 | ADMIN_PANEL.MD | Original specs | Reference |

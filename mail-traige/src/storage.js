@@ -1,8 +1,4 @@
 const DEFAULTS = {
-  provider: "openai", // openai | gemini
-  model: "gpt-4o-mini",
-  openaiApiKey: "",
-  geminiApiKey: "",
   maxEmailsPerRun: 20
 };
 

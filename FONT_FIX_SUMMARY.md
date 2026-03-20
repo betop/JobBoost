@@ -90,7 +90,7 @@ Created validation tests to confirm:
 
 ## Technical Details
 
-- **File Modified:** `resume-extension/pdfGenerator.js`
+- **File Modified:** `swiftcv/pdfGenerator.js`
 - **Lines Added:** ~10 (new method)
 - **Lines Modified:** ~5 (font registration loop)
 - **Total Change:** Minimal, focused modification
