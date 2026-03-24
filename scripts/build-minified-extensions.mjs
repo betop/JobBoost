@@ -120,7 +120,19 @@ async function buildTarget(targetName) {
 
 async function zipTarget(targetName) {
   const sourceDir = path.join(distRoot, targetName);
-  const zipPath = path.join(zipRoot, `${targetName}.zip`);
+  const manifestPath = path.join(sourceDir, "manifest.json");
+
+  // Read version from manifest.json
+  let version = "unknown";
+  try {
+    const manifestContent = await fs.readFile(manifestPath, "utf8");
+    const manifest = JSON.parse(manifestContent);
+    version = manifest.version || "unknown";
+  } catch (error) {
+    console.warn(`[warn] Could not read version from ${targetName}/manifest.json. Using 'unknown'.`);
+  }
+
+  const zipPath = path.join(zipRoot, `${targetName}-v${version}.zip`);
 
   await fs.mkdir(zipRoot, { recursive: true });
 
@@ -137,7 +149,7 @@ async function zipTarget(targetName) {
     archive.finalize();
   });
 
-  console.log(`[ok] Zipped ${targetName} -> ${path.relative(root, zipPath)}`);
+  console.log(`[ok] Zipped ${targetName} v${version} -> ${path.relative(root, zipPath)}`);
 }
 
 async function main() {
