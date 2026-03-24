@@ -224,6 +224,8 @@ export default function RulesPage() {
         isOpen={showPasswordConfirm}
         onClose={() => {
           setShowPasswordConfirm(false);
+        }}
+        onCancel={() => {
           router.push("/dashboard");
         }}
         onConfirm={() => {

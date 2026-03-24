@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Edit2, Check, AlertCircle } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
+import PasswordConfirmModal from "@/components/PasswordConfirmModal";
 
 interface ExtensionVersion {
   id: string;
@@ -13,11 +15,16 @@ interface ExtensionVersion {
   changelog?: string;
 }
 
-export default function VersionManagement() {
+export default function ExtensionManagement() {
+  const router = useRouter();
   const { showToast } = useUIStore();
   const [versions, setVersions] = useState<ExtensionVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
+  const [showActionConfirm, setShowActionConfirm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'set-current'; data?: any; versionId?: string } | null>(null);
   const [formData, setFormData] = useState({
     extension_name: "swiftcv",
     version: "",
@@ -27,8 +34,16 @@ export default function VersionManagement() {
   const extensions = ["swiftcv", "mail-triage"];
 
   useEffect(() => {
-    fetchVersions();
-  }, []);
+    if (!isPasswordVerified) {
+      setShowPasswordConfirm(true);
+    }
+  }, [isPasswordVerified]);
+
+  useEffect(() => {
+    if (isPasswordVerified) {
+      fetchVersions();
+    }
+  }, [isPasswordVerified]);
 
   const fetchVersions = async () => {
     try {
@@ -60,11 +75,18 @@ export default function VersionManagement() {
       return;
     }
 
+    setPendingAction({ type: 'create', data: { ...formData } });
+    setShowActionConfirm(true);
+  };
+
+  const executeCreateVersion = async () => {
+    if (!pendingAction || pendingAction.type !== 'create') return;
+
     try {
       const response = await fetch("/api/extension-versions", {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify(formData),
+        body: JSON.stringify(pendingAction.data),
       });
 
       if (!response.ok) throw new Error("Failed to create version");
@@ -73,6 +95,7 @@ export default function VersionManagement() {
       setFormData({ extension_name: "swiftcv", version: "", changelog: "" });
       setShowForm(false);
       fetchVersions();
+      setPendingAction(null);
     } catch (error) {
       console.error("Error creating version:", error);
       showToast("Failed to create version", "error");
@@ -80,8 +103,15 @@ export default function VersionManagement() {
   };
 
   const handleSetCurrent = async (versionId: string) => {
+    setPendingAction({ type: 'set-current', versionId });
+    setShowActionConfirm(true);
+  };
+
+  const executeSetCurrent = async () => {
+    if (!pendingAction || pendingAction.type !== 'set-current') return;
+
     try {
-      const response = await fetch(`/api/extension-versions/${versionId}/set-current`, {
+      const response = await fetch(`/api/extension-versions/${pendingAction.versionId}/set-current`, {
         method: "PATCH",
         headers: getAuthHeaders(),
       });
@@ -90,32 +120,83 @@ export default function VersionManagement() {
       
       showToast("Current version updated successfully", "success");
       fetchVersions();
+      setPendingAction(null);
     } catch (error) {
       console.error("Error setting current version:", error);
       showToast("Failed to update current version", "error");
     }
   };
 
+  const executePendingAction = async () => {
+    if (!pendingAction) return;
+    
+    if (pendingAction.type === 'create') {
+      await executeCreateVersion();
+    } else if (pendingAction.type === 'set-current') {
+      await executeSetCurrent();
+    }
+  };
+
   const groupedVersions = extensions.map((ext) => ({
     name: ext,
-    versions: versions.filter((v) => v.extension_name === ext),
+    versions: versions
+      .filter((v) => v.extension_name === ext)
+      .sort((a, b) => new Date(b.release_date).getTime() - new Date(a.release_date).getTime()),
   }));
 
-  if (loading) {
+  if (loading || !isPasswordVerified) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
-      </div>
+      <>
+        <PasswordConfirmModal
+          isOpen={showPasswordConfirm}
+          onClose={() => {
+            setShowPasswordConfirm(false);
+          }}
+          onCancel={() => {
+            router.push("/dashboard");
+          }}
+          onConfirm={() => {
+            setIsPasswordVerified(true);
+            setShowPasswordConfirm(false);
+          }}
+          title="Access Extensions"
+          description="Please confirm your password to access the Extensions page"
+        />
+
+        {loading && (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+          </div>
+        )}
+      </>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Version Management</h1>
-          <p className="text-gray-600 mt-2">Manage extension versions and set current releases</p>
-        </div>
+    <>
+      <PasswordConfirmModal
+        isOpen={showActionConfirm}
+        onClose={() => {
+          setShowActionConfirm(false);
+        }}
+        onCancel={() => {
+          setPendingAction(null);
+        }}
+        onConfirm={executePendingAction}
+        title="Confirm Action"
+        description={
+          pendingAction?.type === 'set-current'
+            ? "Please confirm your password to set this as the current version"
+            : "Please confirm your password to create this version"
+        }
+      />
+
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Extension Management</h1>
+            <p className="text-gray-600 mt-2">Manage extension versions and set current releases</p>
+          </div>
         <button
           onClick={() => setShowForm(!showForm)}
           className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
@@ -260,6 +341,7 @@ export default function VersionManagement() {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

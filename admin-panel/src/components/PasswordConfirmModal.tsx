@@ -21,6 +21,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
   title?: string;
   description?: string;
 }
@@ -29,6 +30,7 @@ export default function PasswordConfirmModal({
   isOpen,
   onClose,
   onConfirm,
+  onCancel,
   title = "Confirm Password",
   description = "Enter your password to continue",
 }: Props) {
@@ -49,6 +51,7 @@ export default function PasswordConfirmModal({
   const handleClose = () => {
     reset();
     setShowPassword(false);
+    onCancel?.();
     onClose();
   };
 
@@ -68,7 +71,9 @@ export default function PasswordConfirmModal({
 
       showToast("Password confirmed", "success");
       await onConfirm();
-      handleClose();
+      reset();
+      setShowPassword(false);
+      onClose();
     } catch (err: any) {
       const message =
         err.response?.data?.message ||

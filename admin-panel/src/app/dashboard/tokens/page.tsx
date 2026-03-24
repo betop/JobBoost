@@ -250,6 +250,8 @@ export default function TokensPage() {
         isOpen={showPasswordConfirm}
         onClose={() => {
           setShowPasswordConfirm(false);
+        }}
+        onCancel={() => {
           router.push("/dashboard");
         }}
         onConfirm={() => {
