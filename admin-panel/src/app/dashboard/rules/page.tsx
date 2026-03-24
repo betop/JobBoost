@@ -224,6 +224,7 @@ export default function RulesPage() {
         isOpen={showPasswordConfirm}
         onClose={() => {
           setShowPasswordConfirm(false);
+          router.push("/dashboard");
         }}
         onConfirm={() => {
           setIsPasswordVerified(true);

@@ -10,9 +10,10 @@ interface ModalProps {
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
   closeOnBackdrop?: boolean;
+  zIndex?: number;
 }
 
-export default function Modal({ isOpen, onClose, title, children, size = "md", closeOnBackdrop = true }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, size = "md", closeOnBackdrop = true, zIndex = 50 }: ModalProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && closeOnBackdrop) onClose();
@@ -39,7 +40,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "md", c
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className={`fixed inset-0 flex items-center justify-center p-4`} style={{ zIndex }}>
       <div
         className="absolute inset-0 bg-black bg-opacity-50"
         onClick={closeOnBackdrop ? onClose : undefined}

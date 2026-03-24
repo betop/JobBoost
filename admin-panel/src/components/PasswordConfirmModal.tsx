@@ -81,7 +81,7 @@ export default function PasswordConfirmModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={title} size="sm" closeOnBackdrop={false}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={title} size="sm" closeOnBackdrop={false} zIndex={60}>
       <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
         <p className="text-sm text-gray-600">{description}</p>
 

@@ -104,6 +104,26 @@ btnCheck.addEventListener("click", async () => {
   runStatus.textContent = "Checking…";
   renderSummary(null);
 
+  // Check version first
+  try {
+    const localVersion = chrome.runtime.getManifest().version;
+    const currentVersionResponse = await fetch(
+      "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1/public/current-version?extension_name=mail-triage"
+    );
+    
+    if (currentVersionResponse.ok) {
+      const versionData = await currentVersionResponse.json();
+      if (localVersion !== versionData.version) {
+        runStatus.textContent = `⚠️ Extension update required. Please update Mail-Triage to the latest version.`;
+        btnCheck.disabled = false;
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("Version check failed:", e);
+    // Continue anyway if version check fails (fail-open)
+  }
+
   const startDate = fromDate.value;
   const endDate = toDate.value;
   if (!startDate || !endDate) {

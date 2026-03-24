@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   Activity,
+  Package,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Bidders", href: "/dashboard/bidders", icon: UserCheck },
   { name: "Keys", href: "/dashboard/tokens", icon: Key },
   { name: "Rules", href: "/dashboard/rules", icon: FileText },
+  { name: "Versions", href: "/dashboard/versions", icon: Package },
   { name: "Generation Logs", href: "/dashboard/logs", icon: Activity },
 ];
 

@@ -30,7 +30,7 @@ chrome.runtime.onInstalled.addListener(async () => {
       url: "setup.html",
       type: "popup",
       width: 480,
-      height: 560,
+      height: 550,
     });
   } else {
     await refreshProfilesIfNeeded({ force: true });
@@ -167,7 +167,7 @@ function openProfileConfirmationFlow() {
       url: "confirm.html",
       type: "popup",
       width: 480,
-      height: 560,
+      height: 550,
     });
     return;
   }
@@ -177,7 +177,7 @@ function openProfileConfirmationFlow() {
       url: "select_profile.html",
       type: "popup",
       width: 420,
-      height: 420,
+      height: 550,
     });
   }
 }
@@ -336,7 +336,7 @@ async function generateResume(jobDescription, jobUrl = "") {
   // Open progress window
   const progressWin = await new Promise((resolve) =>
     chrome.windows.create(
-      { url: "progress.html", type: "popup", width: 380, height: 420 },
+      { url: "progress.html", type: "popup", width: 380, height: 550 },
       (win) => resolve(win)
     )
   );
@@ -362,6 +362,7 @@ async function generateResume(jobDescription, jobUrl = "") {
         token: extensionState.token,
         ai_provider: "claude",
         job_url: jobUrl,
+        extension_version: chrome.runtime.getManifest().version,
       }),
     });
 
@@ -370,6 +371,11 @@ async function generateResume(jobDescription, jobUrl = "") {
       try {
         const errorData = await response.json();
         message = errorData?.message || errorData?.error || message;
+        
+        // Check if this is a version mismatch error
+        if (message.includes("version") || message.includes("Version")) {
+          message = message + " — Please update the SwiftCV extension to the latest version.";
+        }
       } catch (_) {}
       throw new Error(message);
     }
@@ -530,7 +536,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       url: "setup.html",
       type: "popup",
       width: 480,
-      height: 560,
+      height: 550,
     });
     sendResponse({ success: true });
   } else if (request.action === "openProfileConfirmation") {
