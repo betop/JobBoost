@@ -8,6 +8,7 @@ query "resume/generate" verb=POST {
     text job_description?
     text token?
     text job_url?
+    text extension_version?
   }
 
   stack {
@@ -24,6 +25,22 @@ query "resume/generate" verb=POST {
     precondition ($input.token != null && $input.token != "") {
       error_type = "accessdenied"
       error = "Missing authorization token"
+    }
+  
+    // Check extension version first
+    db.query extension_version {
+      where = $db.extension_version.extension_name == "swiftcv" && $db.extension_version.is_current == true
+      return = {type: "single"}
+    } as $current_version
+  
+    precondition ($current_version != null) {
+      error_type = "badrequest"
+      error = "No current version found for swiftcv extension"
+    }
+  
+    precondition ($input.extension_version != null && $input.extension_version == $current_version.version) {
+      error_type = "badrequest"
+      error = "Extension version mismatch"
     }
   
     db.query access_token {

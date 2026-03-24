@@ -81,7 +81,9 @@ class PDFGenerator {
       accent: [37,  99,  235],   // #2563EB
       dark:   [17,  24,  39 ],   // #111827
       medium: [55,  65,  81 ],   // #374151
-      gray:   [107, 114, 128],   // #6B7280
+      body:   [24,  24,  27 ],   // near-black for primary content text
+      bodyMuted: [63,  63,  70], // darker muted neutral for secondary content text
+      gray:   [82,  82,  91],    // #52525B more visible gray for supporting text
       rule:   [209, 213, 219],   // #D1D5DB  section rules
       page:   [255, 255, 255],
     };
@@ -649,7 +651,13 @@ class PDFGenerator {
       10: { accent: [100, 116, 139], dark: [15,  23,  42],  medium: [71,  85,  105], gray: [148,163,184], rule: [203,213,225], sidebar: null },
     };
     const t = themes[tid] || themes[1];
-    this.C = { ...t, page: [255,255,255] };
+    this.C = {
+      ...t,
+      body: [24, 24, 27],
+      bodyMuted: [63, 63, 70],
+      gray: [82, 82, 91],
+      page: [255,255,255],
+    };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -783,16 +791,12 @@ class PDFGenerator {
     doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(255,255,255);
     doc.text((r.name || "").toUpperCase(), m, 14);
     if (r.title) {
-      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10.5); doc.setTextColor(...this.C.medium);
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10.5); doc.setTextColor(255,255,255);
       doc.text(r.title, m, 22);
     }
-    // Contact in band
-    doc.setFont(this._activeFont, "normal"); doc.setFontSize(8.5); doc.setTextColor(255,255,255);
-    const parts = [];
-    if (r.email) parts.push(r.email);
-    if (r.phone) parts.push(r.phone);
-    if (r.location) parts.push(r.location);
-    doc.text(parts.join("  ·  "), m, 30);
+    // Contact in band — use shared renderer with white text/links
+    this.currentY = 30;
+    this._renderContactLine(doc, r, 8.5, false, { textColor: [255,255,255], linkColor: [255,255,255] });
     this.currentY = bandH + 10;
     this._renderCommonSections(doc, r, (d, title) => {
       this.currentY += this.SP.beforeSection;
@@ -895,7 +899,7 @@ class PDFGenerator {
     nameLines.forEach(ln => { doc.text(ln, 7, sy); sy += 5.5; });
     sy += 2;
     if (r.title) {
-      doc.setFont(this._activeFont, "normal"); doc.setFontSize(8.5); doc.setTextColor(...this.C.accent);
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(8.5); doc.setTextColor(255,255,255);
       const tLines = doc.splitTextToSize(r.title, sideW - 12);
       tLines.forEach(ln => { doc.text(ln, 7, sy); sy += 4.5; });
       sy += 3;
@@ -903,8 +907,8 @@ class PDFGenerator {
     // Sidebar divider
     doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.5);
     doc.line(7, sy, sideW - 7, sy); sy += 5;
-    // Sidebar contact items
-    doc.setFont(this._activeFont, "normal"); doc.setFontSize(7.5); doc.setTextColor(200,210,230);
+    // Sidebar contact items (ensure visible on dark sidebar)
+    doc.setFont(this._activeFont, "normal"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
     const sideItems = [];
     if (r.email) sideItems.push(r.email);
     if (r.phone) sideItems.push(r.phone);
@@ -924,7 +928,7 @@ class PDFGenerator {
     if (r.summary) {
       this._sectionHeader(doc, "PROFILE");
       const segs = this._parseMarkers(r.summary);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.dark, this.LH.base);
+      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
       this.currentY = endY + this.LH.base + 1;
     }
     this._renderCommonSections(doc, r, (d, title) => {
@@ -956,7 +960,7 @@ class PDFGenerator {
     doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(255,255,255);
     doc.text((r.name || "").toUpperCase(), m, 13);
     if (r.title) {
-      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10); doc.setTextColor(255,230,240);
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10); doc.setTextColor(255,255,255);
       doc.text(r.title, m, 21);
     }
     this.currentY = hh + 6;
@@ -1028,7 +1032,7 @@ class PDFGenerator {
     if (!skipSummary && r.summary) {
       sectionHeaderFn(doc, "SUMMARY");
       const segs = this._parseMarkers(r.summary);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.dark, this.LH.base);
+      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
       this.currentY = endY + this.LH.base + 1;
     }
 
@@ -1089,7 +1093,7 @@ class PDFGenerator {
   //  Shared contact line renderer
   // ═══════════════════════════════════════════════════════════════════════════
 
-  _renderContactLine(doc, r, ptSize, centered) {
+  _renderContactLine(doc, r, ptSize, centered, opts) {
     const m = this.marginH;
     const contactParts = [];
     if (r.location) contactParts.push({ text: r.location, url: null });
@@ -1103,16 +1107,18 @@ class PDFGenerator {
 
     doc.setFont(this._activeFont, "normal");
     doc.setFontSize(ptSize || 9);
-    doc.setTextColor(...this.C.gray);
+    const textColor = opts && opts.textColor ? opts.textColor : this.C.gray;
+    const linkColor = opts && opts.linkColor ? opts.linkColor : this.C.accent;
+    doc.setTextColor(...textColor);
     const sep = " \u00B7 ";
     const totalW = contactParts.reduce((acc, p, i) => acc + doc.getTextWidth(p.text) + (i > 0 ? doc.getTextWidth(sep) : 0), 0);
     let cx = centered ? (this.pageWidth - totalW) / 2 : m;
     contactParts.forEach((part, i) => {
       if (i > 0) { doc.text(sep, cx, this.currentY); cx += doc.getTextWidth(sep); }
       if (part.url) {
-        doc.setTextColor(...this.C.accent);
+        doc.setTextColor(...linkColor);
         doc.textWithLink(part.text, cx, this.currentY, { url: part.url });
-        doc.setTextColor(...this.C.gray);
+        doc.setTextColor(...textColor);
       } else {
         doc.text(part.text, cx, this.currentY);
       }
@@ -1132,7 +1138,7 @@ class PDFGenerator {
     // ── Name ────────────────────────────────────────────────────────────────
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(22);
-    doc.setTextColor(...this.C.dark);
+    doc.setTextColor(...this.C.body);
     doc.text((r.name || "").toUpperCase(), m, this.currentY);
     this.currentY += 7.5;
 
@@ -1264,7 +1270,7 @@ class PDFGenerator {
     // Category label — 9.5pt bold
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(9.5);
-    doc.setTextColor(...this.C.dark);
+    doc.setTextColor(...this.C.body);
     const labelText = (category || "") + ":";
     doc.text(labelText, m, y);
     const labelW = doc.getTextWidth(labelText) + 2; // 2mm gap
@@ -1272,7 +1278,7 @@ class PDFGenerator {
     // Values — 9.5pt normal
     doc.setFont(this._activeFont, "normal");
     doc.setFontSize(9.5);
-    doc.setTextColor(...this.C.dark);
+    doc.setTextColor(...this.C.body);
     const valStr = Array.isArray(values) ? values.join(", ") : (values || "");
 
     // Split the full value string into words and lay out manually:
@@ -1337,7 +1343,7 @@ class PDFGenerator {
     const location = job.location || "";
     doc.setFont(this._activeFont, "normal");
     doc.setFontSize(10);
-    doc.setTextColor(...this.C.medium);
+    doc.setTextColor(...this.C.bodyMuted);
     doc.text(company, m, this.currentY);
 
     if (location) {
@@ -1354,7 +1360,7 @@ class PDFGenerator {
     if (summary) {
       this.currentY += this.SP.companySumTop;
       const segs = this._parseMarkers(summary);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 9.5, this.C.gray, this.LH.sm);
+      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 9.5, this.C.bodyMuted, this.LH.sm);
       this.currentY = endY + this.LH.sm + this.SP.companySumBot;
     }
 
@@ -1372,12 +1378,12 @@ class PDFGenerator {
       this._checkPageBreak(doc, bulletHeight);
 
       // Bullet char
-      doc.setTextColor(...this.C.dark);
+      doc.setTextColor(...this.C.body);
       doc.text("\u2022", m, this.currentY);  // • U+2022
 
       // Parse and render bullet text
       const segs = this._parseMarkers(bullet);
-      const endY = this._renderSegments(doc, segs, bx, this.currentY, bw, 10, this.C.dark, this.LH.base);
+      const endY = this._renderSegments(doc, segs, bx, this.currentY, bw, 10, this.C.body, this.LH.base);
       this.currentY = endY + this.LH.base + this.SP.betweenBullets;
 
       if (bi === bullets.length - 1) {
@@ -1418,7 +1424,7 @@ class PDFGenerator {
     const year = edu.year || edu.end || "";
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10);
-    doc.setTextColor(...this.C.medium);
+    doc.setTextColor(...this.C.body);
     doc.text(edu.degree || edu.degree_name || "", m, this.currentY);
 
     doc.setFont(this._activeFont, "normal");
@@ -1432,7 +1438,7 @@ class PDFGenerator {
     if (institution) {
       doc.setFont(this._activeFont, "bold");
       doc.setFontSize(9.5);
-      doc.setTextColor(...this.C.gray);
+      doc.setTextColor(...this.C.bodyMuted);
       doc.text(institution, m, this.currentY);
       this.currentY += this.LH.sm + 0.5;
     }
@@ -1452,7 +1458,7 @@ class PDFGenerator {
     const issuer = cert.issuer || "";
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10);
-    doc.setTextColor(...this.C.medium);
+    doc.setTextColor(...this.C.body);
     doc.text(name, m, this.currentY);
 
     if (issuer) {
@@ -1460,7 +1466,7 @@ class PDFGenerator {
       const sep = "  \u00B7  ";
       doc.setFont(this._activeFont, "normal");
       doc.setFontSize(9.5);
-      doc.setTextColor(...this.C.gray);
+      doc.setTextColor(...this.C.bodyMuted);
       doc.text(sep + issuer, m + nw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
@@ -1470,7 +1476,7 @@ class PDFGenerator {
     if (vp) {
       doc.setFont(this._activeFont, "normal");
       doc.setFontSize(9.5);
-      doc.setTextColor(...this.C.gray);
+      doc.setTextColor(...this.C.bodyMuted);
       const lines = doc.splitTextToSize(vp, cw);
       doc.text(lines, m, this.currentY);
       this.currentY += (lines.length - 1) * this.LH.sm + this.LH.sm + 0.5;
@@ -1507,7 +1513,7 @@ class PDFGenerator {
     const desc = proj.description || "";
     if (desc) {
       const segs = this._parseMarkers(desc);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.dark, this.LH.base);
+      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
       this.currentY = endY + this.LH.base + 0.8;
     }
 
@@ -1524,7 +1530,7 @@ class PDFGenerator {
 
       doc.setFont(this._activeFont, "normal");
       doc.setFontSize(9.5);
-      doc.setTextColor(...this.C.gray);
+      doc.setTextColor(...this.C.bodyMuted);
       const techStr = Array.isArray(tech) ? tech.join(", ") : tech;
       const tlines = doc.splitTextToSize(techStr, cw - lw);
       doc.text(tlines, m + lw, this.currentY);
@@ -1545,7 +1551,7 @@ class PDFGenerator {
     const context = [award.company, award.year].filter(Boolean).join("  |  ");
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10.5);
-    doc.setTextColor(...this.C.dark);
+    doc.setTextColor(...this.C.body);
     doc.text(name, m, this.currentY);
 
     if (context) {
@@ -1560,7 +1566,7 @@ class PDFGenerator {
     const desc = award.description || "";
     if (desc) {
       const segs = this._parseMarkers(desc);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.dark, this.LH.base);
+      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
       this.currentY = endY + this.LH.base + 0.5;
     }
   }
@@ -1657,12 +1663,12 @@ class PDFGenerator {
       const hasMarkup = segs.some(s => s.bold);
 
       if (hasMarkup) {
-        const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10.5, this.C.dark, this.LH.base);
+        const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10.5, this.C.body, this.LH.base);
         this.currentY = endY + this.LH.base + 5;
       } else {
         doc.setFont(this._activeFont, "normal");
         doc.setFontSize(10.5);
-        doc.setTextColor(...this.C.dark);
+        doc.setTextColor(...this.C.body);
         const lines = doc.splitTextToSize(trimmed, cw);
         lines.forEach((line) => {
           this._checkPageBreak(doc, 8);
@@ -1685,7 +1691,7 @@ class PDFGenerator {
       this._checkPageBreak(doc, 15);
       doc.setFont(this._activeFont, "normal");
       doc.setFontSize(9);
-      doc.setTextColor(...this.C.dark);
+      doc.setTextColor(...this.C.body);
       const lines = doc.splitTextToSize(para.trim(), this.contentWidth);
       // Render line by line with page breaks
       lines.forEach((line) => {

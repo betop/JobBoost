@@ -34,7 +34,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <p class="status-message">Please confirm your profile</p>
               </div>
             </div>
+            <button id="confirmProfileBtn" class="btn-primary" style="margin-top:12px;width:100%;">Confirm Profile</button>
           `;
+          document.getElementById("confirmProfileBtn").addEventListener("click", () => {
+            chrome.runtime.sendMessage({ action: "openProfileConfirmation" }, () => {
+              window.close();
+            });
+          });
         } else {
           statusInfoEl.innerHTML = `
             <div class="status-inactive">

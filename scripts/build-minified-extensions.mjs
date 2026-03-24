@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, "..");
 const buildRoot = path.join(root, "build");
 const distRoot = path.join(buildRoot, "extensions");
 const zipRoot = path.join(buildRoot, "zips");
-const targets = ["swiftcv", "mail-traige"];
+const targets = ["swiftcv", "mail-triage"];
 
 const textExts = new Set([".js", ".mjs", ".cjs", ".html", ".css", ".json"]);
 
