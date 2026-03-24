@@ -178,6 +178,7 @@ query "resume/generate" verb=POST {
             |set:"company":"Name"
             |set:"title":"Most Recent Title"
             |set:"date_range":"Mon YYYY - Mon YYYY"
+            |set:"location":"e.v. Remote|Onsite|Hybrid or New York, NY"
             |set:"promotion_note":"e.g. promoted from junior"
             |set:"company_summary":"italic company description with bold tools inline."
             |set:"highlights":([]

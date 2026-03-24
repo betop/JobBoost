@@ -1338,20 +1338,21 @@ class PDFGenerator {
     doc.text(dateStr, this.pageWidth - m - dw, this.currentY);
     this.currentY += this.LH.base + 0.5;
 
-    // Row 2: Company (left) + promotion note (right)
+    // Row 2: Company (left) + promotion note or location (right)
     const company  = job.company || "";
-    const promotionNote = job.promotion_note || "";
+    // Priority: show promotion_note if it exists, otherwise show location
+    const displayText = job.promotion_note || job.location || "";
     doc.setFont(this._activeFont, "normal");
     doc.setFontSize(10);
     doc.setTextColor(...this.C.bodyMuted);
     doc.text(company, m, this.currentY);
 
-    if (promotionNote) {
+    if (displayText) {
       doc.setFont(this._activeFont, "normal");
       doc.setFontSize(8);
       doc.setTextColor(...this.C.gray);
-      const lw = doc.getTextWidth(promotionNote);
-      doc.text(promotionNote, this.pageWidth - m - lw, this.currentY);
+      const lw = doc.getTextWidth(displayText);
+      doc.text(displayText, this.pageWidth - m - lw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
 
