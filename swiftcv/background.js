@@ -154,14 +154,25 @@ async function applyProfilesData(data, { openDialogs = true } = {}) {
     return;
   }
 
-  if (ids.length === 1 && !extensionState.isConfirmed) {
+  openProfileConfirmationFlow();
+}
+
+function openProfileConfirmationFlow() {
+  if (!extensionState.token || extensionState.isConfirmed) {
+    return;
+  }
+
+  if (extensionState.profileIds.length === 1) {
     chrome.windows.create({
       url: "confirm.html",
       type: "popup",
-      width: 400,
-      height: 300,
+      width: 480,
+      height: 560,
     });
-  } else if (ids.length > 1 && !extensionState.profileId) {
+    return;
+  }
+
+  if (extensionState.profileIds.length > 1) {
     chrome.windows.create({
       url: "select_profile.html",
       type: "popup",
@@ -503,7 +514,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === "tokenSaved") {
     // Called by setup.js after token is validated and stored
     extensionState.token = request.token;
-    refreshProfilesIfNeeded({ force: true }).then(() => sendResponse({ success: true }));
+    refreshProfilesIfNeeded({ force: true, openDialogs: true, notify: true }).then(() => sendResponse({ success: true }));
     return true;
   } else if (request.action === "switchProfile") {
     // Called from popup when user wants to switch profile
@@ -522,6 +533,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       height: 560,
     });
     sendResponse({ success: true });
+  } else if (request.action === "openProfileConfirmation") {
+    loadExtensionState()
+      .then(() => refreshProfilesIfNeeded({ force: true, openDialogs: false, notify: false }))
+      .catch(() => null)
+      .finally(() => {
+        openProfileConfirmationFlow();
+        sendResponse({ success: true });
+      });
+    return true;
   } else if (request.action === "getState") {
     // Re-load state if token was lost (service worker went idle)
     if (!extensionState.token) {
