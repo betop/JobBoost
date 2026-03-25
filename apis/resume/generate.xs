@@ -120,8 +120,41 @@ query "resume/generate" verb=POST {
           }
         }
       
+        var $location_display {
+          value = $w.location
+        }
+      
+        // Extract promotion note from job title (text within parentheses)
+        var $promotion_note_display {
+          value = ""
+        }
+      
+        var $title_display {
+          value = $w.job_title
+        }
+      
+        var $paren_parts {
+          value = $w.job_title|split:"("
+        }
+      
+        conditional {
+          if (`$paren_parts.length` > 1) {
+            var $closing_parts {
+              value = ($paren_parts|last)|split:")"
+            }
+          
+            var.update $promotion_note_display {
+              value = $closing_parts|first
+            }
+          
+            var.update $title_display {
+              value = ($paren_parts|first)|trim
+            }
+          }
+        }
+      
         var.update $work_text {
-          value = $work_text ~ $w.job_title ~ " at " ~ $w.company_name ~ " (" ~ $w.start_date ~ " - " ~ $end_label ~ ") "
+          value = $work_text ~ $title_display ~ " | " ~ $w.company_name ~ " | " ~ $location_display ~ " | " ~ $w.start_date ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
         }
       }
     }
@@ -178,8 +211,8 @@ query "resume/generate" verb=POST {
             |set:"company":"Name"
             |set:"title":"Most Recent Title"
             |set:"date_range":"Mon YYYY - Mon YYYY"
-            |set:"location":"e.v. Remote|Onsite|Hybrid or New York, NY"
-            |set:"promotion_note":"e.g. promoted from junior"
+            |set:"location":"Work location, leave blank if not exist"
+            |set:"promotion_note":"Promotion note for special cases, otherwise leave blank"
             |set:"company_summary":"italic company description with bold tools inline."
             |set:"highlights":([]
               |push:"bullet tool action result."
@@ -250,7 +283,7 @@ query "resume/generate" verb=POST {
   
     // Build user prompt with candidate profile and job description
     var $user_prompt {
-      value = "STEP 1 - REMOTE CHECK:\n\nIf job description mentions relocation, hybrid, onsite, in-office, or required office days, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch.\n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+      value = "STEP 1 - REMOTE CHECK:\n\nIf job description must require relocation, hybrid, onsite, in-office, or required at least 1 day office visit, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch.\n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
     }
   
     var $claude_auth {
@@ -477,5 +510,6 @@ query "resume/generate" verb=POST {
     cover_letter_text    : $cover_letter_text
     resume_filename      : $resume_filename
     cover_letter_filename: $cover_letter_filename
+    user_prompt          : $user_prompt
   }
 }
