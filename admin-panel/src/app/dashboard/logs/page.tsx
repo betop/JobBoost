@@ -29,6 +29,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Ban,
+  Eye,
 } from "lucide-react";
 
 type SortField = "created_at" | "bidder_name" | "profile_name" | "position_title" | "company_name";
@@ -288,6 +289,60 @@ function RegenerateModal({
   );
 }
 
+// Reason Modal (for skip/mismatch)
+function ReasonModal({
+  log,
+  onClose,
+}: {
+  log: GenerationLog;
+  onClose: () => void;
+}) {
+  const isSkipped = log.is_matched === 2;
+  const isMismatched = log.is_matched === 0;
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isSkipped ? (
+              <>
+                <Ban className="w-5 h-5 text-gray-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Job Skipped</h2>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Job Mismatched</h2>
+              </>
+            )}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          <div className={`rounded-lg p-4 mb-4 ${isSkipped ? 'bg-gray-50 border border-gray-200' : 'bg-amber-50 border border-amber-200'}`}>
+            <p className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-700' : 'text-amber-800'}`}>
+              {log.match_reason || "No reason provided."}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className={`w-full px-4 py-2 text-white text-sm font-semibold rounded-lg transition-colors ${
+              isSkipped
+                ? 'bg-gray-600 hover:bg-gray-700'
+                : 'bg-amber-600 hover:bg-amber-700'
+            }`}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatCard({
   icon: Icon,
   label,
@@ -340,6 +395,7 @@ export default function LogsPage() {
   // Modal state
   const [jobDetailsLog, setJobDetailsLog]     = useState<GenerationLog | null>(null);
   const [regenerateLog, setRegenerateLog]     = useState<GenerationLog | null>(null);
+  const [reasonLog, setReasonLog]             = useState<GenerationLog | null>(null);
 
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ["generation-logs", filters],
@@ -458,6 +514,12 @@ export default function LogsPage() {
             queryClient.invalidateQueries({ queryKey: ["generation-logs"] });
             queryClient.invalidateQueries({ queryKey: ["logs-stats"] });
           }}
+        />
+      )}
+      {reasonLog && (
+        <ReasonModal
+          log={reasonLog}
+          onClose={() => setReasonLog(null)}
         />
       )}
 
@@ -802,19 +864,41 @@ export default function LogsPage() {
                             </span>
                           )}
                           {log.is_matched === 1 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title={log.match_reason || ""}>
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               Matched
                             </span>
                           )}
                           {log.is_matched === 0 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200" title={log.match_reason || ""}>
-                              Mismatch
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                Mismatch
+                              </span>
+                              {log.match_reason && (
+                                <button
+                                  onClick={() => setReasonLog(log)}
+                                  className="p-0.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded transition-colors"
+                                  title="View reason"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                           {log.is_matched === 2 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-200">
-                              Skipped
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-200">
+                                Skipped
+                              </span>
+                              {log.match_reason && (
+                                <button
+                                  onClick={() => setReasonLog(log)}
+                                  className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                  title="View reason"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
