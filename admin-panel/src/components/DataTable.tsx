@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 interface Column<T> {
@@ -16,6 +17,7 @@ interface DataTableProps<T> {
   searchPlaceholder?: string;
   onSearch?: (query: string) => void;
   loading?: boolean;
+  persistToUrl?: boolean;
 }
 
 export default function DataTable<T extends { id: string }>({
@@ -25,10 +27,39 @@ export default function DataTable<T extends { id: string }>({
   searchPlaceholder = "Search...",
   onSearch,
   loading = false,
+  persistToUrl = true,
 }: DataTableProps<T>) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const itemsPerPage = 10;
+
+  // Load state from URL on mount
+  useEffect(() => {
+    if (!persistToUrl) return;
+
+    const page = searchParams.get("page");
+    const search = searchParams.get("search");
+
+    if (page) setCurrentPage(parseInt(page, 10));
+    if (search) setSearchQuery(search);
+  }, [persistToUrl]);
+
+  // Helper to update URL parameters
+  const updateQueryParams = (updates: Record<string, string | number | undefined>) => {
+    if (!persistToUrl) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === undefined || value === "" || value === null) {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
+    router.push(`?${params.toString()}`, { scroll: false } as any);
+  };
 
   const filteredData = searchQuery
     ? data.filter((item) =>
@@ -46,7 +77,13 @@ export default function DataTable<T extends { id: string }>({
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setCurrentPage(1);
+    updateQueryParams({ search: query || undefined, page: 1 });
     onSearch?.(query);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    updateQueryParams({ page });
   };
 
   if (loading) {
@@ -130,7 +167,7 @@ export default function DataTable<T extends { id: string }>({
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
               className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -140,7 +177,7 @@ export default function DataTable<T extends { id: string }>({
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
-                  onClick={() => setCurrentPage(page)}
+                  onClick={() => handlePageChange(page)}
                   className={`px-3 py-1 rounded-lg ${
                     currentPage === page
                       ? "bg-primary-600 text-white"
@@ -152,7 +189,7 @@ export default function DataTable<T extends { id: string }>({
               ))}
             </div>
             <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
               className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
