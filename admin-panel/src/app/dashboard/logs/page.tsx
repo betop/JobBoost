@@ -411,10 +411,12 @@ export default function LogsPage() {
     if (params.get("sortDir")) setSortDir((params.get("sortDir") as SortDir) || "desc");
     if (params.get("page")) setPage(Number(params.get("page")) || 1);
     if (params.get("pageSize")) setPageSize(Number(params.get("pageSize")) || 25);
-    if (params.get("statsPeriod")) setStatsPeriod((params.get("statsPeriod") as LogsPeriod) || "today");
+    
+    const period = (params.get("statsPeriod") as LogsPeriod) || "today";
+    if (params.get("statsPeriod")) setStatsPeriod(period);
     
     // Load filters
-    const filterObj: LogsFilters = { period: "custom", date_from: today, date_to: today };
+    const filterObj: LogsFilters = { period: period !== "custom" ? (period as LogsFilters["period"]) : "custom", date_from: today, date_to: today };
     if (params.get("bidder_id")) filterObj.bidder_id = params.get("bidder_id") || undefined;
     if (params.get("profile_id")) filterObj.profile_id = params.get("profile_id") || undefined;
     if (params.get("is_matched")) filterObj.is_matched = (params.get("is_matched") as "1" | "0" | "2") || undefined;
