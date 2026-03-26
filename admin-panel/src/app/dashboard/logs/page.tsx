@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { logsService, LogsFilters, GenerationLog } from "@/services/logsService";
 import { downloadResumePDF } from "@/utils/pdfDownload";
@@ -373,11 +374,14 @@ function StatCard({
 }
 
 export default function LogsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split('T')[0];
   
+  // Initialize state from URL query parameters
   const [filters, setFilters] = useState<LogsFilters>({ 
     period: "custom",
     date_from: today,
@@ -396,6 +400,44 @@ export default function LogsPage() {
   const [jobDetailsLog, setJobDetailsLog]     = useState<GenerationLog | null>(null);
   const [regenerateLog, setRegenerateLog]     = useState<GenerationLog | null>(null);
   const [reasonLog, setReasonLog]             = useState<GenerationLog | null>(null);
+
+  // Load state from URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    if (params.get("search")) setSearch(params.get("search") || "");
+    if (params.get("sortField")) setSortField((params.get("sortField") as SortField) || "created_at");
+    if (params.get("sortDir")) setSortDir((params.get("sortDir") as SortDir) || "desc");
+    if (params.get("page")) setPage(Number(params.get("page")) || 1);
+    if (params.get("pageSize")) setPageSize(Number(params.get("pageSize")) || 25);
+    if (params.get("statsPeriod")) setStatsPeriod((params.get("statsPeriod") as LogsPeriod) || "today");
+    
+    // Load filters
+    const filterObj: LogsFilters = { period: "custom", date_from: today, date_to: today };
+    if (params.get("bidder_id")) filterObj.bidder_id = params.get("bidder_id") || undefined;
+    if (params.get("profile_id")) filterObj.profile_id = params.get("profile_id") || undefined;
+    if (params.get("is_matched")) filterObj.is_matched = (params.get("is_matched") as "1" | "0" | "2") || undefined;
+    if (params.get("is_regenerated")) filterObj.is_regenerated = (params.get("is_regenerated") as "1" | "0") || undefined;
+    if (params.get("date_from")) filterObj.date_from = params.get("date_from") || today;
+    if (params.get("date_to")) filterObj.date_to = params.get("date_to") || today;
+    
+    setFilters(filterObj);
+  }, []);
+
+  // Update URL when state changes
+  const updateQueryParams = (updates: Record<string, string | number | undefined>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === undefined || value === "" || value === null) {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
+    
+    router.push(`?${params.toString()}`, { scroll: false } as any);
+  };
 
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ["generation-logs", filters],
@@ -420,8 +462,11 @@ export default function LogsPage() {
   function applyPeriod(period: LogsPeriod) {
     setStatsPeriod(period);
     setPage(1);
+    updateQueryParams({ statsPeriod: period, page: 1 });
+    
     if (period !== "custom") {
       setFilters((f) => ({ ...f, period: period as LogsFilters["period"], date_from: undefined, date_to: undefined }));
+      updateQueryParams({ date_from: undefined, date_to: undefined });
     } else {
       setFilters((f) => ({ ...f, period: "custom" }));
     }
@@ -430,9 +475,11 @@ export default function LogsPage() {
   function handleSort(field: SortField) {
     if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      updateQueryParams({ sortDir: sortField === field && sortDir === "asc" ? "desc" : "asc", page: 1 });
     } else {
       setSortField(field);
       setSortDir(field === "created_at" ? "desc" : "asc");
+      updateQueryParams({ sortField: field, sortDir: field === "created_at" ? "desc" : "asc", page: 1 });
     }
     setPage(1);
   }
@@ -639,9 +686,11 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px]"
             value={filters.bidder_id || ""}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, bidder_id: e.target.value || undefined }))
-            }
+            onChange={(e) => {
+              setFilters((f) => ({ ...f, bidder_id: e.target.value || undefined }));
+              updateQueryParams({ bidder_id: e.target.value || undefined, page: 1 });
+              setPage(1);
+            }}
           >
             <option value="">All bidders</option>
             {bidders?.map((b) => (
@@ -657,9 +706,11 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px]"
             value={filters.profile_id || ""}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, profile_id: e.target.value || undefined }))
-            }
+            onChange={(e) => {
+              setFilters((f) => ({ ...f, profile_id: e.target.value || undefined }));
+              updateQueryParams({ profile_id: e.target.value || undefined, page: 1 });
+              setPage(1);
+            }}
           >
             <option value="">All profiles</option>
             {profiles?.map((p) => (
@@ -675,9 +726,11 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px]"
             value={filters.is_matched ?? ""}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, is_matched: (e.target.value as "1" | "0" | "2") || undefined }))
-            }
+            onChange={(e) => {
+              setFilters((f) => ({ ...f, is_matched: (e.target.value as "1" | "0" | "2") || undefined }));
+              updateQueryParams({ is_matched: e.target.value || undefined, page: 1 });
+              setPage(1);
+            }}
           >
             <option value="">All jobs</option>
             <option value="1">✅ Matched only</option>
@@ -691,9 +744,11 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px]"
             value={filters.is_regenerated ?? ""}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, is_regenerated: (e.target.value as "1" | "0") || undefined }))
-            }
+            onChange={(e) => {
+              setFilters((f) => ({ ...f, is_regenerated: (e.target.value as "1" | "0") || undefined }));
+              updateQueryParams({ is_regenerated: e.target.value || undefined, page: 1 });
+              setPage(1);
+            }}
           >
             <option value="">All types</option>
             <option value="0">Original only</option>
@@ -705,9 +760,11 @@ export default function LogsPage() {
           <div className="text-xs text-blue-600 self-end pb-2">
             Showing filtered results —{" "}
             <button
-              onClick={() =>
-                setFilters((f) => ({ ...f, bidder_id: undefined, profile_id: undefined }))
-              }
+              onClick={() => {
+                setFilters((f) => ({ ...f, bidder_id: undefined, profile_id: undefined }));
+                updateQueryParams({ bidder_id: undefined, profile_id: undefined, page: 1 });
+                setPage(1);
+              }}
               className="underline"
             >
               clear
@@ -727,12 +784,20 @@ export default function LogsPage() {
               type="text"
               placeholder="Search bidder, profile, position, company…"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => { 
+                setSearch(e.target.value);
+                setPage(1);
+                updateQueryParams({ search: e.target.value || undefined, page: 1 });
+              }}
               className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             {search && (
               <button
-                onClick={() => { setSearch(""); setPage(1); }}
+                onClick={() => { 
+                  setSearch("");
+                  setPage(1);
+                  updateQueryParams({ search: undefined, page: 1 });
+                }}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
                 <X className="w-3.5 h-3.5" />
@@ -743,7 +808,12 @@ export default function LogsPage() {
             <span>Rows per page:</span>
             <select
               value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              onChange={(e) => { 
+                const newSize = Number(e.target.value);
+                setPageSize(newSize);
+                setPage(1);
+                updateQueryParams({ pageSize: newSize, page: 1 });
+              }}
               className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
@@ -982,7 +1052,10 @@ export default function LogsPage() {
                   Page {safePage} of {totalPages}
                 </span>
                 <button
-                  onClick={() => setPage(1)}
+                  onClick={() => {
+                    setPage(1);
+                    updateQueryParams({ page: 1 });
+                  }}
                   disabled={safePage === 1}
                   className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                   title="First page"
@@ -990,7 +1063,11 @@ export default function LogsPage() {
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => {
+                    const newPage = Math.max(1, safePage - 1);
+                    setPage(newPage);
+                    updateQueryParams({ page: newPage });
+                  }}
                   disabled={safePage === 1}
                   className="px-2.5 py-1.5 rounded text-xs hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
@@ -1011,7 +1088,10 @@ export default function LogsPage() {
                     ) : (
                       <button
                         key={n}
-                        onClick={() => setPage(n as number)}
+                        onClick={() => {
+                          setPage(n as number);
+                          updateQueryParams({ page: n as number });
+                        }}
                         className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
                           safePage === n
                             ? "bg-blue-600 text-white"
@@ -1024,14 +1104,21 @@ export default function LogsPage() {
                   )}
 
                 <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => {
+                    const newPage = Math.min(totalPages, safePage + 1);
+                    setPage(newPage);
+                    updateQueryParams({ page: newPage });
+                  }}
                   disabled={safePage === totalPages}
                   className="px-2.5 py-1.5 rounded text-xs hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Next
                 </button>
                 <button
-                  onClick={() => setPage(totalPages)}
+                  onClick={() => {
+                    setPage(totalPages);
+                    updateQueryParams({ page: totalPages });
+                  }}
                   disabled={safePage === totalPages}
                   className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Last page"

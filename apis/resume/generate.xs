@@ -264,6 +264,7 @@ query "resume/generate" verb=POST {
     var $match_schema {
       value = {}
         |set:"status":"match"
+        |set:"reason":"Just keep empty"
         |set:"resume":$resume_schema
         |set:"cover_letter":"<full tailored cover letter as HTML>"
         |set:"position_title":"<title>"
