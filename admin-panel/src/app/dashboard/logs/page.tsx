@@ -400,6 +400,7 @@ export default function LogsPage() {
   const [jobDetailsLog, setJobDetailsLog]     = useState<GenerationLog | null>(null);
   const [regenerateLog, setRegenerateLog]     = useState<GenerationLog | null>(null);
   const [reasonLog, setReasonLog]             = useState<GenerationLog | null>(null);
+  const [isRefreshing, setIsRefreshing]       = useState(false);
 
   // Load state from URL on mount
   useEffect(() => {
@@ -453,10 +454,15 @@ export default function LogsPage() {
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: profileService.getAll });
 
   async function refreshData() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["generation-logs"] }),
-      queryClient.invalidateQueries({ queryKey: ["logs-stats"] }),
-    ]);
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["generation-logs"] }),
+        queryClient.invalidateQueries({ queryKey: ["logs-stats"] }),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   }
 
   function applyPeriod(period: LogsPeriod) {
@@ -580,10 +586,11 @@ export default function LogsPage() {
         </div>
         <button
           onClick={refreshData}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+          disabled={isRefreshing}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
-          <RotateCcw className="w-4 h-4" />
-          Refresh
+          <RotateCcw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          {isRefreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 
@@ -616,6 +623,7 @@ export default function LogsPage() {
               onChange={(e) => {
                 setFilters((f) => ({ ...f, date_from: e.target.value }));
                 setPage(1);
+                updateQueryParams({ date_from: e.target.value, page: 1 });
               }}
             />
           </div>
@@ -628,6 +636,7 @@ export default function LogsPage() {
               onChange={(e) => {
                 setFilters((f) => ({ ...f, date_to: e.target.value }));
                 setPage(1);
+                updateQueryParams({ date_to: e.target.value, page: 1 });
               }}
             />
           </div>
