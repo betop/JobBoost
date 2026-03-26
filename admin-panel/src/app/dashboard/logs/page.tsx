@@ -470,13 +470,13 @@ export default function LogsPage() {
   function applyPeriod(period: LogsPeriod) {
     setStatsPeriod(period);
     setPage(1);
-    updateQueryParams({ statsPeriod: period, page: 1 });
     
     if (period !== "custom") {
       setFilters((f) => ({ ...f, period: period as LogsFilters["period"], date_from: undefined, date_to: undefined }));
-      updateQueryParams({ date_from: undefined, date_to: undefined });
+      updateQueryParams({ statsPeriod: period, page: 1, date_from: undefined, date_to: undefined });
     } else {
       setFilters((f) => ({ ...f, period: "custom" }));
+      updateQueryParams({ statsPeriod: period, page: 1 });
     }
   }
 
