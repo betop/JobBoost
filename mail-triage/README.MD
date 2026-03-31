@@ -1,4 +1,4 @@
-# Mail Traige Chrome Extension
+# Mail Triage Chrome Extension
 
 ---
 
