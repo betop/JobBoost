@@ -24,7 +24,7 @@ query "resume/generate" verb=POST {
   
     precondition ($input.token != null && $input.token != "") {
       error_type = "accessdenied"
-      error = "Missing authorization token"
+      error = "Missing authorization key"
     }
   
     // Check extension version first
@@ -50,17 +50,17 @@ query "resume/generate" verb=POST {
   
     precondition ($access != null) {
       error_type = "accessdenied"
-      error = "Invalid token"
+      error = "Invalid key"
     }
   
     precondition ($access.is_active) {
       error_type = "accessdenied"
-      error = "Token has been revoked"
+      error = "Key has been revoked"
     }
   
     precondition ($access.expires_at > now) {
       error_type = "accessdenied"
-      error = "Token has expired"
+      error = "Key has expired"
     }
   
     db.get bidder {
