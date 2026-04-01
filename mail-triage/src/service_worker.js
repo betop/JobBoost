@@ -214,20 +214,39 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
 
   sendProgress({ type: "status", message: "Fetching message metadata…" });
   const emails = [];
-  for (let index = 0; index < ids.length; index++) {
+  
+  // Fetch emails in parallel batches (up to 10 at a time) for better performance
+  const batchSize = 10;
+  for (let batchStart = 0; batchStart < ids.length; batchStart += batchSize) {
     if (currentRun?.cancelled) {
       sendProgress({ type: "status", message: "Cancelled." });
       break;
     }
-    const messageId = ids[index];
-    try {
-      const email = await getMessageMetadata({ token, messageId });
-      const bodyText = await getMessageBodyText({ token, messageId }).catch(() => "");
-      email.body = truncateText(bodyText, 1200);
-      emails.push(email);
-    } catch (e) {
-      summary.errors++;
-      sendProgress({ type: "error", index, messageId, message: e?.message || String(e) });
+    
+    const batchEnd = Math.min(batchStart + batchSize, ids.length);
+    const batchIds = ids.slice(batchStart, batchEnd);
+    
+    // Fetch multiple emails in parallel
+    const batchPromises = batchIds.map(async (messageId, index) => {
+      try {
+        const email = await getMessageMetadata({ token, messageId });
+        const bodyText = await getMessageBodyText({ token, messageId }).catch(() => "");
+        email.body = truncateText(bodyText, 1200);
+        return { success: true, email, index: batchStart + index, messageId };
+      } catch (e) {
+        return { success: false, error: e?.message || String(e), index: batchStart + index, messageId };
+      }
+    });
+    
+    const batchResults = await Promise.all(batchPromises);
+    
+    for (const result of batchResults) {
+      if (result.success) {
+        emails.push(result.email);
+      } else {
+        summary.errors++;
+        sendProgress({ type: "error", index: result.index, messageId: result.messageId, message: result.error });
+      }
     }
   }
 
