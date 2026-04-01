@@ -58,7 +58,7 @@ query "resume/generate" verb=POST {
       error = "Key has been revoked"
     }
   
-    precondition ($access.expires_at > now) {
+    precondition ($access.expires_at == null || $access.expires_at > now) {
       error_type = "accessdenied"
       error = "Key has expired"
     }
