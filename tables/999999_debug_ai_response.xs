@@ -1,4 +1,4 @@
-table generation_log {
+table debug_ai_response {
   auth = false
 
   schema {
@@ -12,21 +12,12 @@ table generation_log {
       table = "bidder"
     }
   
-    text job_url?
-    text job_description_snippet?
-    text job_description?
     text ai_provider?
     int input_tokens?
     int output_tokens?
-    text resume_filename?
-    text cover_letter_filename?
-    text position_title?
-    text company_name?
-    int is_regenerated?
-    text original_log_id?
-    int is_matched?
-    text match_reason?
-    text application_status?
+    text raw_response?
+    text job_url?
+    text job_description_snippet?
   }
 
   index = [
@@ -34,6 +25,5 @@ table generation_log {
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
     {type: "btree", field: [{name: "profile_id", op: "asc"}]}
     {type: "btree", field: [{name: "bidder_id", op: "asc"}]}
-    {type: "btree", field: [{name: "job_url", op: "asc"}]}
   ]
 }

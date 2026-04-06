@@ -56,6 +56,19 @@ function showSkipped() {
     if (el) el.style.display = "none";
   }
   document.getElementById("skippedBanner").style.display = "block";
+  document.getElementById("skippedClose").addEventListener("click", () => window.close());
+}
+
+function showNotJobDescription(reason) {
+  document.getElementById("spinner").style.display = "none";
+  document.getElementById("statusText").textContent = "Not a job description.";
+  for (const s of STEPS) {
+    const el = document.getElementById("step-" + s);
+    if (el) el.style.display = "none";
+  }
+  if (reason) document.getElementById("notJdReason").textContent = reason;
+  document.getElementById("notJdBanner").style.display = "block";
+  document.getElementById("notJdClose").addEventListener("click", () => window.close());
 }
 
 function showMismatch(reason) {
@@ -82,6 +95,46 @@ function showMismatch(reason) {
 
   document.getElementById("mismatchCancel").addEventListener("click", () => {
     chrome.runtime.sendMessage({ action: "mismatchCancelled" });
+    window.close();
+  });
+}
+
+function showDuplicate(detail) {
+  document.getElementById("spinner").style.display = "none";
+  document.getElementById("statusText").textContent = "Already applied.";
+  for (const s of STEPS) {
+    const el = document.getElementById("step-" + s);
+    if (el) el.style.display = "none";
+  }
+  if (detail) document.getElementById("duplicateDetail").textContent = detail;
+  document.getElementById("duplicateBanner").style.display = "block";
+  document.getElementById("duplicateClose").addEventListener("click", () => window.close());
+}
+
+function showReposted(detail) {
+  document.getElementById("spinner").style.display = "none";
+  document.getElementById("statusText").textContent = "Possible repost detected.";
+  for (const s of STEPS) {
+    const el = document.getElementById("step-" + s);
+    if (el) el.style.display = "none";
+  }
+  if (detail) document.getElementById("repostedDetail").textContent = detail;
+  document.getElementById("repostedBanner").style.display = "block";
+
+  document.getElementById("repostContinue").addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "repostConfirmed" });
+    document.getElementById("repostedBanner").style.display = "none";
+    document.getElementById("spinner").style.display = "block";
+    for (const s of STEPS) {
+      const el = document.getElementById("step-" + s);
+      if (el) { el.style.display = "flex"; el.className = "step pending"; }
+    }
+    document.getElementById("step-resume").className = "step active";
+    document.getElementById("statusText").textContent = STATUS_MAP.resume;
+  });
+
+  document.getElementById("repostCancel").addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "repostCancelled" });
     window.close();
   });
 }
@@ -113,6 +166,12 @@ chrome.runtime.onMessage.addListener((message) => {
       showError(error);
     } else if (step === "skipped") {
       showSkipped();
+    } else if (step === "not_job_description") {
+      showNotJobDescription(reason);
+    } else if (step === "duplicate") {
+      showDuplicate(reason);
+    } else if (step === "reposted") {
+      showReposted(reason);
     } else if (step === "mismatch") {
       showMismatch(reason);
     } else if (step === "ready") {

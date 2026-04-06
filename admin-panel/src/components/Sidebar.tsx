@@ -12,6 +12,7 @@ import {
   Menu,
   Activity,
   Package,
+  Mail,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
@@ -26,6 +27,7 @@ const navigation = [
   { name: "Rules", href: "/dashboard/rules", icon: FileText },
   { name: "Extensions", href: "/dashboard/versions", icon: Package },
   { name: "Generation Logs", href: "/dashboard/logs", icon: Activity },
+  { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail },
 ];
 
 export default function Sidebar() {

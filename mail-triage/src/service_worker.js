@@ -199,6 +199,32 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
   sendProgress({ type: "status", message: "Listing messages in date range…" });
   const ids = await listMessageIdsPaged({ token, query, maxResults: max });
 
+  // Also fetch spam messages in the same date range
+  const spamQuery = query ? `in:spam ${query}` : "in:spam";
+  sendProgress({ type: "status", message: "Checking spam folder…" });
+  let spamIds = [];
+  try {
+    spamIds = await listMessageIdsPaged({ token, query: spamQuery, maxResults: max });
+  } catch (e) {
+    sendProgress({ type: "error", message: `Failed to list spam: ${e?.message || String(e)}` });
+  }
+
+  // Un-spam: remove SPAM label and move to INBOX so labels can be applied
+  if (spamIds.length > 0) {
+    sendProgress({ type: "status", message: `Moving ${spamIds.length} message(s) out of spam…` });
+    try {
+      await batchModifyMessages({ token, ids: spamIds, addLabelIds: ["INBOX"], removeLabelIds: ["SPAM"] });
+    } catch (e) {
+      sendProgress({ type: "error", message: `Failed to un-spam messages: ${e?.message || String(e)}` });
+    }
+
+    // Merge spam IDs into main list (deduplicate)
+    const existing = new Set(ids);
+    for (const id of spamIds) {
+      if (!existing.has(id)) ids.push(id);
+    }
+  }
+
   const summary = {
     mode: "stages",
     total: ids.length,

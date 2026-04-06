@@ -33,6 +33,7 @@ export interface WorkExperience {
   location?: string;
   start_date: string;
   end_date?: string;
+  is_current?: boolean;
 }
 
 export interface CreateProfileInput {

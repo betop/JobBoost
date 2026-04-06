@@ -19,6 +19,7 @@ export interface ParsedWorkExperience {
   location?: string;
   start_date?: string;
   end_date?: string;
+  is_current?: boolean;
   description?: string;
 }
 
@@ -242,6 +243,7 @@ function parseWorkExperience(text: string): ParsedWorkExperience[] {
       const { start, end } = parseDateRange(dateLine);
       entry.start_date = start;
       entry.end_date = end;
+      entry.is_current = !end || /present|current|now/i.test(dateLine);
     }
 
     // Location — line with city/country-like pattern, no date
@@ -380,6 +382,7 @@ function parseJsonResume(obj: JsonObj): ParsedProfile {
       location:        gs(w, "location"),
       start_date:      gs(w, "startDate") ? normaliseDate(gs(w, "startDate") as string) : undefined,
       end_date:        gs(w, "endDate")   ? normaliseDate(gs(w, "endDate") as string)   : undefined,
+      is_current:      !gs(w, "endDate") || /present|current|now/i.test(gs(w, "endDate") as string),
       description:     Array.isArray(w.highlights)
         ? (w.highlights as string[]).join("\n")
         : gs(w, "summary", "description"),

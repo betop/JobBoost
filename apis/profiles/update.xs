@@ -160,10 +160,6 @@ query "profiles/{id}" verb=PUT {
       
         foreach ($input.work_experience) {
           each as $wk {
-            var $is_current {
-              value = $wk.end_date == null
-            }
-          
             db.add work_experience {
               data = {
                 created_at     : now
@@ -174,7 +170,7 @@ query "profiles/{id}" verb=PUT {
                 location       : $wk.location
                 start_date     : $wk.start_date
                 end_date       : $wk.end_date
-                is_current     : $is_current
+                is_current     : $wk.is_current
                 updated_at     : now
               }
             } as $new_work
@@ -230,6 +226,7 @@ query "profiles/{id}" verb=PUT {
             location       : $wk.location
             start_date     : $wk.start_date
             end_date       : $wk.end_date
+            is_current     : $wk.is_current
           }
         }
       }

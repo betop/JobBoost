@@ -11,6 +11,7 @@ const XANO_BASES: Record<string, string> = {
   dashboard:        "https://x8ki-letl-twmt.n7.xano.io/api:5kArnPy5:v1",
   logs:             "https://x8ki-letl-twmt.n7.xano.io/api:fMYNj_1_:v1",
   resume:           "https://x8ki-letl-twmt.n7.xano.io/api:caf8Eo15:v1",
+  public:           "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1",
 };
 
 async function proxyRequest(req: NextRequest, segments: string[]) {

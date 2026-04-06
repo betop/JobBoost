@@ -65,6 +65,7 @@ query "profiles/{id}" verb=GET {
             location       : $w.location
             start_date     : $w.start_date
             end_date       : $w.end_date
+            is_current     : $w.is_current
           }
         }
       }

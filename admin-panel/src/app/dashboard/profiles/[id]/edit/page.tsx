@@ -32,6 +32,7 @@ const workExperienceSchema = z.object({
   location: z.string().optional(),
   start_date: z.string().min(1, "Start date is required"),
   end_date: z.string().optional(),
+  is_current: z.boolean().optional().default(false),
 });
 
 const profileSchema = z.object({
@@ -86,8 +87,9 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
             ...w,
             start_date: toMonth(w.start_date),
             end_date: toMonth(w.end_date),
+            is_current: w.is_current ?? false,
           }))
-        : [{ job_title: "", start_date: "" }],
+        : [{ job_title: "", start_date: "", is_current: false }],
     },
   });
 
@@ -202,7 +204,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => appendWork({ job_title: "", start_date: "" })}
+            onClick={() => appendWork({ job_title: "", start_date: "", is_current: false })}
           >
             <Plus className="w-4 h-4" />
             Add Experience
@@ -228,8 +230,29 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
                 <Input label="Company" error={errors.work_experience?.[index]?.company?.message} {...register(`work_experience.${index}.company`)} />
                 <Input label="Employment Type" error={errors.work_experience?.[index]?.employment_type?.message} {...register(`work_experience.${index}.employment_type`)} />
                 <Input label="Location" error={errors.work_experience?.[index]?.location?.message} {...register(`work_experience.${index}.location`)} />
-                <Input label="Start Date" type="month" error={errors.work_experience?.[index]?.start_date?.message} {...register(`work_experience.${index}.start_date`)} required />
-                <Input label="End Date" type="month" error={errors.work_experience?.[index]?.end_date?.message} {...register(`work_experience.${index}.end_date`)} />
+                <Controller
+                  control={control}
+                  name={`work_experience.${index}.is_current`}
+                  render={({ field: currentField }) => (
+                    <div className="md:col-span-2 flex flex-col gap-3">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={currentField.value ?? false}
+                          onChange={(e) => currentField.onChange(e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        Current position
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input label="Start Date" type="month" error={errors.work_experience?.[index]?.start_date?.message} {...register(`work_experience.${index}.start_date`)} required />
+                        {!currentField.value && (
+                          <Input label="End Date" type="month" error={errors.work_experience?.[index]?.end_date?.message} {...register(`work_experience.${index}.end_date`)} />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                />
               </div>
             </div>
           ))}

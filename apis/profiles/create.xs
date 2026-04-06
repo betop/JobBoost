@@ -60,7 +60,7 @@ query profiles verb=POST {
             location       : $w.location
             start_date     : $w.start_date
             end_date       : $w.end_date
-            is_current     : ($w.end_date == null || $w.end_date == "")
+            is_current     : $w.is_current
             updated_at     : now
           }
         } as $new_work
@@ -114,6 +114,7 @@ query profiles verb=POST {
             location       : $wk.location
             start_date     : $wk.start_date
             end_date       : $wk.end_date
+            is_current     : $wk.is_current
           }
         }
       }

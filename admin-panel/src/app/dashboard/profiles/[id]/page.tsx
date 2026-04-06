@@ -107,7 +107,7 @@ export default function ProfileViewPage() {
                 <h4 className="font-semibold text-gray-900">{exp.job_title}</h4>
                 {exp.company && <p className="text-gray-700">{exp.company}</p>}
                 <p className="text-sm text-gray-600">
-                  {formatDate(exp.start_date)} - {exp.end_date ? formatDate(exp.end_date) : "Present"}
+                  {formatDate(exp.start_date)} - {exp.is_current ? "Present" : formatDate(exp.end_date)}
                 </p>
                 {exp.employment_type && <p className="text-sm text-gray-600">{exp.employment_type}</p>}
                 {exp.location && <p className="text-sm text-gray-600">{exp.location}</p>}

@@ -30,6 +30,7 @@ const workExperienceSchema = z.object({
   location: z.string().optional(),
   start_date: z.string().min(1, "Start date is required"),
   end_date: z.string().optional(),
+  is_current: z.boolean().optional().default(false),
 });
 
 const profileSchema = z.object({
@@ -61,7 +62,7 @@ export default function NewProfilePage() {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       education: [{ degree: "", field_of_study: "", start_date: "" }],
-      work_experience: [{ job_title: "", start_date: "" }],
+      work_experience: [{ job_title: "", start_date: "", is_current: false }],
     },
   });
 
@@ -81,7 +82,9 @@ export default function NewProfilePage() {
       github: data.github || "",
       job_category: data.job_category || "",
       education: Array.isArray(data.education) && data.education.length ? data.education : [{ degree: "", field_of_study: "", start_date: "" }],
-      work_experience: Array.isArray(data.work_experience) && data.work_experience.length ? data.work_experience : [{ job_title: "", start_date: "" }],
+      work_experience: Array.isArray(data.work_experience) && data.work_experience.length
+        ? data.work_experience.map((w) => ({ ...w, is_current: w.is_current ?? (!w.end_date) }))
+        : [{ job_title: "", start_date: "", is_current: false }],
     });
   }
 
@@ -235,7 +238,7 @@ export default function NewProfilePage() {
               type="button"
               variant="secondary"
               size="sm"
-              onClick={() => appendWork({ job_title: "", start_date: "" })}
+              onClick={() => appendWork({ job_title: "", start_date: "", is_current: false })}
             >
               <Plus className="w-4 h-4" />
               Add Experience
@@ -278,18 +281,39 @@ export default function NewProfilePage() {
                     error={errors.work_experience?.[index]?.location?.message}
                     {...register(`work_experience.${index}.location`)}
                   />
-                  <Input
-                    label="Start Date"
-                    type="month"
-                    error={errors.work_experience?.[index]?.start_date?.message}
-                    {...register(`work_experience.${index}.start_date`)}
-                    required
-                  />
-                  <Input
-                    label="End Date"
-                    type="month"
-                    error={errors.work_experience?.[index]?.end_date?.message}
-                    {...register(`work_experience.${index}.end_date`)}
+                  <Controller
+                    control={control}
+                    name={`work_experience.${index}.is_current`}
+                    render={({ field: currentField }) => (
+                      <div className="md:col-span-2 flex flex-col gap-3">
+                        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={currentField.value ?? false}
+                            onChange={(e) => currentField.onChange(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          Current position
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input
+                            label="Start Date"
+                            type="month"
+                            error={errors.work_experience?.[index]?.start_date?.message}
+                            {...register(`work_experience.${index}.start_date`)}
+                            required
+                          />
+                          {!currentField.value && (
+                            <Input
+                              label="End Date"
+                              type="month"
+                              error={errors.work_experience?.[index]?.end_date?.message}
+                              {...register(`work_experience.${index}.end_date`)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
                   />
                 </div>
               </div>

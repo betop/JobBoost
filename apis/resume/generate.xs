@@ -1,5 +1,5 @@
 // Generate resume and cover letter for a job description
-// v4: clean rewrite, system prompt from DB rules
+// v4: clean rewrite, system prompt from DB rules, content validation
 query "resume/generate" verb=POST {
   api_group = "resume"
 
@@ -20,6 +20,12 @@ query "resume/generate" verb=POST {
     precondition ($input.job_description != null) {
       error_type = "badrequest"
       error = "job_description is required"
+    }
+  
+    // Reject short inputs (e.g. just a job title or URL) – a real job description is at least 500 chars
+    precondition (($input.job_description|strlen) >= 500) {
+      error_type = "badrequest"
+      error = "The job description is too short. Please paste the full job description text, not just a job title or link."
     }
   
     precondition ($input.token != null && $input.token != "") {
@@ -78,6 +84,68 @@ query "resume/generate" verb=POST {
       error = "Bidder account is inactive"
     }
   
+    // ==================== DUPLICATE URL DETECTION ====================
+    // Check if this exact job_url was already applied to by this bidder
+    var $duplicate_log {
+      value = null
+    }
+  
+    conditional {
+      if ($input.job_url != null && $input.job_url != "") {
+        db.query generation_log {
+          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.application_status != "duplicated" && $db.generation_log.application_status != "reposted"
+          sort = {generation_log.created_at: "desc"}
+          return = {type: "single"}
+        } as $existing_url_log
+      
+        conditional {
+          if ($existing_url_log != null) {
+            var.update $duplicate_log {
+              value = $existing_url_log
+            }
+          
+            // Save a log entry with "duplicated" status (no AI call needed)
+            db.add generation_log {
+              data = {
+                profile_id             : $input.profile_id
+                bidder_id              : $access.bidder_id
+                job_url                : $input.job_url
+                job_description_snippet: $input.job_description|substr:0:300
+                job_description        : $input.job_description
+                ai_provider            : ""
+                input_tokens           : 0
+                output_tokens          : 0
+                resume_filename        : ""
+                cover_letter_filename  : ""
+                position_title         : $existing_url_log.position_title
+                company_name           : $existing_url_log.company_name
+                is_regenerated         : 0
+                is_matched             : 4
+                match_reason           : "Duplicate job URL detected"
+                application_status     : "duplicated"
+              }
+            } as $dup_log
+          }
+        }
+      }
+    }
+  
+    // If duplicate was found, fail with structured error containing duplicate info
+    precondition ($duplicate_log == null) {
+      error_type = "badrequest"
+      error = "DUPLICATE_URL"
+      payload = {
+        log_id        : $duplicate_log.id
+        is_matched    : 4
+        match_reason  : "Duplicate job URL detected"
+        applied_date  : $duplicate_log.created_at
+        position_title: $duplicate_log.position_title
+        company_name  : $duplicate_log.company_name
+      }
+    }
+  
+    // ==================== END DUPLICATE URL DETECTION ====================
+  
     db.get profile {
       field_name = "id"
       field_value = $input.profile_id
@@ -114,13 +182,13 @@ query "resume/generate" verb=POST {
     foreach ($work) {
       each as $w {
         var $end_label {
-          value = "Present"
+          value = $w.end_date
         }
       
         conditional {
-          if ($w.end_date != null) {
+          if ($w.is_current) {
             var.update $end_label {
-              value = $w.end_date
+              value = "Present"
             }
           }
         }
@@ -266,6 +334,16 @@ query "resume/generate" verb=POST {
         |set:"company_name":""
     }
   
+    var $not_jd_schema {
+      value = {}
+        |set:"status":"not_job_description"
+        |set:"reason":"<explain why this is not a job description>"
+        |set:"resume":""
+        |set:"cover_letter":""
+        |set:"position_title":""
+        |set:"company_name":""
+    }
+  
     var $match_schema {
       value = {}
         |set:"status":"match"
@@ -288,14 +366,14 @@ query "resume/generate" verb=POST {
   
     // Build user prompt with candidate profile and job description
     var $user_prompt {
-      value = "STEP 1 - REMOTE CHECK:\n\nIf job description doesn't provide 100% remote position and only requires either relocation, hybrid, onsite, in-office, or at least 1 day office visit, return status=skip. And if job requires Security Clearance or Public trust, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch. If job description requires Lead or Staff level Engineer or higher level Engineer than current role in the profile, return status=mismatch. \n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+      value = "STEP 0 - CONTENT VALIDATION:\n\nFirst, check if the provided text is actually a job description/job posting. If the text is NOT a real job description (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps.\n\nSTEP 1 - REMOTE CHECK:\n\nIf job description doesn't provide 100% remote position and only requires either relocation, hybrid, onsite, in-office, or at least 1 day office visit, return status=skip. And if job requires Security Clearance or Public trust, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch. If job description requires Staff level Engineer or higher level Engineer than current role in the profile, return status=mismatch. \n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION: " ~ ($not_jd_schema|json_encode) ~ "\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
     }
   
     var $claude_auth {
       value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
     }
   
-    // is_matched: 1=match, 0=mismatch, 2=skip
+    // is_matched: 1=match, 0=mismatch, 2=skip, 3=not_job_description
     var $is_matched {
       value = 1
     }
@@ -358,6 +436,23 @@ query "resume/generate" verb=POST {
           value = $ai_resp.response.result.content|first|get:"text"
         }
       
+        // ==================== DEBUG: REMOVE THIS BLOCK LATER ====================
+        // Saves raw AI response to debug_ai_response table for debugging purposes
+        db.add debug_ai_response {
+          data = {
+            profile_id             : $input.profile_id
+            bidder_id              : $access.bidder_id
+            ai_provider            : "claude"
+            input_tokens           : $input_tokens
+            output_tokens          : $output_tokens
+            raw_response           : $response_text
+            job_url                : $input.job_url
+            job_description_snippet: $input.job_description|substr:0:300
+          }
+        } as $debug_log
+      
+        // ==================== END DEBUG =========================================
+      
         var.update $input_tokens {
           value = `($ai_resp.response.result.usage|get:"input_tokens") + 0`
         }
@@ -376,6 +471,18 @@ query "resume/generate" verb=POST {
       
         var $parsed_response {
           value = $clean_response|json_decode
+        }
+      
+        conditional {
+          if ($parsed_response.status == "not_job_description") {
+            var.update $is_matched {
+              value = 3
+            }
+          
+            var.update $match_reason {
+              value = $parsed_response.reason
+            }
+          }
         }
       
         conditional {
@@ -486,6 +593,68 @@ query "resume/generate" verb=POST {
       }
     }
   
+    // ==================== REPOST DETECTION (company + title) ====================
+    // After AI parsed the position_title and company_name, check if this same
+    // company + title combo was already applied to by this bidder
+    var $repost_log {
+      value = null
+    }
+  
+    var $repost_applied_date {
+      value = ""
+    }
+  
+    conditional {
+      if ($position_title != "" && $company_name != "" && ($is_matched == 1 || $is_matched == 0)) {
+        db.query generation_log {
+          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.application_status != "duplicated" && $db.generation_log.application_status != "reposted"
+          sort = {generation_log.created_at: "desc"}
+          return = {type: "single"}
+        } as $existing_title_log
+      
+        conditional {
+          if ($existing_title_log != null) {
+            var.update $repost_log {
+              value = $existing_title_log
+            }
+          
+            var.update $repost_applied_date {
+              value = $existing_title_log.created_at
+            }
+          
+            var.update $is_matched {
+              value = 5
+            }
+          
+            var.update $match_reason {
+              value = "Same company and position found in previous application"
+            }
+          }
+        }
+      }
+    }
+  
+    // Determine application_status for the log
+    var $app_status {
+      value = "applied"
+    }
+  
+    conditional {
+      if ($is_matched == 0) {
+        var.update $app_status {
+          value = "mismatched"
+        }
+      }
+    
+      elseif ($is_matched == 5) {
+        var.update $app_status {
+          value = "reposted"
+        }
+      }
+    }
+  
+    // ==================== END REPOST DETECTION ====================
+  
     db.add generation_log {
       data = {
         profile_id             : $input.profile_id
@@ -503,6 +672,7 @@ query "resume/generate" verb=POST {
         is_regenerated         : 0
         is_matched             : $is_matched
         match_reason           : $match_reason
+        application_status     : $app_status
       }
     } as $log
   }
@@ -511,6 +681,7 @@ query "resume/generate" verb=POST {
     log_id               : $log.id
     is_matched           : $is_matched
     match_reason         : $match_reason
+    applied_date         : $repost_applied_date
     resume_text          : $resume_text
     cover_letter_text    : $cover_letter_text
     resume_filename      : $resume_filename

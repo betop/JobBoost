@@ -370,6 +370,19 @@ async function generateResume(jobDescription, jobUrl = "") {
       let message = "Failed to generate resume";
       try {
         const errorData = await response.json();
+
+        // Check if this is a duplicate URL detection
+        if (errorData?.message === "DUPLICATE_URL" && errorData?.payload) {
+          const p = errorData.payload;
+          console.log("[BG] Duplicate URL detected:", p);
+          const appliedDate = p.applied_date
+            ? new Date(p.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+            : "unknown date";
+          const detail = (p.position_title || "") + (p.company_name ? " at " + p.company_name : "") + " — applied on " + appliedDate;
+          sendProgress("duplicate", undefined, detail);
+          return;
+        }
+
         message = errorData?.message || errorData?.error || message;
         
         // Check if this is a version mismatch error
@@ -385,11 +398,67 @@ async function generateResume(jobDescription, jobUrl = "") {
 
     await syncProfilesFromGenerateResponse(data);
 
+    // If the content is not a real job description (is_matched === 3), warn the user
+    if (data.is_matched === 3) {
+      console.log("[BG] Not a job description:", data.match_reason);
+      sendProgress("not_job_description", undefined, data.match_reason || "");
+      return;
+    }
+
     // If job is not 100% remote (is_matched === 2), inform the user via the progress window
     if (data.skipped === true || data.is_matched === 2) {
       console.log("[BG] Job skipped: not a 100% remote position.");
       sendProgress("skipped");
       return;
+    }
+
+    // If company+title match found in previous applications (is_matched === 5), show repost warning
+    if (data.is_matched === 5) {
+      const appliedDate = data.applied_date
+        ? new Date(data.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+        : "";
+      const detail = (data.match_reason || "Same company and position found in previous application")
+        + (appliedDate ? " (applied on " + appliedDate + ")" : "");
+      console.log("[BG] Repost detected:", detail);
+      sendProgress("reposted", undefined, detail);
+
+      // Wait for user decision (yes = generate anyway, no = cancel)
+      const confirmed = await new Promise((resolve) => {
+        function handler(message) {
+          if (message.action === "repostConfirmed") {
+            chrome.runtime.onMessage.removeListener(handler);
+            resolve(true);
+          } else if (message.action === "repostCancelled") {
+            chrome.runtime.onMessage.removeListener(handler);
+            resolve(false);
+          }
+        }
+        chrome.runtime.onMessage.addListener(handler);
+        // Auto-cancel after 5 minutes
+        setTimeout(() => { chrome.runtime.onMessage.removeListener(handler); resolve(false); }, 300000);
+      });
+
+      if (!confirmed) {
+        console.log("[BG] User cancelled after repost warning.");
+        return;
+      }
+
+      // User confirmed — update the log status to "applied"
+      try {
+        await fetch(`${XANO_RESUME_URL}/resume/confirm_log`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            log_id: data.log_id,
+            token: extensionState.token,
+          }),
+        });
+      } catch (e) {
+        console.warn("[BG] Failed to confirm repost status:", e);
+      }
+
+      // Continue with PDF generation
+      sendProgress("resume");
     }
 
     // If job does not match the profile, warn the user and wait for confirmation
@@ -417,6 +486,20 @@ async function generateResume(jobDescription, jobUrl = "") {
       if (!confirmed) {
         console.log("[BG] User cancelled after mismatch warning.");
         return;
+      }
+
+      // User confirmed — update the log status to "applied"
+      try {
+        await fetch(`${XANO_RESUME_URL}/resume/confirm_log`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            log_id: data.log_id,
+            token: extensionState.token,
+          }),
+        });
+      } catch (e) {
+        console.warn("[BG] Failed to confirm mismatch status:", e);
       }
 
       wasMismatched = true;

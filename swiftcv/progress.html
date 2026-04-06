@@ -40,6 +40,20 @@
       .mismatch-banner .btn-continue:hover { background: #78350f; }
       .mismatch-banner .btn-cancel { background: #e5e7eb; color: #374151; }
       .mismatch-banner .btn-cancel:hover { background: #d1d5db; }
+      .duplicate-banner { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
+      .duplicate-banner .duplicate-title { color: #991b1b; font-weight: 600; font-size: 14px; margin: 0 0 6px; }
+      .duplicate-banner .duplicate-detail { color: #7f1d1d; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
+      .duplicate-banner .duplicate-close { display: block; width: 100%; padding: 8px; background: #991b1b; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; }
+      .duplicate-banner .duplicate-close:hover { background: #7f1d1d; }
+      .reposted-banner { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
+      .reposted-banner .reposted-title { color: #1e40af; font-weight: 600; font-size: 14px; margin: 0 0 6px; }
+      .reposted-banner .reposted-detail { color: #1e3a5f; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
+      .reposted-banner .repost-btns { display: flex; gap: 8px; }
+      .reposted-banner .repost-btns button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .reposted-banner .btn-repost-continue { background: #1e40af; color: #fff; }
+      .reposted-banner .btn-repost-continue:hover { background: #1e3a8a; }
+      .reposted-banner .btn-repost-cancel { background: #e5e7eb; color: #374151; }
+      .reposted-banner .btn-repost-cancel:hover { background: #d1d5db; }
       .ready-banner { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
       .ready-banner .ready-title { color: #15803d; font-weight: 600; font-size: 14px; margin: 0 0 4px; }
       .ready-banner .ready-body { color: #166534; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
@@ -50,7 +64,7 @@
   <body>
     <div class="container">
       <div class="header">
-        <h1>SwiftCV <span style="font-size:0.6em;opacity:0.6;font-weight:400;">v0.1.2</span></h1>
+        <h1>SwiftCV <span style="font-size:0.6em;opacity:0.6;font-weight:400;">v0.1.3</span></h1>
         <p>Generating your documents</p>
       </div>
       <div class="progress-container">
@@ -86,7 +100,12 @@
         <div id="skippedBanner" class="skipped-banner" style="display:none">
           <p class="skipped-title">⚠️ Job not qualified — not 100% remote</p>
           <p class="skipped-body">This job appears to be hybrid or onsite (requires office visits). Resume and cover letter generation was skipped.</p>
-          <button class="skipped-close" onclick="window.close()">OK, Got It</button>
+          <button class="skipped-close" id="skippedClose">OK, Got It</button>
+        </div>
+        <div id="notJdBanner" class="skipped-banner" style="display:none">
+          <p class="skipped-title">⚠️ Not a job description</p>
+          <p id="notJdReason" class="skipped-body">The page content does not appear to be a job description. Please navigate to an actual job posting and try again.</p>
+          <button class="skipped-close" id="notJdClose">OK, Got It</button>
         </div>
         <div id="mismatchBanner" class="mismatch-banner" style="display:none">
           <p class="mismatch-title">⚠️ Job may not match your profile</p>
@@ -94,6 +113,19 @@
           <div class="mismatch-btns">
             <button class="btn-cancel" id="mismatchCancel">Cancel</button>
             <button class="btn-continue" id="mismatchContinue">Generate Anyway</button>
+          </div>
+        </div>
+        <div id="duplicateBanner" class="duplicate-banner" style="display:none">
+          <p class="duplicate-title">🚫 Already Applied</p>
+          <p id="duplicateDetail" class="duplicate-detail">You have already applied to this job posting.</p>
+          <button class="duplicate-close" id="duplicateClose">OK, Got It</button>
+        </div>
+        <div id="repostedBanner" class="reposted-banner" style="display:none">
+          <p class="reposted-title">🔄 Possible Repost Detected</p>
+          <p id="repostedDetail" class="reposted-detail">This job may have been posted again. Please review carefully before proceeding.</p>
+          <div class="repost-btns">
+            <button class="btn-repost-cancel" id="repostCancel">No, Cancel</button>
+            <button class="btn-repost-continue" id="repostContinue">Yes, Generate Anyway</button>
           </div>
         </div>
         <div id="readyBanner" class="ready-banner" style="display:none">

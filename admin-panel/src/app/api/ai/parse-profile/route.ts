@@ -16,6 +16,7 @@ interface ParsedWork {
   location?: string;
   start_date?: string;
   end_date?: string;
+  is_current?: boolean;
   description?: string;
 }
 
@@ -89,6 +90,7 @@ function normalizeProfile(input: ParsedProfile): ParsedProfile {
       location: entry.location?.trim() || "",
       start_date: toMonth(entry.start_date) || "2000-01",
       end_date: toMonth(entry.end_date) || "",
+      is_current: entry.is_current ?? !toMonth(entry.end_date),
       description: entry.description?.trim() || "",
     }))
     .filter((entry) => entry.job_title);

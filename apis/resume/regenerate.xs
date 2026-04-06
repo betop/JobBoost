@@ -75,13 +75,13 @@ query "resume/regenerate" verb=POST {
     foreach ($work) {
       each as $w {
         var $end_label {
-          value = "Present"
+          value = $w.end_date
         }
       
         conditional {
-          if ($w.end_date != null) {
+          if ($w.is_current) {
             var.update $end_label {
-              value = $w.end_date
+              value = "Present"
             }
           }
         }
