@@ -33,7 +33,7 @@ query "resume/generate" verb=POST {
       error = "Missing authorization key"
     }
   
-    // Check extension version first
+    // Check extension version (skipped when extension_version is not sent, e.g. staging env)
     db.query extension_version {
       where = $db.extension_version.extension_name == "swiftcv" && $db.extension_version.is_current == true
       return = {type: "single"}
@@ -44,7 +44,7 @@ query "resume/generate" verb=POST {
       error = "No current version found for swiftcv extension"
     }
   
-    precondition ($input.extension_version != null && $input.extension_version == $current_version.version) {
+    precondition ($input.extension_version == null || $input.extension_version == $current_version.version) {
       error_type = "badrequest"
       error = "Extension version mismatch"
     }

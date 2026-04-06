@@ -2,7 +2,12 @@
  * Version Check Utility
  * Validates that the extension is running the current/approved version
  * Prevents operation if not on the current version
+ * In staging mode, all checks are bypassed
  */
+
+// Extension environment: "staging" (no version checks) or "prod" (version checks enforced)
+// The build script will replace "staging" with "prod" for production builds
+const EXTENSION_ENV = "staging";
 
 const XANO_API_BASE = "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1";
 const VERSION_CHECK_INTERVAL = 3600000; // 1 hour in ms
@@ -49,6 +54,11 @@ async function getCurrentVersionFromXano(extensionName) {
  */
 async function checkVersion(extensionName) {
   const localVersion = getLocalVersion();
+
+  // In staging, always report version as current
+  if (EXTENSION_ENV === "staging") {
+    return { isCurrentVersion: true, localVersion };
+  }
 
   try {
     const currentVersion = await getCurrentVersionFromXano(extensionName);

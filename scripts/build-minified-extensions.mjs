@@ -104,7 +104,15 @@ async function buildTarget(targetName) {
       continue;
     }
 
-    const raw = await fs.readFile(file, "utf8");
+    let raw = await fs.readFile(file, "utf8");
+
+    // Switch extension environment from staging to prod for production builds
+    if (ext === ".js") {
+      raw = raw.replace(
+        /const EXTENSION_ENV\s*=\s*"staging"/g,
+        'const EXTENSION_ENV = "prod"'
+      );
+    }
 
     try {
       const minified = await minifyContent(file, raw);

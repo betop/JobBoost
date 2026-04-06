@@ -1,6 +1,10 @@
 // Background service worker for SwiftCV Extension
 // PDF generation is handled by the offscreen document (offscreen.html/offscreen.js)
 
+// Extension environment: "staging" (no version checks) or "prod" (version checks enforced)
+// The build script will replace "staging" with "prod" for production builds
+const EXTENSION_ENV = "staging";
+
 // Xano API base URLs per group
 const XANO_PUBLIC_URL = "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1";
 const XANO_RESUME_URL = "https://x8ki-letl-twmt.n7.xano.io/api:caf8Eo15:v1";
@@ -351,19 +355,24 @@ async function generateResume(jobDescription, jobUrl = "") {
   try {
     sendProgress("ai");
 
+    const generateBody = {
+      profile_id: extensionState.profileId,
+      job_description: jobDescription,
+      token: extensionState.token,
+      ai_provider: "claude",
+      job_url: jobUrl,
+    };
+    // Only send extension_version in prod (backend enforces version check)
+    if (EXTENSION_ENV === "prod") {
+      generateBody.extension_version = chrome.runtime.getManifest().version;
+    }
+
     const response = await fetch(`${XANO_RESUME_URL}/resume/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        profile_id: extensionState.profileId,
-        job_description: jobDescription,
-        token: extensionState.token,
-        ai_provider: "claude",
-        job_url: jobUrl,
-        extension_version: chrome.runtime.getManifest().version,
-      }),
+      body: JSON.stringify(generateBody),
     });
 
     if (!response.ok) {
@@ -385,8 +394,8 @@ async function generateResume(jobDescription, jobUrl = "") {
 
         message = errorData?.message || errorData?.error || message;
         
-        // Check if this is a version mismatch error
-        if (message.includes("version") || message.includes("Version")) {
+        // Check if this is a version mismatch error (only relevant in prod)
+        if (EXTENSION_ENV === "prod" && (message.includes("version") || message.includes("Version"))) {
           message = message + " — Please update the SwiftCV extension to the latest version.";
         }
       } catch (_) {}

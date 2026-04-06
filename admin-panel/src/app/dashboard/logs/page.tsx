@@ -419,7 +419,7 @@ export default function LogsPage() {
     const filterObj: LogsFilters = { period: period !== "custom" ? (period as LogsFilters["period"]) : "custom", date_from: today, date_to: today };
     if (params.get("bidder_id")) filterObj.bidder_id = params.get("bidder_id") || undefined;
     if (params.get("profile_id")) filterObj.profile_id = params.get("profile_id") || undefined;
-    if (params.get("is_matched")) filterObj.is_matched = (params.get("is_matched") as "1" | "0" | "2") || undefined;
+    if (params.get("is_matched")) filterObj.is_matched = (params.get("is_matched") as "1" | "0" | "2" | "3" | "4" | "5") || undefined;
     if (params.get("is_regenerated")) filterObj.is_regenerated = (params.get("is_regenerated") as "1" | "0") || undefined;
     if (params.get("date_from")) filterObj.date_from = params.get("date_from") || today;
     if (params.get("date_to")) filterObj.date_to = params.get("date_to") || today;
@@ -738,7 +738,7 @@ export default function LogsPage() {
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px]"
             value={filters.is_matched ?? ""}
             onChange={(e) => {
-              setFilters((f) => ({ ...f, is_matched: (e.target.value as "1" | "0" | "2") || undefined }));
+              setFilters((f) => ({ ...f, is_matched: (e.target.value as "1" | "0" | "2" | "3" | "4" | "5") || undefined }));
               updateQueryParams({ is_matched: e.target.value || undefined, page: 1 });
               setPage(1);
             }}
@@ -747,6 +747,9 @@ export default function LogsPage() {
             <option value="1">✅ Matched only</option>
             <option value="0">⚠️ Mismatched only</option>
             <option value="2">🚫 Skipped only</option>
+            <option value="3">📄 Not a JD only</option>
+            <option value="4">🔁 Duplicate only</option>
+            <option value="5">📌 Reposted only</option>
           </select>
         </div>
 
@@ -980,6 +983,36 @@ export default function LogsPage() {
                                 </button>
                               )}
                             </div>
+                          )}
+                          {log.is_matched === 3 && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                              Not a JD
+                            </span>
+                          )}
+                          {log.is_matched === 4 && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                              Duplicate
+                            </span>
+                          )}
+                          {log.is_matched === 5 && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 text-violet-700 border border-violet-200">
+                              Reposted
+                            </span>
+                          )}
+                          {log.application_status && (
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                              log.application_status === "applied"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : log.application_status === "mismatched"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : log.application_status === "reposted"
+                                ? "bg-violet-50 text-violet-700 border border-violet-200"
+                                : log.application_status === "duplicated"
+                                ? "bg-red-50 text-red-700 border border-red-200"
+                                : "bg-gray-100 text-gray-500 border border-gray-200"
+                            }`}>
+                              {log.application_status.charAt(0).toUpperCase() + log.application_status.slice(1)}
+                            </span>
                           )}
                         </div>
                       </td>
