@@ -60,7 +60,7 @@ export interface GenerationLog {
   company_name: string;
   is_regenerated: number;  // 0=original, 1=regenerated
   original_log_id: string;
-  is_matched: number | null;  // 1=matched, 0=mismatched, 2=skipped(not-remote), 3=not_job_description, 4=duplicate_url, 5=reposted, null=unknown
+  is_matched: number | null;  // 1=matched, 0=mismatched, 2=skipped(not-remote), 3=not_job_description, 4=duplicate_url, 5=reposted, 6=error, null=unknown
   match_reason: string;
   is_applied: boolean;
 }
@@ -93,7 +93,7 @@ export interface LogsFilters {
   date_from?: string;
   date_to?: string;
   period?: LogsPeriod;
-  is_matched?: "1" | "0" | "2" | "3" | "4" | "5";
+  is_matched?: "1" | "0" | "2" | "3" | "4" | "5" | "6";
   is_regenerated?: "1" | "0";
 }
 

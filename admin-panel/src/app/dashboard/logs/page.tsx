@@ -750,6 +750,7 @@ export default function LogsPage() {
             <option value="3">📄 Not a JD</option>
             <option value="4">🔁 Duplicate URL</option>
             <option value="5">🔄 Reposted</option>
+            <option value="6">❌ AI Error</option>
           </select>
         </div>
 
@@ -997,6 +998,11 @@ export default function LogsPage() {
                           {log.is_matched === 5 && (
                             <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                               Reposted
+                            </span>
+                          )}
+                          {log.is_matched === 6 && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-600 border border-red-200">
+                              AI Error
                             </span>
                           )}
                           {log.is_applied && (

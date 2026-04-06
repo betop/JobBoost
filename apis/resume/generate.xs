@@ -466,14 +466,63 @@ query "resume/generate" verb=POST {
             |replace:"```json\n":""
             |replace:"```\n":""
             |replace:"```":""
+            |trim
         }
       
+        // Try parsing JSON; if it fails (e.g. extra trailing }), trim it and retry
         var $parsed_response {
-          value = $clean_response|json_decode
+          value = null
+        }
+      
+        try_catch {
+          try {
+            var.update $parsed_response {
+              value = $clean_response|json_decode
+            }
+          }
+        
+          catch {
+            // Remove trailing } and retry (AI sometimes returns an extra closing brace)
+            var $trimmed_response {
+              value = $clean_response|regex_replace:"}[s]*$":""|trim
+            }
+          
+            var.update $trimmed_response {
+              value = $trimmed_response ~ "}"
+            }
+          
+            try_catch {
+              try {
+                var.update $parsed_response {
+                  value = $trimmed_response|json_decode
+                }
+              }
+            
+              catch {
+                // JSON is truly invalid — $parsed_response stays null, handled below
+                debug.log {
+                  value = "JSON parse failed even after trimming extra brace"
+                }
+              }
+            }
+          }
+        }
+      
+        // If JSON parsing failed completely, mark as error
+        conditional {
+          if ($parsed_response == null) {
+            var.update $is_matched {
+              value = 6
+            }
+          
+            var.update $match_reason {
+              value = "AI processing error: invalid JSON response"
+            }
+          }
         }
       
         conditional {
-          if ($parsed_response.status == "not_job_description") {
+          if ($parsed_response != null && $parsed_response.status == "not_job_description") {
             var.update $is_matched {
               value = 3
             }
@@ -485,7 +534,7 @@ query "resume/generate" verb=POST {
         }
       
         conditional {
-          if ($parsed_response.status == "skip") {
+          if ($parsed_response != null && $parsed_response.status == "skip") {
             var.update $is_matched {
               value = 2
             }
@@ -497,7 +546,7 @@ query "resume/generate" verb=POST {
         }
       
         conditional {
-          if ($parsed_response.status == "mismatch") {
+          if ($parsed_response != null && $parsed_response.status == "mismatch") {
             var.update $is_matched {
               value = 0
             }
@@ -525,7 +574,7 @@ query "resume/generate" verb=POST {
         }
       
         conditional {
-          if ($parsed_response.status == "match") {
+          if ($parsed_response != null && $parsed_response.status == "match") {
             var.update $is_matched {
               value = 1
             }
@@ -559,7 +608,7 @@ query "resume/generate" verb=POST {
         }
       
         var.update $is_matched {
-          value = 0
+          value = 6
         }
       
         var.update $match_reason {

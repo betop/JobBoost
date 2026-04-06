@@ -407,6 +407,13 @@ async function generateResume(jobDescription, jobUrl = "") {
 
     await syncProfilesFromGenerateResponse(data);
 
+    // If AI processing failed (is_matched === 6), show error
+    if (data.is_matched === 6) {
+      console.log("[BG] AI processing error:", data.match_reason);
+      sendProgress("error", data.match_reason || "AI processing error. Please try again.");
+      return;
+    }
+
     // If the content is not a real job description (is_matched === 3), warn the user
     if (data.is_matched === 3) {
       console.log("[BG] Not a job description:", data.match_reason);
