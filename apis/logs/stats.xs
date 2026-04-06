@@ -136,6 +136,26 @@ query "logs/stats" verb=GET {
       value = 0
     }
   
+    var $duplicated_count {
+      value = 0
+    }
+  
+    var $not_jd_count {
+      value = 0
+    }
+  
+    var $reposted_count {
+      value = 0
+    }
+  
+    var $error_count {
+      value = 0
+    }
+  
+    var $applied_count {
+      value = 0
+    }
+  
     foreach ($period_logs) {
       each as $log {
         conditional {
@@ -191,6 +211,47 @@ query "logs/stats" verb=GET {
             }
           }
         }
+      
+        conditional {
+          if ($log.is_matched == 4) {
+            var.update $duplicated_count {
+              value = $duplicated_count + 1
+            }
+          }
+        }
+      
+        conditional {
+          if ($log.is_matched == 3) {
+            var.update $not_jd_count {
+              value = $not_jd_count + 1
+            }
+          }
+        }
+      
+        conditional {
+          if ($log.is_matched == 5) {
+            var.update $reposted_count {
+              value = $reposted_count + 1
+            }
+          }
+        }
+      
+        conditional {
+          if ($log.is_matched == 6) {
+            var.update $error_count {
+              value = $error_count + 1
+            }
+          }
+        }
+      
+        // Count as applied if is_applied=true OR is_matched=1 (matched = auto-applied)
+        conditional {
+          if ($log.is_applied || $log.is_matched == 1) {
+            var.update $applied_count {
+              value = $applied_count + 1
+            }
+          }
+        }
       }
     }
   
@@ -242,6 +303,11 @@ query "logs/stats" verb=GET {
     matched_count         : $matched_count
     mismatched_count      : $mismatched_count
     skipped_count         : $skipped_count
+    duplicated_count      : $duplicated_count
+    not_jd_count          : $not_jd_count
+    reposted_count        : $reposted_count
+    error_count           : $error_count
+    applied_count         : $applied_count
     all_time_total        : $all_time_total
     all_time_input_tokens : $all_time_input_tokens
     all_time_output_tokens: $all_time_output_tokens

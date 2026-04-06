@@ -82,6 +82,11 @@ export interface LogsStatsResponse {
   matched_count: number;
   mismatched_count: number;
   skipped_count: number;
+  duplicated_count: number;
+  not_jd_count: number;
+  reposted_count: number;
+  error_count: number;
+  applied_count: number;
   all_time_total: number;
   all_time_input_tokens: number;
   all_time_output_tokens: number;

@@ -31,6 +31,8 @@ import {
   AlertTriangle,
   Ban,
   Eye,
+  Copy,
+  XCircle,
 } from "lucide-react";
 
 type SortField = "created_at" | "bidder_name" | "profile_name" | "position_title" | "company_name";
@@ -649,42 +651,106 @@ export default function LogsPage() {
       {statsLoading ? (
         <div className="flex justify-center py-8"><LoadingSpinner /></div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <StatCard
-            icon={Activity}
-            label="Generations (period)"
-            value={stats?.total_generations ?? 0}
-            sub={`All time: ${stats?.all_time_total ?? 0}`}
-            color="bg-blue-500"
-          />
-          <StatCard
-            icon={CheckCircle}
-            label="Matched Jobs (period)"
-            value={stats?.matched_count ?? 0}
-            sub={`${stats?.total_generations ? Math.round(((stats.matched_count ?? 0) / stats.total_generations) * 100) : 0}% match rate`}
-            color="bg-emerald-500"
-          />
-          <StatCard
-            icon={AlertTriangle}
-            label="Mismatched Jobs (period)"
-            value={stats?.mismatched_count ?? 0}
-            sub={`${stats?.total_generations ? Math.round(((stats.mismatched_count ?? 0) / stats.total_generations) * 100) : 0}% mismatch rate`}
-            color="bg-amber-500"
-          />
-          <StatCard
-            icon={Ban}
-            label="Skipped Jobs (period)"
-            value={stats?.skipped_count ?? 0}
-            sub="Not 100% remote"
-            color="bg-gray-500"
-          />
-          <StatCard
-            icon={DollarSign}
-            label="Est. Cost (period)"
-            value={formatCost(periodCost)}
-            sub={`All time: ${formatCost(allTimeCost)}`}
-            color="bg-purple-600"
-          />
+        <div className="space-y-3 mb-8">
+          {/* Row 1: Total, Applied, Est. Cost */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
+              <div className="bg-blue-500 w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Activity className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Total</p>
+                <p className="text-xl font-bold text-gray-900">{(stats?.total_generations ?? 0).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-400">All time: {(stats?.all_time_total ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
+              <div className="bg-green-500 w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Applied</p>
+                <p className="text-xl font-bold text-gray-900">{(stats?.applied_count ?? 0).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-400">{stats?.total_generations ? Math.round(((stats.applied_count ?? 0) / stats.total_generations) * 100) : 0}% of total</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
+              <div className="bg-purple-600 w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
+                <DollarSign className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Est. Cost</p>
+                <p className="text-xl font-bold text-gray-900">{formatCost(periodCost)}</p>
+                <p className="text-[10px] text-gray-400">All time: {formatCost(allTimeCost)}</p>
+              </div>
+            </div>
+          </div>
+          {/* Row 2: Matched, Mismatched, Duplicated, Reposted, Not a JD, Skipped, Error */}
+          <div className="grid grid-cols-7 gap-2">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+              <div className="bg-emerald-500 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium">Matched</p>
+                <p className="text-lg font-bold text-gray-900">{(stats?.matched_count ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+              <div className="bg-amber-500 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium">Mismatched</p>
+                <p className="text-lg font-bold text-gray-900">{(stats?.mismatched_count ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+              <div className="bg-red-500 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <Copy className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium">Duplicated</p>
+                <p className="text-lg font-bold text-gray-900">{(stats?.duplicated_count ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+              <div className="bg-indigo-500 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <RefreshCw className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium">Reposted</p>
+                <p className="text-lg font-bold text-gray-900">{(stats?.reposted_count ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+              <div className="bg-slate-500 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <FileText className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium">Not a JD</p>
+                <p className="text-lg font-bold text-gray-900">{(stats?.not_jd_count ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+              <div className="bg-gray-500 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <Ban className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium">Skipped</p>
+                <p className="text-lg font-bold text-gray-900">{(stats?.skipped_count ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+              <div className="bg-red-600 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
+                <XCircle className="w-3.5 h-3.5 text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium">Error</p>
+                <p className="text-lg font-bold text-gray-900">{(stats?.error_count ?? 0).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

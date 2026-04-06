@@ -46,7 +46,7 @@ query "resume/generate" verb=POST {
   
     precondition ($input.extension_version == null || $input.extension_version == $current_version.version) {
       error_type = "badrequest"
-      error = "Extension version mismatch"
+      error = "Extension version mismatch. Please update your extension to the latest version."
     }
   
     db.query access_token {
