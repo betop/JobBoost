@@ -26,7 +26,7 @@ table generation_log {
     text original_log_id?
     int is_matched?
     text match_reason?
-    text application_status?
+    bool is_applied?
   }
 
   index = [

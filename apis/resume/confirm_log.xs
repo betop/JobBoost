@@ -1,4 +1,4 @@
-// Confirm a log entry — update application_status to "applied"
+// Confirm a log entry — set is_applied = true
 // Called when user clicks "Generate Anyway" on repost or mismatch warnings
 query "resume/confirm_log" verb=POST {
   api_group = "resume"
@@ -50,11 +50,11 @@ query "resume/confirm_log" verb=POST {
       error = "Access denied"
     }
   
-    // Update application_status to "applied"
+    // Mark as applied
     db.edit generation_log {
       field_name = "id"
       field_value = $input.log_id
-      data = {application_status: "applied"}
+      data = {is_applied: true}
     } as $updated_log
   }
 

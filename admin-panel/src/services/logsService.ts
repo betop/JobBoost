@@ -60,9 +60,9 @@ export interface GenerationLog {
   company_name: string;
   is_regenerated: number;  // 0=original, 1=regenerated
   original_log_id: string;
-  is_matched: number | null;  // 1=matched, 0=mismatched, 2=skipped(not-remote), 3=not_job_description, 4=duplicate_url, 5=reposted
+  is_matched: number | null;  // 1=matched, 0=mismatched, 2=skipped(not-remote), 3=not_job_description, 4=duplicate_url, 5=reposted, null=unknown
   match_reason: string;
-  application_status: string | null;  // "applied", "mismatched", "reposted", "duplicated"
+  is_applied: boolean;
 }
 
 export interface LogsListResponse {

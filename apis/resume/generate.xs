@@ -93,7 +93,7 @@ query "resume/generate" verb=POST {
     conditional {
       if ($input.job_url != null && $input.job_url != "") {
         db.query generation_log {
-          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.application_status != "duplicated" && $db.generation_log.application_status != "reposted"
+          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5
           sort = {generation_log.created_at: "desc"}
           return = {type: "single"}
         } as $existing_url_log
@@ -122,7 +122,6 @@ query "resume/generate" verb=POST {
                 is_regenerated         : 0
                 is_matched             : 4
                 match_reason           : "Duplicate job URL detected"
-                application_status     : "duplicated"
               }
             } as $dup_log
           }
@@ -607,7 +606,7 @@ query "resume/generate" verb=POST {
     conditional {
       if ($position_title != "" && $company_name != "" && ($is_matched == 1 || $is_matched == 0)) {
         db.query generation_log {
-          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.application_status != "duplicated" && $db.generation_log.application_status != "reposted"
+          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5
           sort = {generation_log.created_at: "desc"}
           return = {type: "single"}
         } as $existing_title_log
@@ -634,25 +633,6 @@ query "resume/generate" verb=POST {
       }
     }
   
-    // Determine application_status for the log
-    var $app_status {
-      value = "applied"
-    }
-  
-    conditional {
-      if ($is_matched == 0) {
-        var.update $app_status {
-          value = "mismatched"
-        }
-      }
-    
-      elseif ($is_matched == 5) {
-        var.update $app_status {
-          value = "reposted"
-        }
-      }
-    }
-  
     // ==================== END REPOST DETECTION ====================
   
     db.add generation_log {
@@ -672,7 +652,6 @@ query "resume/generate" verb=POST {
         is_regenerated         : 0
         is_matched             : $is_matched
         match_reason           : $match_reason
-        application_status     : $app_status
       }
     } as $log
   }
