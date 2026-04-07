@@ -85,7 +85,8 @@ query "resume/generate" verb=POST {
     }
   
     // ==================== DUPLICATE URL DETECTION ====================
-    // Check if this exact job_url was already applied to by this bidder
+    // Check if this exact job_url + profile combo was already applied to by this bidder
+    // Same URL with a different profile is allowed (different resume for same job)
     var $duplicate_log {
       value = null
     }
@@ -93,7 +94,7 @@ query "resume/generate" verb=POST {
     conditional {
       if ($input.job_url != null && $input.job_url != "") {
         db.query generation_log {
-          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5
+          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5
           sort = {generation_log.created_at: "desc"}
           return = {type: "single"}
         } as $existing_url_log
@@ -501,7 +502,7 @@ query "resume/generate" verb=POST {
               catch {
                 // JSON is truly invalid — $parsed_response stays null, handled below
                 debug.log {
-                  value = "JSON parse failed even after trimming extra brace"
+                  value = "JSON parse failed even after trimming extra brace: " ~ $error
                 }
               }
             }
@@ -604,7 +605,7 @@ query "resume/generate" verb=POST {
     
       catch {
         debug.log {
-          value = "AI call failed"
+          value = "AI call failed: " ~ $error
         }
       
         var.update $is_matched {
@@ -612,7 +613,7 @@ query "resume/generate" verb=POST {
         }
       
         var.update $match_reason {
-          value = "AI processing error"
+          value = "AI processing error: " ~ $error
         }
       }
     }
@@ -655,7 +656,7 @@ query "resume/generate" verb=POST {
     conditional {
       if ($position_title != "" && $company_name != "" && ($is_matched == 1 || $is_matched == 0)) {
         db.query generation_log {
-          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.bidder_id == $access.bidder_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5
+          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5
           sort = {generation_log.created_at: "desc"}
           return = {type: "single"}
         } as $existing_title_log

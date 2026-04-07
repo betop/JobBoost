@@ -48,7 +48,30 @@ precondition ($input.id == null) {
 }
 ```
 
-Wrap risky blocks with `try_catch` if you need recovery.
+### Try/Catch (error handling)
+
+Wrap risky blocks with `try_catch` if you need recovery. The `catch` block has access to the `$error` variable containing the error details.
+
+```xanoscript
+try_catch {
+  try {
+    // statements that may throw
+    function.run risky_function { input = { foo: "bar" } } as $result
+  }
+  catch {
+    // $error is automatically available with the error details
+    debug.log { value = $error }
+  }
+  finally {
+    // always runs (optional)
+    debug.log { value = "Cleanup actions" }
+  }
+}
+```
+
+- **try**: Executes code that may throw an error
+- **catch**: Runs if an error occurs — `$error` contains the error message/details
+- **finally**: Always runs regardless of success or failure (optional)
 
 ## 3) Tables
 
