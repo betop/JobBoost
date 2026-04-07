@@ -40,6 +40,10 @@ export const tokenService = {
     await api.patch(`/tokens/${id}/extend`, { expiration_date: expiration_date || null });
   },
 
+  toggleAdmin: async (id: string, is_admin: boolean): Promise<void> => {
+    await api.patch(`/tokens/${id}/toggle-admin`, { is_admin });
+  },
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/tokens/${id}`);
   },

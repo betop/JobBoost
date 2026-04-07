@@ -23,7 +23,7 @@ export default function TokensPage() {
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [showActionConfirm, setShowActionConfirm] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ type: 'generate' | 'revoke' | 'delete' | 'extend'; id?: string; data?: any } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: 'generate' | 'revoke' | 'delete' | 'extend' | 'toggle_admin'; id?: string; data?: any } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [extendToken, setExtendToken] = useState<Token | null>(null);
@@ -98,6 +98,21 @@ export default function TokensPage() {
     },
   });
 
+  const toggleAdminMutation = useMutation({
+    mutationFn: ({ id, is_admin }: { id: string; is_admin: boolean }) =>
+      tokenService.toggleAdmin(id, is_admin),
+    onSuccess: (_data, variables) => {
+      showToast(
+        variables.is_admin ? "Admin permission granted" : "Admin permission revoked",
+        "success"
+      );
+      refetch();
+    },
+    onError: () => {
+      showToast("Failed to update permission", "error");
+    },
+  });
+
   const onSubmit = (data: any) => {
     const payload: any = { bidder_id: data.bidder_id };
     if (data.expiration_date) payload.expiration_date = data.expiration_date;
@@ -116,6 +131,8 @@ export default function TokensPage() {
       deleteMutation.mutate(pendingAction.id!);
     } else if (pendingAction.type === 'extend') {
       extendMutation.mutate({ id: pendingAction.id!, expiration_date: pendingAction.data });
+    } else if (pendingAction.type === 'toggle_admin') {
+      toggleAdminMutation.mutate({ id: pendingAction.id!, is_admin: pendingAction.data });
     }
     
     setPendingAction(null);
@@ -208,17 +225,26 @@ export default function TokensPage() {
     {
       key: "is_admin",
       label: "Permission",
-      render: (value: boolean) => (
-        value ? (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
-            <Shield className="w-3 h-3" />
-            Admin
-          </span>
-        ) : (
-          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
-            Standard
-          </span>
-        )
+      render: (value: boolean, row: Token) => (
+        <button
+          onClick={() => {
+            setPendingAction({ type: 'toggle_admin' as any, id: row.id, data: !value });
+            setShowActionConfirm(true);
+          }}
+          className="cursor-pointer hover:opacity-80 transition-opacity"
+          title={value ? "Click to revoke admin" : "Click to grant admin"}
+        >
+          {value ? (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+              <Shield className="w-3 h-3" />
+              Admin
+            </span>
+          ) : (
+            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+              Standard
+            </span>
+          )}
+        </button>
       ),
     },
     {
@@ -293,6 +319,8 @@ export default function TokensPage() {
             ? "Please confirm your password to revoke this key"
             : pendingAction?.type === 'extend'
             ? "Please confirm your password to extend this key"
+            : pendingAction?.type === 'toggle_admin'
+            ? `Please confirm your password to ${pendingAction?.data ? 'grant' : 'revoke'} admin permission`
             : "Please confirm your password to generate a new key"
         }
       />
