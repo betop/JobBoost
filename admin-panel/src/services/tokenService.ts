@@ -9,11 +9,13 @@ export interface Token {
   expiration_date?: string;
   is_used: boolean;
   is_active: boolean;
+  is_admin: boolean;
 }
 
 export interface GenerateTokenInput {
   bidder_id: string;
   expiration_date?: string;
+  is_admin?: boolean;
 }
 
 export const tokenService = {
@@ -25,6 +27,7 @@ export const tokenService = {
   generate: async (input: GenerateTokenInput): Promise<Token> => {
     const payload: Partial<GenerateTokenInput> = { bidder_id: input.bidder_id };
     if (input.expiration_date) payload.expiration_date = input.expiration_date;
+    if (input.is_admin) payload.is_admin = true;
     const response = await api.post("/tokens/generate", payload);
     return response.data;
   },

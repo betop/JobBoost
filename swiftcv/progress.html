@@ -54,6 +54,19 @@
       .reposted-banner .btn-repost-continue:hover { background: #1e3a8a; }
       .reposted-banner .btn-repost-cancel { background: #e5e7eb; color: #374151; }
       .reposted-banner .btn-repost-cancel:hover { background: #d1d5db; }
+      .admin-override-banner { background: #fef3c7; border: 2px solid #f59e0b; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
+      .admin-override-banner .admin-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .admin-override-banner .admin-title { color: #92400e; font-weight: 600; font-size: 14px; margin: 0 0 6px; }
+      .admin-override-banner .admin-detail { color: #78350f; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
+      .admin-override-banner .admin-btns { display: flex; gap: 8px; }
+      .admin-override-banner .admin-btns button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .admin-override-banner .btn-admin-continue { background: #f59e0b; color: #fff; }
+      .admin-override-banner .btn-admin-continue:hover { background: #d97706; }
+      .admin-override-banner .btn-admin-cancel { background: #e5e7eb; color: #374151; }
+      .admin-override-banner .btn-admin-cancel:hover { background: #d1d5db; }
+      .admin-warning-banner { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-top: 8px; text-align: left; }
+      .admin-warning-banner .admin-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .admin-warning-banner .admin-warning-text { color: #78350f; font-size: 11px; margin: 0; line-height: 1.4; }
       .ready-banner { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
       .ready-banner .ready-title { color: #15803d; font-weight: 600; font-size: 14px; margin: 0 0 4px; }
       .ready-banner .ready-body { color: #166534; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
@@ -127,6 +140,19 @@
             <button class="btn-repost-cancel" id="repostCancel">No, Cancel</button>
             <button class="btn-repost-continue" id="repostContinue">Yes, Generate Anyway</button>
           </div>
+        </div>
+        <div id="adminOverrideBanner" class="admin-override-banner" style="display:none">
+          <span class="admin-badge">🔑 Admin</span>
+          <p class="admin-title" id="adminOverrideTitle">⚠️ Status Warning</p>
+          <p id="adminOverrideDetail" class="admin-detail">This job returned a non-standard status.</p>
+          <div class="admin-btns">
+            <button class="btn-admin-cancel" id="adminOverrideCancel">Cancel</button>
+            <button class="btn-admin-continue" id="adminOverrideContinue">Generate Anyway</button>
+          </div>
+        </div>
+        <div id="adminWarningBanner" class="admin-warning-banner" style="display:none">
+          <span class="admin-badge">🔑 Admin</span>
+          <p id="adminWarningText" class="admin-warning-text"></p>
         </div>
         <div id="readyBanner" class="ready-banner" style="display:none">
           <p class="ready-title">✅ Resume is ready!</p>

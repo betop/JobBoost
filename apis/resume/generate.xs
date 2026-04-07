@@ -9,6 +9,7 @@ query "resume/generate" verb=POST {
     text token?
     text job_url?
     text extension_version?
+    bool force_generate?
   }
 
   stack {
@@ -69,6 +70,19 @@ query "resume/generate" verb=POST {
       error = "Key has expired"
     }
   
+    // Check if this is an admin key (can override all warnings)
+    var $is_admin {
+      value = false
+    }
+  
+    conditional {
+      if ($access.is_admin == true) {
+        var.update $is_admin {
+          value = true
+        }
+      }
+    }
+  
     db.get bidder {
       field_name = "id"
       field_value = $access.bidder_id
@@ -87,12 +101,13 @@ query "resume/generate" verb=POST {
     // ==================== DUPLICATE URL DETECTION ====================
     // Check if this exact job_url + profile combo was already applied to by this bidder
     // Same URL with a different profile is allowed (different resume for same job)
+    // Admin keys with force_generate skip duplicate detection entirely
     var $duplicate_log {
       value = null
     }
   
     conditional {
-      if ($input.job_url != null && $input.job_url != "") {
+      if ($input.job_url != null && $input.job_url != "" && !($is_admin == true && $input.force_generate == true)) {
         db.query generation_log {
           where = $db.generation_log.job_url == $input.job_url && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5
           sort = {generation_log.created_at: "desc"}
@@ -105,33 +120,39 @@ query "resume/generate" verb=POST {
               value = $existing_url_log
             }
           
-            // Save a log entry with "duplicated" status (no AI call needed)
-            db.add generation_log {
-              data = {
-                profile_id             : $input.profile_id
-                bidder_id              : $access.bidder_id
-                job_url                : $input.job_url
-                job_description_snippet: $input.job_description|substr:0:300
-                job_description        : $input.job_description
-                ai_provider            : ""
-                input_tokens           : 0
-                output_tokens          : 0
-                resume_filename        : ""
-                cover_letter_filename  : ""
-                position_title         : $existing_url_log.position_title
-                company_name           : $existing_url_log.company_name
-                is_regenerated         : 0
-                is_matched             : 4
-                match_reason           : "Duplicate job URL detected"
+            // Only log the duplicate entry for non-admin keys
+            // Admin keys skip the log and proceed to AI generation
+            conditional {
+              if ($is_admin == false) {
+                db.add generation_log {
+                  data = {
+                    profile_id             : $input.profile_id
+                    bidder_id              : $access.bidder_id
+                    job_url                : $input.job_url
+                    job_description_snippet: $input.job_description|substr:0:300
+                    job_description        : $input.job_description
+                    ai_provider            : ""
+                    input_tokens           : 0
+                    output_tokens          : 0
+                    resume_filename        : ""
+                    cover_letter_filename  : ""
+                    position_title         : $existing_url_log.position_title
+                    company_name           : $existing_url_log.company_name
+                    is_regenerated         : 0
+                    is_matched             : 4
+                    match_reason           : "Duplicate job URL detected"
+                  }
+                } as $dup_log
               }
-            } as $dup_log
+            }
           }
         }
       }
     }
   
     // If duplicate was found, fail with structured error containing duplicate info
-    precondition ($duplicate_log == null) {
+    // Admin keys can override — they get the warning but can still generate
+    precondition ($duplicate_log == null || $is_admin == true) {
       error_type = "badrequest"
       error = "DUPLICATE_URL"
       payload = {
@@ -367,6 +388,15 @@ query "resume/generate" verb=POST {
     // Build user prompt with candidate profile and job description
     var $user_prompt {
       value = "STEP 0 - CONTENT VALIDATION:\n\nFirst, check if the provided text is actually a job description/job posting. If the text is NOT a real job description (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps.\n\nSTEP 1 - REMOTE CHECK:\n\nIf job description doesn't provide 100% remote position and only requires either relocation, hybrid, onsite, in-office, or at least 1 day office visit, return status=skip. And if job requires Security Clearance or Public trust, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch. If job description requires Staff level Engineer or higher level Engineer than current role in the profile, return status=mismatch. \n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION: " ~ ($not_jd_schema|json_encode) ~ "\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+    }
+  
+    // Admin + force_generate: override the prompt to always generate a resume (treat as match)
+    conditional {
+      if ($is_admin == true && $input.force_generate == true) {
+        var.update $user_prompt {
+          value = "IMPORTANT: SKIP all validation steps. Do NOT return not_job_description or skip status. Always generate a full tailored resume and cover letter. Treat this as status=match regardless of remote policy or domain alignment.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY this JSON structure (status MUST be match):\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+        }
+      }
     }
   
     var $claude_auth {
@@ -711,6 +741,8 @@ query "resume/generate" verb=POST {
     is_matched           : $is_matched
     match_reason         : $match_reason
     applied_date         : $repost_applied_date
+    is_admin             : $is_admin
+    duplicate_info       : $duplicate_log
     resume_text          : $resume_text
     cover_letter_text    : $cover_letter_text
     resume_filename      : $resume_filename

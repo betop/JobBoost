@@ -11,7 +11,7 @@ import Modal from "@/components/Modal";
 import Select from "@/components/Select";
 import Input from "@/components/Input";
 import PasswordConfirmModal from "@/components/PasswordConfirmModal";
-import { Plus, Copy, XCircle, Trash2, CalendarClock, Eye, EyeOff } from "lucide-react";
+import { Plus, Copy, XCircle, Trash2, CalendarClock, Eye, EyeOff, Shield } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useState } from "react";
 import { useUIStore } from "@/store/uiStore";
@@ -206,6 +206,22 @@ export default function TokensPage() {
       ),
     },
     {
+      key: "is_admin",
+      label: "Permission",
+      render: (value: boolean) => (
+        value ? (
+          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
+            <Shield className="w-3 h-3" />
+            Admin
+          </span>
+        ) : (
+          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+            Standard
+          </span>
+        )
+      ),
+    },
+    {
       key: "id",
       label: "Actions",
       render: (_: any, row: Token) => (
@@ -332,6 +348,19 @@ export default function TokensPage() {
               required
             />
             <Input label="Expiration Date (Optional)" type="date" {...register("expiration_date")} />
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="is_admin"
+                {...register("is_admin")}
+                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+              />
+              <label htmlFor="is_admin" className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <Shield className="w-4 h-4 text-amber-600" />
+                Admin Permission
+              </label>
+              <span className="text-xs text-gray-400">(Can override all warnings)</span>
+            </div>
             <Button type="submit" loading={generateMutation.isPending} className="w-full">
               Generate Token
             </Button>

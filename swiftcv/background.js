@@ -352,6 +352,93 @@ async function generateResume(jobDescription, jobUrl = "") {
     chrome.runtime.sendMessage({ action: "progressUpdate", step, error, reason }).catch(() => {});
   }
 
+  // Wait for admin to click "Generate Anyway" or "Cancel" on override banner
+  function waitForAdminDecision() {
+    return new Promise((resolve) => {
+      function handler(message) {
+        if (message.action === "adminOverrideConfirmed") {
+          chrome.runtime.onMessage.removeListener(handler);
+          resolve(true);
+        } else if (message.action === "adminOverrideCancelled") {
+          chrome.runtime.onMessage.removeListener(handler);
+          resolve(false);
+        }
+      }
+      chrome.runtime.onMessage.addListener(handler);
+      setTimeout(() => { chrome.runtime.onMessage.removeListener(handler); resolve(false); }, 300000);
+    });
+  }
+
+  // Re-call generate API with force_generate=true (admin only)
+  async function retryWithForce(jd, url) {
+    sendProgress("ai");
+    const forceBody = {
+      profile_id: extensionState.profileId,
+      job_description: jd,
+      token: extensionState.token,
+      ai_provider: "claude",
+      job_url: url,
+      force_generate: true,
+    };
+    if (EXTENSION_ENV === "prod") {
+      forceBody.extension_version = chrome.runtime.getManifest().version;
+    }
+
+    const resp = await fetch(`${XANO_RESUME_URL}/resume/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(forceBody),
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData?.message || "Force generate failed");
+    }
+
+    const forceData = await resp.json();
+    console.log("[BG] Force generate response:", JSON.stringify(forceData));
+
+    await syncProfilesFromGenerateResponse(forceData);
+
+    // Even with force, if AI still errored out, show error
+    if (forceData.is_matched === 6) {
+      sendProgress("error", forceData.match_reason || "AI processing error. Please try again.");
+      return;
+    }
+
+    // Process the forced response (always has resume data)
+    await processResumeResponse(forceData);
+  }
+
+  // Process a successful generate response into PDFs
+  async function processResumeResponse(data) {
+    const rawData = data.resume_text || "";
+    const rawDataStr = typeof rawData === "object" ? JSON.stringify(rawData) : String(rawData);
+    if (!rawDataStr || rawDataStr === "{}" || rawDataStr === "") {
+      throw new Error("No resume content returned from server.");
+    }
+
+    sendProgress("resume");
+    await ensureOffscreenDocument();
+    sendProgress("cover");
+
+    const pdfResult = await chrome.runtime.sendMessage({
+      action: "generateAndDownloadPDFs",
+      rawData: rawData,
+      coverLetterText: data.cover_letter_text || "",
+      resumeFilename: data.resume_filename || "Resume.pdf",
+      coverLetterFilename: data.cover_letter_filename || "Cover_Letter.pdf",
+      templateId: extensionState.resumeTemplate || 1,
+    });
+
+    if (!pdfResult?.success) {
+      throw new Error(pdfResult?.error || "PDF generation failed");
+    }
+
+    sendProgress("download");
+    sendProgress("done");
+  }
+
   try {
     sendProgress("ai");
 
@@ -407,9 +494,30 @@ async function generateResume(jobDescription, jobUrl = "") {
 
     await syncProfilesFromGenerateResponse(data);
 
+    const isAdmin = data.is_admin === true;
+
+    // If admin + duplicate was found (but API still generated), show warning
+    if (isAdmin && data.duplicate_info) {
+      const d = data.duplicate_info;
+      const appliedDate = d.created_at
+        ? new Date(d.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+        : "unknown date";
+      const detail = (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + " — applied on " + appliedDate;
+      console.log("[BG] Admin: duplicate detected but proceeding:", detail);
+      sendProgress("admin_warning", "Duplicate URL detected", detail + "\n\n(Admin override: resume was still generated)");
+    }
+
     // If AI processing failed (is_matched === 6), show error
     if (data.is_matched === 6) {
       console.log("[BG] AI processing error:", data.match_reason);
+      if (isAdmin) {
+        sendProgress("admin_override", data.match_reason || "AI processing error", "error");
+        const confirmed = await waitForAdminDecision();
+        if (confirmed) {
+          await retryWithForce(jobDescription, jobUrl);
+          return;
+        }
+      }
       sendProgress("error", data.match_reason || "AI processing error. Please try again.");
       return;
     }
@@ -417,6 +525,14 @@ async function generateResume(jobDescription, jobUrl = "") {
     // If the content is not a real job description (is_matched === 3), warn the user
     if (data.is_matched === 3) {
       console.log("[BG] Not a job description:", data.match_reason);
+      if (isAdmin) {
+        sendProgress("admin_override", data.match_reason || "Not a job description", "not_jd");
+        const confirmed = await waitForAdminDecision();
+        if (confirmed) {
+          await retryWithForce(jobDescription, jobUrl);
+          return;
+        }
+      }
       sendProgress("not_job_description", undefined, data.match_reason || "");
       return;
     }
@@ -424,6 +540,14 @@ async function generateResume(jobDescription, jobUrl = "") {
     // If job is not 100% remote (is_matched === 2), inform the user via the progress window
     if (data.skipped === true || data.is_matched === 2) {
       console.log("[BG] Job skipped: not a 100% remote position.");
+      if (isAdmin) {
+        sendProgress("admin_override", data.match_reason || "Not 100% remote — skipped", "skipped");
+        const confirmed = await waitForAdminDecision();
+        if (confirmed) {
+          await retryWithForce(jobDescription, jobUrl);
+          return;
+        }
+      }
       sendProgress("skipped");
       return;
     }

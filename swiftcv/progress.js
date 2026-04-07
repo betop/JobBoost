@@ -157,6 +157,52 @@ function showReady() {
   });
 }
 
+// Admin override: show warning with "Generate Anyway" option
+// statusType is one of: "error", "not_jd", "skipped"
+function showAdminOverride(reason, statusType) {
+  document.getElementById("spinner").style.display = "none";
+  const titles = {
+    error:   "❌ AI Processing Error",
+    not_jd:  "⚠️ Not a Job Description",
+    skipped: "⚠️ Not 100% Remote — Skipped",
+  };
+  document.getElementById("statusText").textContent = titles[statusType] || "Status Warning";
+  for (const s of STEPS) {
+    const el = document.getElementById("step-" + s);
+    if (el) el.style.display = "none";
+  }
+  document.getElementById("adminOverrideTitle").textContent = titles[statusType] || "⚠️ Status Warning";
+  document.getElementById("adminOverrideDetail").textContent = reason || "The AI returned a non-standard status for this job.";
+  document.getElementById("adminOverrideBanner").style.display = "block";
+
+  document.getElementById("adminOverrideContinue").addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "adminOverrideConfirmed" });
+    document.getElementById("adminOverrideBanner").style.display = "none";
+    document.getElementById("spinner").style.display = "block";
+    for (const s of STEPS) {
+      const el = document.getElementById("step-" + s);
+      if (el) { el.style.display = "flex"; el.className = "step pending"; }
+    }
+    document.getElementById("step-ai").className = "step active";
+    document.getElementById("statusText").textContent = STATUS_MAP.ai;
+  });
+
+  document.getElementById("adminOverrideCancel").addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "adminOverrideCancelled" });
+    window.close();
+  });
+}
+
+// Admin warning: info-only banner (e.g. duplicate detected but resume was generated)
+function showAdminWarning(title, detail) {
+  document.getElementById("adminWarningText").textContent = title + " — " + detail;
+  document.getElementById("adminWarningBanner").style.display = "block";
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    document.getElementById("adminWarningBanner").style.display = "none";
+  }, 5000);
+}
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === "progressUpdate") {
     const { step, error, reason } = message;
@@ -176,6 +222,12 @@ chrome.runtime.onMessage.addListener((message) => {
       showMismatch(reason);
     } else if (step === "ready") {
       showReady();
+    } else if (step === "admin_override") {
+      // error = reason text, reason = statusType (error/not_jd/skipped)
+      showAdminOverride(error, reason);
+    } else if (step === "admin_warning") {
+      // error = title, reason = detail
+      showAdminWarning(error, reason);
     } else {
       setStep(step);
     }

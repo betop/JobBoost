@@ -3,7 +3,7 @@
     "id": 736832,
     "type": "table",
     "path": "tables/736832_access_token.xs",
-    "status": "unchanged",
+    "status": "changed",
     "staged": false,
     "sha256": "e6a291651e30371df27ac3114393a6783fad94b2959013290b016ef772d34266",
     "original": "dGFibGUgYWNjZXNzX3Rva2VuIHsKICBhdXRoID0gZmFsc2UKCiAgc2NoZW1hIHsKICAgIHV1aWQgaWQKICAgIHRpbWVzdGFtcCBjcmVhdGVkX2F0Pz1ub3cKICAgIHRleHQgdG9rZW4/CiAgICB1dWlkIGJpZGRlcl9pZD8gewogICAgICB0YWJsZSA9ICJiaWRkZXIiCiAgICB9CiAgCiAgICB1dWlkIGNyZWF0ZWRfYnlfYWRtaW5faWQ/IHsKICAgICAgdGFibGUgPSAiYWRtaW4iCiAgICB9CiAgCiAgICB0aW1lc3RhbXAgaXNzdWVkX2F0Pz1ub3cKICAgIHRpbWVzdGFtcCBleHBpcmVzX2F0PwogICAgYm9vbCBpc191c2VkPwogICAgYm9vbCBpc19hY3RpdmU/PXRydWUKICAgIHRleHQgdG9rZW5faGFzaD8KICB9CgogIGluZGV4ID0gWwogICAge3R5cGU6ICJwcmltYXJ5IiwgZmllbGQ6IFt7bmFtZTogImlkIn1dfQogICAge3R5cGU6ICJidHJlZSIsIGZpZWxkOiBbe25hbWU6ICJjcmVhdGVkX2F0Iiwgb3A6ICJkZXNjIn1dfQogICAge3R5cGU6ICJidHJlZSIsIGZpZWxkOiBbe25hbWU6ICJ0b2tlbl9oYXNoIn1dfQogICAge3R5cGU6ICJidHJlZSIsIGZpZWxkOiBbe25hbWU6ICJiaWRkZXJfaWQifV19CiAgXQp9"
@@ -335,7 +335,7 @@
   {
     "id": 3556019,
     "path": "apis/tokens/list.xs",
-    "status": "unchanged",
+    "status": "changed",
     "type": "api_endpoint",
     "staged": false,
     "sha256": "a8fab21d89eefe8511b2d012394aa3d1993e11d7d4bd1de2c1e9194b4a7000b5",
@@ -344,7 +344,7 @@
   {
     "id": 3556020,
     "path": "apis/tokens/generate.xs",
-    "status": "unchanged",
+    "status": "changed",
     "type": "api_endpoint",
     "staged": false,
     "sha256": "45844c1dbe139ac0cc4f0c73a12baa197e214f03e72abe3f8631738b869f9faf",
@@ -407,7 +407,7 @@
   {
     "id": 3558588,
     "path": "apis/resume/generate.xs",
-    "status": "unchanged",
+    "status": "changed",
     "type": "api_endpoint",
     "staged": false,
     "sha256": "5a1c74f91bb9a11420a7862d53d6d1027026ddbba2a4e993a0048d4c852e4a8e",

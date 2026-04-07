@@ -6,6 +6,7 @@ query "tokens/generate" verb=POST {
   input {
     uuid bidder_id?
     timestamp expiration_date?
+    bool is_admin?
   }
 
   stack {
@@ -48,6 +49,7 @@ query "tokens/generate" verb=POST {
         expires_at         : $input.expiration_date
         is_used            : false
         is_active          : true
+        is_admin           : $input.is_admin
       }
     } as $t
   }
@@ -61,5 +63,6 @@ query "tokens/generate" verb=POST {
     expiration_date: $t.expires_at
     is_used        : $t.is_used
     is_active      : $t.is_active
+    is_admin       : $t.is_admin
   }
 }

@@ -49,6 +49,7 @@ query tokens verb=GET {
             expiration_date: $t.expires_at
             is_used        : $t.is_used
             is_active      : $t.is_active
+            is_admin       : $t.is_admin
           }
         }
       }
