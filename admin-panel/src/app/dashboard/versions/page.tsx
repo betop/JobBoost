@@ -24,7 +24,9 @@ export default function ExtensionManagement() {
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [showActionConfirm, setShowActionConfirm] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'set-current'; data?: any; versionId?: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: 'create' | 'set-current' | 'edit'; data?: any; versionId?: string } | null>(null);
+  const [editingVersion, setEditingVersion] = useState<string | null>(null);
+  const [editData, setEditData] = useState<{ version: string; changelog: string; release_date: string }>({ version: "", changelog: "", release_date: "" });
   const [formData, setFormData] = useState({
     extension_name: "swiftcv",
     version: "",
@@ -107,6 +109,49 @@ export default function ExtensionManagement() {
     setShowActionConfirm(true);
   };
 
+  const startEditing = (version: ExtensionVersion) => {
+    setEditingVersion(version.id);
+    setEditData({
+      version: version.version,
+      changelog: version.changelog || "",
+      release_date: new Date(version.release_date).toISOString().split("T")[0],
+    });
+  };
+
+  const handleSaveEdit = (versionId: string) => {
+    setPendingAction({ type: 'edit', versionId, data: { ...editData } });
+    setShowActionConfirm(true);
+  };
+
+  const executeEditVersion = async () => {
+    if (!pendingAction || pendingAction.type !== 'edit' || !pendingAction.versionId) return;
+
+    try {
+      const body: any = {};
+      if (pendingAction.data.version) body.version = pendingAction.data.version;
+      if (pendingAction.data.changelog !== undefined) body.changelog = pendingAction.data.changelog;
+      if (pendingAction.data.release_date) {
+        body.release_date = new Date(pendingAction.data.release_date + "T00:00:00").toISOString();
+      }
+
+      const response = await fetch(`/api/extension-versions/${pendingAction.versionId}/edit`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) throw new Error("Failed to edit version");
+
+      showToast("Version updated successfully", "success");
+      setEditingVersion(null);
+      fetchVersions();
+      setPendingAction(null);
+    } catch (error) {
+      console.error("Error editing version:", error);
+      showToast("Failed to edit version", "error");
+    }
+  };
+
   const executeSetCurrent = async () => {
     if (!pendingAction || pendingAction.type !== 'set-current') return;
 
@@ -134,6 +179,8 @@ export default function ExtensionManagement() {
       await executeCreateVersion();
     } else if (pendingAction.type === 'set-current') {
       await executeSetCurrent();
+    } else if (pendingAction.type === 'edit') {
+      await executeEditVersion();
     }
   };
 
@@ -187,6 +234,8 @@ export default function ExtensionManagement() {
         description={
           pendingAction?.type === 'set-current'
             ? "Please confirm your password to set this as the current version"
+            : pendingAction?.type === 'edit'
+            ? "Please confirm your password to save the changes"
             : "Please confirm your password to create this version"
         }
       />
@@ -293,36 +342,95 @@ export default function ExtensionManagement() {
               ) : (
                 group.versions.map((version) => (
                   <div key={version.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            v{version.version}
-                          </h3>
-                          {version.is_current && (
-                            <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full">
-                              <Check className="w-4 h-4 text-green-600" />
-                              <span className="text-xs font-medium text-green-600">Current</span>
-                            </div>
+                    {editingVersion === version.id ? (
+                      /* ── Edit mode ── */
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Version</label>
+                            <input
+                              type="text"
+                              value={editData.version}
+                              onChange={(e) => setEditData({ ...editData, version: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Release Date</label>
+                            <input
+                              type="date"
+                              value={editData.release_date}
+                              onChange={(e) => setEditData({ ...editData, release_date: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            />
+                          </div>
+                          <div className="flex items-end gap-2">
+                            <button
+                              onClick={() => handleSaveEdit(version.id)}
+                              className="px-4 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 transition-colors"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingVersion(null)}
+                              className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Changelog</label>
+                          <textarea
+                            value={editData.changelog}
+                            onChange={(e) => setEditData({ ...editData, changelog: e.target.value })}
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      /* ── View mode ── */
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-gray-900">
+                              v{version.version}
+                            </h3>
+                            {version.is_current && (
+                              <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full">
+                                <Check className="w-4 h-4 text-green-600" />
+                                <span className="text-xs font-medium text-green-600">Current</span>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Released: {new Date(version.release_date).toLocaleDateString()}
+                          </p>
+                          {version.changelog && (
+                            <p className="text-sm text-gray-700 mt-2">{version.changelog}</p>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Released: {new Date(version.release_date).toLocaleDateString()}
-                        </p>
-                        {version.changelog && (
-                          <p className="text-sm text-gray-700 mt-2">{version.changelog}</p>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startEditing(version)}
+                            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Edit
+                          </button>
+                          {!version.is_current && (
+                            <button
+                              onClick={() => handleSetCurrent(version.id)}
+                              className="flex items-center gap-2 px-4 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors border border-primary-200"
+                            >
+                              <Check className="w-4 h-4" />
+                              Set Current
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {!version.is_current && (
-                        <button
-                          onClick={() => handleSetCurrent(version.id)}
-                          className="flex items-center gap-2 px-4 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors border border-primary-200"
-                        >
-                          <Check className="w-4 h-4" />
-                          Set Current
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 ))
               )}

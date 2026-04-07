@@ -10,8 +10,6 @@ import { profileService } from "@/services/profileService";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   Activity,
-  Cpu,
-  TrendingUp,
   ExternalLink,
   Filter,
   RotateCcw,
@@ -375,6 +373,19 @@ function StatCard({
   );
 }
 
+// Helper: get last week's Monday–Sunday in YYYY-MM-DD
+function getLastWeekRange(): { from: string; to: string } {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun
+  // Last Sunday = today - dayOfWeek (if Sun, -7)
+  const lastSun = new Date(now);
+  lastSun.setDate(now.getDate() - (dayOfWeek === 0 ? 7 : dayOfWeek));
+  const lastMon = new Date(lastSun);
+  lastMon.setDate(lastSun.getDate() - 6);
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  return { from: fmt(lastMon), to: fmt(lastSun) };
+}
+
 export default function LogsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -383,13 +394,13 @@ export default function LogsPage() {
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split('T')[0];
   
-  // Initialize state from URL query parameters
-  const [filters, setFilters] = useState<LogsFilters>({ 
-    period: "custom",
-    date_from: today,
-    date_to: today
-  });
+  // Date range state — only these trigger API calls
   const [statsPeriod, setStatsPeriod] = useState<LogsPeriod>("today");
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
+
+  // Client-side filters — these do NOT trigger API calls
+  const [filters, setFilters] = useState<LogsFilters>({});
 
   // Table state
   const [search, setSearch]         = useState("");
@@ -415,16 +426,36 @@ export default function LogsPage() {
     if (params.get("pageSize")) setPageSize(Number(params.get("pageSize")) || 25);
     
     const period = (params.get("statsPeriod") as LogsPeriod) || "today";
-    if (params.get("statsPeriod")) setStatsPeriod(period);
+    setStatsPeriod(period);
     
-    // Load filters
-    const filterObj: LogsFilters = { period: period !== "custom" ? (period as LogsFilters["period"]) : "custom", date_from: today, date_to: today };
+    // Resolve date range from period or URL params
+    if (period === "custom") {
+      const lastWeek = getLastWeekRange();
+      setDateFrom(params.get("date_from") || lastWeek.from);
+      setDateTo(params.get("date_to") || lastWeek.to);
+    } else if (period === "today") {
+      setDateFrom(today);
+      setDateTo(today);
+    } else if (period === "week") {
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() + mondayOffset);
+      setDateFrom(weekStart.toISOString().split("T")[0]);
+      setDateTo(today);
+    } else if (period === "month") {
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      setDateFrom(monthStart.toISOString().split("T")[0]);
+      setDateTo(today);
+    }
+    
+    // Load client-side filters
+    const filterObj: LogsFilters = {};
     if (params.get("bidder_id")) filterObj.bidder_id = params.get("bidder_id") || undefined;
     if (params.get("profile_id")) filterObj.profile_id = params.get("profile_id") || undefined;
     if (params.get("is_matched")) filterObj.is_matched = (params.get("is_matched") as LogsFilters["is_matched"]) || undefined;
     if (params.get("is_regenerated")) filterObj.is_regenerated = (params.get("is_regenerated") as "1" | "0") || undefined;
-    if (params.get("date_from")) filterObj.date_from = params.get("date_from") || today;
-    if (params.get("date_to")) filterObj.date_to = params.get("date_to") || today;
     
     setFilters(filterObj);
   }, []);
@@ -444,14 +475,10 @@ export default function LogsPage() {
     router.push(`?${params.toString()}`, { scroll: false } as any);
   };
 
+  // ── API call: only depends on dateFrom/dateTo (date range changes only) ──
   const { data: logsData, isLoading: logsLoading } = useQuery({
-    queryKey: ["generation-logs", filters],
-    queryFn: () => logsService.list(filters),
-  });
-
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["logs-stats", statsPeriod, filters.profile_id, filters.bidder_id, filters.date_from, filters.date_to],
-    queryFn: () => logsService.stats(statsPeriod, filters.profile_id, filters.bidder_id, filters.date_from, filters.date_to),
+    queryKey: ["generation-logs", dateFrom, dateTo],
+    queryFn: () => logsService.list({ period: "custom", date_from: dateFrom, date_to: dateTo }),
   });
 
   const { data: bidders } = useQuery({ queryKey: ["bidders"], queryFn: bidderService.getAll });
@@ -460,10 +487,7 @@ export default function LogsPage() {
   async function refreshData() {
     setIsRefreshing(true);
     try {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["generation-logs"] }),
-        queryClient.invalidateQueries({ queryKey: ["logs-stats"] }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: ["generation-logs"] });
     } finally {
       setIsRefreshing(false);
     }
@@ -473,12 +497,32 @@ export default function LogsPage() {
     setStatsPeriod(period);
     setPage(1);
     
-    if (period !== "custom") {
-      setFilters((f) => ({ ...f, period: period as LogsFilters["period"], date_from: undefined, date_to: undefined }));
-      updateQueryParams({ statsPeriod: period, page: 1, date_from: undefined, date_to: undefined });
-    } else {
-      setFilters((f) => ({ ...f, period: "custom" }));
-      updateQueryParams({ statsPeriod: period, page: 1 });
+    if (period === "custom") {
+      // Default custom range to last week (Mon–Sun)
+      const lastWeek = getLastWeekRange();
+      setDateFrom(lastWeek.from);
+      setDateTo(lastWeek.to);
+      updateQueryParams({ statsPeriod: period, date_from: lastWeek.from, date_to: lastWeek.to, page: 1 });
+    } else if (period === "today") {
+      setDateFrom(today);
+      setDateTo(today);
+      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
+    } else if (period === "week") {
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() + mondayOffset);
+      const from = weekStart.toISOString().split("T")[0];
+      setDateFrom(from);
+      setDateTo(today);
+      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
+    } else if (period === "month") {
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const from = monthStart.toISOString().split("T")[0];
+      setDateFrom(from);
+      setDateTo(today);
+      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
     }
   }
 
@@ -494,19 +538,29 @@ export default function LogsPage() {
     setPage(1);
   }
 
-  // Processed (search → sort → paginate)
+  // ── All rows from API (date-range only) ──
   const allRows: GenerationLog[] = useMemo(() => logsData?.items ?? [], [logsData?.items]);
 
-  const searched = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  // ── Client-side filtering: bidder, profile, match status, type, search ──
+  const filtered = useMemo(() => {
     return allRows.filter((log) => {
-      if (q && ![log.bidder_name, log.profile_name, log.position_title, log.company_name, log.job_url]
-        .some((v) => v?.toLowerCase().includes(q))) return false;
+      if (filters.bidder_id && log.bidder_id !== filters.bidder_id) return false;
+      if (filters.profile_id && log.profile_id !== filters.profile_id) return false;
+      if (filters.is_matched !== undefined && String(log.is_matched) !== filters.is_matched) return false;
       if (filters.is_regenerated === "1" && log.is_regenerated !== 1) return false;
       if (filters.is_regenerated === "0" && log.is_regenerated !== 0) return false;
       return true;
     });
-  }, [allRows, search, filters.is_regenerated]);
+  }, [allRows, filters.bidder_id, filters.profile_id, filters.is_matched, filters.is_regenerated]);
+
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return filtered;
+    return filtered.filter((log) =>
+      [log.bidder_name, log.profile_name, log.position_title, log.company_name, log.job_url]
+        .some((v) => v?.toLowerCase().includes(q))
+    );
+  }, [filtered, search]);
 
   const sorted = useMemo(() => {
     return [...searched].sort((a, b) => {
@@ -529,30 +583,60 @@ export default function LogsPage() {
   const safePage      = Math.min(page, totalPages);
   const pageRows      = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  // Estimate cost from stats (treat all period tokens as Claude since we have claude_count/openai_count split)
-  // For accuracy, compute per-row cost in the table; here we approximate using provider counts proportionally
-  const claudeInputEst = stats?.total_input_tokens && stats?.claude_count && (stats.claude_count + (stats.openai_count ?? 0)) > 0
-    ? Math.round(stats.total_input_tokens * stats.claude_count / (stats.claude_count + (stats.openai_count ?? 0)))
-    : (stats?.total_input_tokens ?? 0);
-  const claudeOutputEst = stats?.total_output_tokens && stats?.claude_count && (stats.claude_count + (stats.openai_count ?? 0)) > 0
-    ? Math.round(stats.total_output_tokens * stats.claude_count / (stats.claude_count + (stats.openai_count ?? 0)))
-    : (stats?.total_output_tokens ?? 0);
-  const openaiInputEst = (stats?.total_input_tokens ?? 0) - claudeInputEst;
-  const openaiOutputEst = (stats?.total_output_tokens ?? 0) - claudeOutputEst;
+  // ── Client-side stats computed from filtered rows (reflects active filters) ──
+  const stats = useMemo(() => {
+    const rows = filtered;
+    let total_input_tokens = 0, total_output_tokens = 0;
+    let claude_count = 0, openai_count = 0;
+    let matched_count = 0, mismatched_count = 0, skipped_count = 0;
+    let duplicated_count = 0, not_jd_count = 0, reposted_count = 0;
+    let error_count = 0, applied_count = 0;
+
+    for (const log of rows) {
+      total_input_tokens += log.input_tokens ?? 0;
+      total_output_tokens += log.output_tokens ?? 0;
+      if (log.ai_provider === "claude") claude_count++;
+      else openai_count++;
+      if (log.is_matched === 1) matched_count++;
+      else if (log.is_matched === 0) mismatched_count++;
+      else if (log.is_matched === 2) skipped_count++;
+      else if (log.is_matched === 3) not_jd_count++;
+      else if (log.is_matched === 4) duplicated_count++;
+      else if (log.is_matched === 5) reposted_count++;
+      else if (log.is_matched === 6) error_count++;
+      if (log.is_applied || log.is_matched === 1) applied_count++;
+    }
+
+    return {
+      total_generations: rows.length,
+      total_input_tokens,
+      total_output_tokens,
+      claude_count,
+      openai_count,
+      matched_count,
+      mismatched_count,
+      skipped_count,
+      duplicated_count,
+      not_jd_count,
+      reposted_count,
+      error_count,
+      applied_count,
+    };
+  }, [filtered]);
+
+  // ── Cost estimation from client-side stats ──
+  const totalProviders = stats.claude_count + stats.openai_count;
+  const claudeInputEst = totalProviders > 0
+    ? Math.round(stats.total_input_tokens * stats.claude_count / totalProviders)
+    : stats.total_input_tokens;
+  const claudeOutputEst = totalProviders > 0
+    ? Math.round(stats.total_output_tokens * stats.claude_count / totalProviders)
+    : stats.total_output_tokens;
+  const openaiInputEst = stats.total_input_tokens - claudeInputEst;
+  const openaiOutputEst = stats.total_output_tokens - claudeOutputEst;
   const periodCost = calcCost("claude", claudeInputEst, claudeOutputEst) + calcCost("openai", openaiInputEst, openaiOutputEst);
 
-  const allTimeCost = (() => {
-    const atClaudeIn = stats?.all_time_input_tokens && stats?.claude_count && (stats.claude_count + (stats.openai_count ?? 0)) > 0
-      ? Math.round((stats.all_time_input_tokens ?? 0) * stats.claude_count / (stats.claude_count + (stats.openai_count ?? 0)))
-      : (stats?.all_time_input_tokens ?? 0);
-    const atClaudeOut = stats?.all_time_output_tokens && stats?.claude_count && (stats.claude_count + (stats.openai_count ?? 0)) > 0
-      ? Math.round((stats.all_time_output_tokens ?? 0) * stats.claude_count / (stats.claude_count + (stats.openai_count ?? 0)))
-      : (stats?.all_time_output_tokens ?? 0);
-    return calcCost("claude", atClaudeIn, atClaudeOut) + calcCost("openai", (stats?.all_time_input_tokens ?? 0) - atClaudeIn, (stats?.all_time_output_tokens ?? 0) - atClaudeOut);
-  })();
-
-  // Per-table-row cost (used in the footer via inline reduce)
-  const totalTokens = (stats?.total_input_tokens ?? 0) + (stats?.total_output_tokens ?? 0);
+  const totalTokens = stats.total_input_tokens + stats.total_output_tokens;
 
   return (
     <div>
@@ -599,16 +683,17 @@ export default function LogsPage() {
       </div>
 
       {/* Period tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className={`flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit ${logsLoading ? "opacity-50 pointer-events-none" : ""}`}>
         {PERIOD_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             onClick={() => applyPeriod(opt.value)}
+            disabled={logsLoading}
             className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
               statsPeriod === opt.value
                 ? "bg-white text-gray-900 font-medium shadow-sm"
                 : "text-gray-500 hover:text-gray-700"
-            }`}
+            } disabled:cursor-not-allowed`}
           >
             {opt.label}
           </button>
@@ -622,10 +707,11 @@ export default function LogsPage() {
             <label className="block text-xs text-gray-500 mb-1">From</label>
             <input
               type="date"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              value={filters.date_from || ""}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              value={dateFrom}
+              disabled={logsLoading}
               onChange={(e) => {
-                setFilters((f) => ({ ...f, date_from: e.target.value }));
+                setDateFrom(e.target.value);
                 setPage(1);
                 updateQueryParams({ date_from: e.target.value, page: 1 });
               }}
@@ -635,10 +721,11 @@ export default function LogsPage() {
             <label className="block text-xs text-gray-500 mb-1">To</label>
             <input
               type="date"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              value={filters.date_to || ""}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              value={dateTo}
+              disabled={logsLoading}
               onChange={(e) => {
-                setFilters((f) => ({ ...f, date_to: e.target.value }));
+                setDateTo(e.target.value);
                 setPage(1);
                 updateQueryParams({ date_to: e.target.value, page: 1 });
               }}
@@ -648,7 +735,7 @@ export default function LogsPage() {
       )}
 
       {/* Stats cards */}
-      {statsLoading ? (
+      {logsLoading ? (
         <div className="flex justify-center py-8"><LoadingSpinner /></div>
       ) : (
         <div className="space-y-3 mb-8">
@@ -660,8 +747,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-500 font-medium">Total</p>
-                <p className="text-xl font-bold text-gray-900">{(stats?.total_generations ?? 0).toLocaleString()}</p>
-                <p className="text-[10px] text-gray-400">All time: {(stats?.all_time_total ?? 0).toLocaleString()}</p>
+                <p className="text-xl font-bold text-gray-900">{stats.total_generations.toLocaleString()}</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
@@ -670,8 +756,8 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-500 font-medium">Applied</p>
-                <p className="text-xl font-bold text-gray-900">{(stats?.applied_count ?? 0).toLocaleString()}</p>
-                <p className="text-[10px] text-gray-400">{stats?.total_generations ? Math.round(((stats.applied_count ?? 0) / stats.total_generations) * 100) : 0}% of total</p>
+                <p className="text-xl font-bold text-gray-900">{stats.applied_count.toLocaleString()}</p>
+                <p className="text-[10px] text-gray-400">{stats.total_generations ? Math.round((stats.applied_count / stats.total_generations) * 100) : 0}% of total</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
@@ -681,7 +767,6 @@ export default function LogsPage() {
               <div>
                 <p className="text-xs text-gray-500 font-medium">Est. Cost</p>
                 <p className="text-xl font-bold text-gray-900">{formatCost(periodCost)}</p>
-                <p className="text-[10px] text-gray-400">All time: {formatCost(allTimeCost)}</p>
               </div>
             </div>
           </div>
@@ -693,7 +778,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-medium">Matched</p>
-                <p className="text-lg font-bold text-gray-900">{(stats?.matched_count ?? 0).toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.matched_count.toLocaleString()}</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
@@ -702,7 +787,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-medium">Mismatched</p>
-                <p className="text-lg font-bold text-gray-900">{(stats?.mismatched_count ?? 0).toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.mismatched_count.toLocaleString()}</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
@@ -711,7 +796,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-medium">Duplicated</p>
-                <p className="text-lg font-bold text-gray-900">{(stats?.duplicated_count ?? 0).toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.duplicated_count.toLocaleString()}</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
@@ -720,7 +805,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-medium">Reposted</p>
-                <p className="text-lg font-bold text-gray-900">{(stats?.reposted_count ?? 0).toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.reposted_count.toLocaleString()}</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
@@ -729,7 +814,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-medium">Not a JD</p>
-                <p className="text-lg font-bold text-gray-900">{(stats?.not_jd_count ?? 0).toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.not_jd_count.toLocaleString()}</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
@@ -738,7 +823,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-medium">Skipped</p>
-                <p className="text-lg font-bold text-gray-900">{(stats?.skipped_count ?? 0).toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.skipped_count.toLocaleString()}</p>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
@@ -747,7 +832,7 @@ export default function LogsPage() {
               </div>
               <div>
                 <p className="text-[10px] text-gray-500 font-medium">Error</p>
-                <p className="text-lg font-bold text-gray-900">{(stats?.error_count ?? 0).toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.error_count.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -755,18 +840,19 @@ export default function LogsPage() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <div className={`bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end ${logsLoading ? "opacity-50 pointer-events-none" : ""}`}>
         <Filter className="w-4 h-4 text-gray-400 self-center" />
 
         <div>
           <label className="block text-xs text-gray-500 mb-1">Bidder</label>
           <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px]"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px] disabled:cursor-not-allowed"
             value={filters.bidder_id || ""}
+            disabled={logsLoading}
             onChange={(e) => {
               setFilters((f) => ({ ...f, bidder_id: e.target.value || undefined }));
-              updateQueryParams({ bidder_id: e.target.value || undefined, page: 1 });
               setPage(1);
+              updateQueryParams({ bidder_id: e.target.value || undefined, page: 1 });
             }}
           >
             <option value="">All bidders</option>
@@ -781,12 +867,13 @@ export default function LogsPage() {
         <div>
           <label className="block text-xs text-gray-500 mb-1">Profile</label>
           <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px]"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px] disabled:cursor-not-allowed"
             value={filters.profile_id || ""}
+            disabled={logsLoading}
             onChange={(e) => {
               setFilters((f) => ({ ...f, profile_id: e.target.value || undefined }));
-              updateQueryParams({ profile_id: e.target.value || undefined, page: 1 });
               setPage(1);
+              updateQueryParams({ profile_id: e.target.value || undefined, page: 1 });
             }}
           >
             <option value="">All profiles</option>
@@ -801,12 +888,13 @@ export default function LogsPage() {
         <div>
           <label className="block text-xs text-gray-500 mb-1">Match Status</label>
           <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px]"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px] disabled:cursor-not-allowed"
             value={filters.is_matched ?? ""}
+            disabled={logsLoading}
             onChange={(e) => {
               setFilters((f) => ({ ...f, is_matched: (e.target.value as LogsFilters["is_matched"]) || undefined }));
-              updateQueryParams({ is_matched: e.target.value || undefined, page: 1 });
               setPage(1);
+              updateQueryParams({ is_matched: e.target.value || undefined, page: 1 });
             }}
           >
             <option value="">All jobs</option>
@@ -823,8 +911,9 @@ export default function LogsPage() {
         <div>
           <label className="block text-xs text-gray-500 mb-1">Type</label>
           <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px]"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px] disabled:cursor-not-allowed"
             value={filters.is_regenerated ?? ""}
+            disabled={logsLoading}
             onChange={(e) => {
               setFilters((f) => ({ ...f, is_regenerated: (e.target.value as "1" | "0") || undefined }));
               updateQueryParams({ is_regenerated: e.target.value || undefined, page: 1 });

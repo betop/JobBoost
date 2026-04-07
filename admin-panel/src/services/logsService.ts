@@ -111,20 +111,18 @@ export interface RegenerateResponse {
 }
 
 export const logsService = {
+  /** Fetch logs for a date range only — no bidder/profile/status filtering (done client-side) */
   list: async (filters: LogsFilters = {}): Promise<LogsListResponse> => {
     const params = new URLSearchParams();
     const periodRange = getDateRangeForPeriod(filters.period);
     const effectiveDateFrom = filters.date_from ?? periodRange.dateFrom;
     const effectiveDateTo = filters.date_to ?? periodRange.dateTo;
 
-    if (filters.profile_id) params.set("profile_id", filters.profile_id);
-    if (filters.bidder_id) params.set("bidder_id", filters.bidder_id);
     if (effectiveDateFrom) params.set("date_from", toStartOfDayISO(effectiveDateFrom));
     if (effectiveDateTo) params.set("date_to", toEndOfDayISO(effectiveDateTo));
     if (!effectiveDateFrom && !effectiveDateTo && filters.period && filters.period !== "custom") {
       params.set("period", filters.period);
     }
-    if (filters.is_matched !== undefined) params.set("is_matched", filters.is_matched);
     const response = await api.get(`/logs/list?${params.toString()}`);
     return response.data;
   },
