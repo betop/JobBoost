@@ -35,7 +35,7 @@ import {
 
 type SortField = "created_at" | "bidder_name" | "profile_name" | "position_title" | "company_name";
 type SortDir = "asc" | "desc";
-type LogsPeriod = "today" | "week" | "month" | "custom";
+type LogsPeriod = "today" | "week" | "month" | "all" | "custom";
 
 // Pricing per 1M tokens (USD)
 const PRICING = {
@@ -58,6 +58,7 @@ const PERIOD_OPTIONS = [
   { label: "Today", value: "today" },
   { label: "This week", value: "week" },
   { label: "This month", value: "month" },
+  { label: "All time", value: "all" },
   { label: "Custom range", value: "custom" },
 ] as const satisfies ReadonlyArray<{ label: string; value: LogsPeriod }>;
 
@@ -448,6 +449,9 @@ export default function LogsPage() {
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
       setDateFrom(monthStart.toISOString().split("T")[0]);
       setDateTo(today);
+    } else if (period === "all") {
+      setDateFrom("2020-01-01");
+      setDateTo(today);
     }
     
     // Load client-side filters
@@ -534,6 +538,10 @@ export default function LogsPage() {
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
       const from = monthStart.toISOString().split("T")[0];
       setDateFrom(from);
+      setDateTo(today);
+      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
+    } else if (period === "all") {
+      setDateFrom("2020-01-01");
       setDateTo(today);
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
     }

@@ -17,7 +17,7 @@ table access_token {
     timestamp expires_at?
     bool is_used?
     bool is_active?=true
-    bool is_admin?=false
+    bool is_admin?
     text token_hash?
   }
 

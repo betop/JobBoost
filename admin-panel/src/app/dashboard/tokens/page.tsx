@@ -224,26 +224,23 @@ export default function TokensPage() {
     },
     {
       key: "is_admin",
-      label: "Permission",
+      label: "Admin",
       render: (value: boolean, row: Token) => (
         <button
           onClick={() => {
             setPendingAction({ type: 'toggle_admin' as any, id: row.id, data: !value });
             setShowActionConfirm(true);
           }}
-          className="cursor-pointer hover:opacity-80 transition-opacity"
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 ${
+            value ? "bg-amber-500" : "bg-gray-300"
+          }`}
           title={value ? "Click to revoke admin" : "Click to grant admin"}
         >
-          {value ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800">
-              <Shield className="w-3 h-3" />
-              Admin
-            </span>
-          ) : (
-            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
-              Standard
-            </span>
-          )}
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+              value ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
         </button>
       ),
     },

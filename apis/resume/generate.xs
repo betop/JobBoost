@@ -76,7 +76,7 @@ query "resume/generate" verb=POST {
     }
   
     conditional {
-      if ($access.is_admin == true) {
+      if ($access.is_admin) {
         var.update $is_admin {
           value = true
         }
@@ -152,7 +152,7 @@ query "resume/generate" verb=POST {
   
     // If duplicate was found, fail with structured error containing duplicate info
     // Admin keys can override — they get the warning but can still generate
-    precondition ($duplicate_log == null || $is_admin == true) {
+    precondition ($duplicate_log == null || $is_admin) {
       error_type = "badrequest"
       error = "DUPLICATE_URL"
       payload = {
@@ -392,7 +392,7 @@ query "resume/generate" verb=POST {
   
     // Admin + force_generate: override the prompt to always generate a resume (treat as match)
     conditional {
-      if ($is_admin == true && $input.force_generate == true) {
+      if ($is_admin && $input.force_generate) {
         var.update $user_prompt {
           value = "IMPORTANT: SKIP all validation steps. Do NOT return not_job_description or skip status. Always generate a full tailored resume and cover letter. Treat this as status=match regardless of remote policy or domain alignment.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY this JSON structure (status MUST be match):\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
         }
