@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { logsService, LogsFilters, GenerationLog } from "@/services/logsService";
 import { downloadResumePDF } from "@/utils/pdfDownload";
 import { bidderService } from "@/services/bidderService";
@@ -476,13 +476,26 @@ export default function LogsPage() {
   };
 
   // ── API call: only depends on dateFrom/dateTo (date range changes only) ──
-  const { data: logsData, isLoading: logsLoading } = useQuery({
+  const { data: logsData, isLoading: logsLoading, isFetching: logsFetching } = useQuery({
     queryKey: ["generation-logs", dateFrom, dateTo],
     queryFn: () => logsService.list({ period: "custom", date_from: dateFrom, date_to: dateTo }),
+    staleTime: 5 * 60 * 1000,       // 5 min — data stays fresh, no refetch on remount
+    gcTime: 30 * 60 * 1000,          // 30 min — keep in cache even after unmount
+    placeholderData: keepPreviousData, // show previous data while new range loads
   });
 
-  const { data: bidders } = useQuery({ queryKey: ["bidders"], queryFn: bidderService.getAll });
-  const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: profileService.getAll });
+  const { data: bidders } = useQuery({
+    queryKey: ["bidders"],
+    queryFn: bidderService.getAll,
+    staleTime: 10 * 60 * 1000,  // bidders rarely change
+    gcTime: 60 * 60 * 1000,
+  });
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: profileService.getAll,
+    staleTime: 10 * 60 * 1000,  // profiles rarely change
+    gcTime: 60 * 60 * 1000,
+  });
 
   async function refreshData() {
     setIsRefreshing(true);
@@ -674,21 +687,21 @@ export default function LogsPage() {
         </div>
         <button
           onClick={refreshData}
-          disabled={isRefreshing}
+          disabled={isRefreshing || logsFetching}
           className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
-          <RotateCcw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
-          {isRefreshing ? "Refreshing..." : "Refresh"}
+          <RotateCcw className={`w-4 h-4 ${isRefreshing || logsFetching ? "animate-spin" : ""}`} />
+          {isRefreshing ? "Refreshing..." : logsFetching ? "Loading..." : "Refresh"}
         </button>
       </div>
 
       {/* Period tabs */}
-      <div className={`flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit ${logsLoading ? "opacity-50 pointer-events-none" : ""}`}>
+      <div className={`flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit ${logsFetching ? "opacity-50 pointer-events-none" : ""}`}>
         {PERIOD_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             onClick={() => applyPeriod(opt.value)}
-            disabled={logsLoading}
+            disabled={logsFetching}
             className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
               statsPeriod === opt.value
                 ? "bg-white text-gray-900 font-medium shadow-sm"
@@ -709,7 +722,7 @@ export default function LogsPage() {
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateFrom}
-              disabled={logsLoading}
+              disabled={logsFetching}
               onChange={(e) => {
                 setDateFrom(e.target.value);
                 setPage(1);
@@ -723,7 +736,7 @@ export default function LogsPage() {
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateTo}
-              disabled={logsLoading}
+              disabled={logsFetching}
               onChange={(e) => {
                 setDateTo(e.target.value);
                 setPage(1);
@@ -735,10 +748,10 @@ export default function LogsPage() {
       )}
 
       {/* Stats cards */}
-      {logsLoading ? (
+      {logsLoading && !logsData ? (
         <div className="flex justify-center py-8"><LoadingSpinner /></div>
       ) : (
-        <div className="space-y-3 mb-8">
+        <div className={`space-y-3 mb-8 transition-opacity duration-200 ${logsFetching ? "opacity-50" : "opacity-100"}`}>
           {/* Row 1: Total, Applied, Est. Cost */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
@@ -840,7 +853,7 @@ export default function LogsPage() {
       )}
 
       {/* Filters */}
-      <div className={`bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end ${logsLoading ? "opacity-50 pointer-events-none" : ""}`}>
+      <div className={`bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end ${logsFetching ? "opacity-50 pointer-events-none" : ""}`}>
         <Filter className="w-4 h-4 text-gray-400 self-center" />
 
         <div>
@@ -848,7 +861,7 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px] disabled:cursor-not-allowed"
             value={filters.bidder_id || ""}
-            disabled={logsLoading}
+            disabled={logsFetching}
             onChange={(e) => {
               setFilters((f) => ({ ...f, bidder_id: e.target.value || undefined }));
               setPage(1);
@@ -869,7 +882,7 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px] disabled:cursor-not-allowed"
             value={filters.profile_id || ""}
-            disabled={logsLoading}
+            disabled={logsFetching}
             onChange={(e) => {
               setFilters((f) => ({ ...f, profile_id: e.target.value || undefined }));
               setPage(1);
@@ -890,7 +903,7 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px] disabled:cursor-not-allowed"
             value={filters.is_matched ?? ""}
-            disabled={logsLoading}
+            disabled={logsFetching}
             onChange={(e) => {
               setFilters((f) => ({ ...f, is_matched: (e.target.value as LogsFilters["is_matched"]) || undefined }));
               setPage(1);
@@ -913,7 +926,7 @@ export default function LogsPage() {
           <select
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px] disabled:cursor-not-allowed"
             value={filters.is_regenerated ?? ""}
-            disabled={logsLoading}
+            disabled={logsFetching}
             onChange={(e) => {
               setFilters((f) => ({ ...f, is_regenerated: (e.target.value as "1" | "0") || undefined }));
               updateQueryParams({ is_regenerated: e.target.value || undefined, page: 1 });
@@ -991,7 +1004,7 @@ export default function LogsPage() {
           </div>
         </div>
 
-        {logsLoading ? (
+        {logsLoading && !logsData ? (
           <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
         ) : !allRows.length ? (
           <div className="text-center py-16 text-gray-400">
