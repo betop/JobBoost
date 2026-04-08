@@ -90,13 +90,13 @@ export interface LogsStatsResponse {
 }
 
 export interface LogsFilters {
-  profile_id?: string;
-  bidder_id?: string;
+  profile_id?: string[];
+  bidder_id?: string[];
   date_from?: string;
   date_to?: string;
   period?: LogsPeriod;
-  is_matched?: "1" | "0" | "2" | "3" | "4" | "5" | "6";
-  is_regenerated?: "1" | "0";
+  is_matched?: ("1" | "0" | "2" | "3" | "4" | "5" | "6")[];
+  is_regenerated?: ("0" | "1")[];
 }
 
 export interface RegenerateResponse {

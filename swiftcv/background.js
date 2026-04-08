@@ -552,7 +552,7 @@ async function generateResume(jobDescription, jobUrl = "") {
       return;
     }
 
-    // If company+title match found in previous applications (is_matched === 5), show repost warning
+    // If company+title match found in previous applications (is_matched === 5), block apply
     if (data.is_matched === 5) {
       const appliedDate = data.applied_date
         ? new Date(data.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
@@ -560,51 +560,21 @@ async function generateResume(jobDescription, jobUrl = "") {
       const detail = (data.match_reason || "Same company and position found in previous application")
         + (appliedDate ? " (applied on " + appliedDate + ")" : "");
       console.log("[BG] Repost detected:", detail);
-      sendProgress("reposted", undefined, detail);
-
-      // Wait for user decision (yes = generate anyway, no = cancel)
-      const confirmed = await new Promise((resolve) => {
-        function handler(message) {
-          if (message.action === "repostConfirmed") {
-            chrome.runtime.onMessage.removeListener(handler);
-            resolve(true);
-          } else if (message.action === "repostCancelled") {
-            chrome.runtime.onMessage.removeListener(handler);
-            resolve(false);
-          }
-        }
-        chrome.runtime.onMessage.addListener(handler);
-        // Auto-cancel after 5 minutes
-        setTimeout(() => { chrome.runtime.onMessage.removeListener(handler); resolve(false); }, 300000);
-      });
-
-      if (!confirmed) {
-        console.log("[BG] User cancelled after repost warning.");
-        return;
-      }
-
-      // User confirmed — update the log status to "applied"
-      try {
-        await fetch(`${XANO_RESUME_URL}/resume/confirm_log`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            log_id: data.log_id,
-            token: extensionState.token,
-          }),
-        });
-      } catch (e) {
-        console.warn("[BG] Failed to confirm repost status:", e);
-      }
-
-      // Continue with PDF generation
-      sendProgress("resume");
+      sendProgress("reposted_blocked", undefined, detail);
+      return;
     }
 
-    // If job does not match the profile, warn the user and wait for confirmation
+    // If job does not match the profile:
+    // - non-admin: block apply immediately
+    // - admin: allow explicit override confirmation
     let wasMismatched = false;
     if (data.is_matched === false || data.is_matched === 0) {
       console.log("[BG] Job mismatch detected:", data.match_reason);
+      if (!isAdmin) {
+        sendProgress("mismatch_blocked", undefined, data.match_reason || "");
+        return;
+      }
+
       sendProgress("mismatch", undefined, data.match_reason || "");
 
       // Wait for user decision (confirmed or cancelled)

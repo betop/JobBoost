@@ -31,11 +31,86 @@ import {
   Eye,
   Copy,
   XCircle,
+  ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 
 type SortField = "created_at" | "bidder_name" | "profile_name" | "position_title" | "company_name";
 type SortDir = "asc" | "desc";
 type LogsPeriod = "today" | "week" | "month" | "all" | "custom";
+
+// ── Reusable checkbox-dropdown component ──
+interface CheckboxOption { value: string; label: string; }
+function CheckboxDropdown({
+  label,
+  options,
+  selected,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  options: CheckboxOption[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = selected.length;
+  const summary = count === 0 ? `All ${label}s` : count === 1
+    ? (options.find((o) => o.value === selected[0])?.label ?? "1 selected")
+    : `${count} selected`;
+
+  return (
+    <div className="relative">
+      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center justify-between gap-2 border rounded-lg px-3 py-2 text-sm min-w-[160px] bg-white hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${count > 0 ? "border-blue-400" : "border-gray-300"}`}
+      >
+        <span className={count > 0 ? "text-blue-600 font-medium" : "text-gray-400"}>{summary}</span>
+        <ChevronDownIcon className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <>
+          {/* backdrop */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[180px] max-h-64 overflow-y-auto py-1">
+            {count > 0 && (
+              <button
+                type="button"
+                onClick={() => { onChange([]); setOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-500 hover:bg-red-50 border-b border-gray-100"
+              >
+                <X className="w-3 h-3" />
+                Reset {label}
+              </button>
+            )}
+            {options.map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt.value)}
+                  onChange={(e) => {
+                    const next = selected.filter((v) => v !== opt.value);
+                    if (e.target.checked) next.push(opt.value);
+                    onChange(next);
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                />
+                <span className="text-sm text-gray-700 whitespace-nowrap">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // Pricing per 1M tokens (USD)
 const PRICING = {
@@ -310,7 +385,7 @@ function ReasonModal({
             {isSkipped ? (
               <>
                 <Ban className="w-5 h-5 text-gray-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Job Skipped</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Job Unfit</h2>
               </>
             ) : (
               <>
@@ -456,10 +531,18 @@ export default function LogsPage() {
     
     // Load client-side filters
     const filterObj: LogsFilters = {};
-    if (params.get("bidder_id")) filterObj.bidder_id = params.get("bidder_id") || undefined;
-    if (params.get("profile_id")) filterObj.profile_id = params.get("profile_id") || undefined;
-    if (params.get("is_matched")) filterObj.is_matched = (params.get("is_matched") as LogsFilters["is_matched"]) || undefined;
-    if (params.get("is_regenerated")) filterObj.is_regenerated = (params.get("is_regenerated") as "1" | "0") || undefined;
+    const bidderParam = params.get("bidder_id");
+    if (bidderParam) filterObj.bidder_id = bidderParam.split(",");
+    const profileParam = params.get("profile_id");
+    if (profileParam) filterObj.profile_id = profileParam.split(",");
+    const matchedParam = params.get("is_matched");
+    if (matchedParam) {
+      filterObj.is_matched = (matchedParam.split(",") as any) as ("1"|"0"|"2"|"3"|"4"|"5"|"6")[];
+    }
+    const regeneratedParam = params.get("is_regenerated");
+    if (regeneratedParam) {
+      filterObj.is_regenerated = (regeneratedParam.split(",") as any) as ("0"|"1")[];
+    }
     
     setFilters(filterObj);
   }, []);
@@ -591,11 +674,10 @@ export default function LogsPage() {
   // ── Client-side filtering: bidder, profile, match status, type, search ──
   const filtered = useMemo(() => {
     return allRows.filter((log) => {
-      if (filters.bidder_id && log.bidder_id !== filters.bidder_id) return false;
-      if (filters.profile_id && log.profile_id !== filters.profile_id) return false;
-      if (filters.is_matched !== undefined && String(log.is_matched) !== filters.is_matched) return false;
-      if (filters.is_regenerated === "1" && log.is_regenerated !== 1) return false;
-      if (filters.is_regenerated === "0" && log.is_regenerated !== 0) return false;
+      if (filters.bidder_id && filters.bidder_id.length > 0 && !filters.bidder_id.includes(log.bidder_id)) return false;
+      if (filters.profile_id && filters.profile_id.length > 0 && !filters.profile_id.includes(log.profile_id)) return false;
+      if (filters.is_matched && filters.is_matched.length > 0 && !filters.is_matched.includes(String(log.is_matched) as any)) return false;
+      if (filters.is_regenerated && filters.is_regenerated.length > 0 && !filters.is_regenerated.includes(String(log.is_regenerated) as any)) return false;
       return true;
     });
   }, [allRows, filters.bidder_id, filters.profile_id, filters.is_matched, filters.is_regenerated]);
@@ -842,7 +924,7 @@ export default function LogsPage() {
                 <Copy className="w-3.5 h-3.5 text-white" />
               </div>
               <div>
-                <p className="text-[10px] text-gray-500 font-medium">Duplicated</p>
+                <p className="text-[10px] text-gray-500 font-medium">Duplicate Bid</p>
                 <p className="text-lg font-bold text-gray-900">{stats.duplicated_count.toLocaleString()}</p>
               </div>
             </div>
@@ -860,17 +942,20 @@ export default function LogsPage() {
                 <FileText className="w-3.5 h-3.5 text-white" />
               </div>
               <div>
-                <p className="text-[10px] text-gray-500 font-medium">Not a JD</p>
+                <p className="text-[10px] text-gray-500 font-medium">Not JD</p>
                 <p className="text-lg font-bold text-gray-900">{stats.not_jd_count.toLocaleString()}</p>
               </div>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2 group relative">
               <div className="bg-gray-500 w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0">
                 <Ban className="w-3.5 h-3.5 text-white" />
               </div>
               <div>
-                <p className="text-[10px] text-gray-500 font-medium">Skipped</p>
+                <p className="text-[10px] text-gray-500 font-medium cursor-help">Unfit</p>
                 <p className="text-lg font-bold text-gray-900">{stats.skipped_count.toLocaleString()}</p>
+              </div>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Not Remote, Security Clearance
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-2.5 py-2 flex items-center gap-2">
@@ -888,105 +973,79 @@ export default function LogsPage() {
 
       {/* Filters */}
       <div className={`bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end ${logsFetching ? "opacity-50 pointer-events-none" : ""}`}>
-        <Filter className="w-4 h-4 text-gray-400 self-center" />
+        <Filter className="w-4 h-4 text-gray-400 self-center mb-1" />
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Bidder</label>
-          <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px] disabled:cursor-not-allowed"
-            value={filters.bidder_id || ""}
-            disabled={logsFetching}
-            onChange={(e) => {
-              setFilters((f) => ({ ...f, bidder_id: e.target.value || undefined }));
-              setPage(1);
-              updateQueryParams({ bidder_id: e.target.value || undefined, page: 1 });
-            }}
-          >
-            <option value="">All bidders</option>
-            {bidders?.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.full_name} ({b.email})
-              </option>
-            ))}
-          </select>
-        </div>
+        <CheckboxDropdown
+          label="Bidder"
+          options={(bidders ?? []).map((b) => ({ value: b.id, label: b.full_name }))}
+          selected={filters.bidder_id ?? []}
+          disabled={logsFetching}
+          onChange={(next) => {
+            setFilters((f) => ({ ...f, bidder_id: next.length > 0 ? next : undefined } as LogsFilters));
+            setPage(1);
+            updateQueryParams({ bidder_id: next.length > 0 ? next.join(",") : undefined, page: 1 });
+          }}
+        />
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Profile</label>
-          <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[180px] disabled:cursor-not-allowed"
-            value={filters.profile_id || ""}
-            disabled={logsFetching}
-            onChange={(e) => {
-              setFilters((f) => ({ ...f, profile_id: e.target.value || undefined }));
-              setPage(1);
-              updateQueryParams({ profile_id: e.target.value || undefined, page: 1 });
-            }}
-          >
-            <option value="">All profiles</option>
-            {profiles?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.full_name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <CheckboxDropdown
+          label="Profile"
+          options={(profiles ?? []).map((p) => ({ value: p.id, label: p.full_name }))}
+          selected={filters.profile_id ?? []}
+          disabled={logsFetching}
+          onChange={(next) => {
+            setFilters((f) => ({ ...f, profile_id: next.length > 0 ? next : undefined } as LogsFilters));
+            setPage(1);
+            updateQueryParams({ profile_id: next.length > 0 ? next.join(",") : undefined, page: 1 });
+          }}
+        />
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Match Status</label>
-          <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px] disabled:cursor-not-allowed"
-            value={filters.is_matched ?? ""}
-            disabled={logsFetching}
-            onChange={(e) => {
-              setFilters((f) => ({ ...f, is_matched: (e.target.value as LogsFilters["is_matched"]) || undefined }));
-              setPage(1);
-              updateQueryParams({ is_matched: e.target.value || undefined, page: 1 });
-            }}
-          >
-            <option value="">All jobs</option>
-            <option value="1">✅ Matched only</option>
-            <option value="0">⚠️ Mismatched only</option>
-            <option value="2">🚫 Skipped only</option>
-            <option value="3">📄 Not a JD</option>
-            <option value="4">🔁 Duplicate URL</option>
-            <option value="5">🔄 Reposted</option>
-            <option value="6">❌ AI Error</option>
-          </select>
-        </div>
+        <CheckboxDropdown
+          label="Status"
+          options={[
+            { value: "1", label: "✅ Matched" },
+            { value: "0", label: "⚠️ Mismatched" },
+            { value: "2", label: "🚫 Unfit" },
+            { value: "3", label: "📄 Not JD" },
+            { value: "4", label: "🔁 Duplicate URL" },
+            { value: "5", label: "🔄 Reposted" },
+            { value: "6", label: "❌ AI Error" },
+          ]}
+          selected={(filters.is_matched ?? []) as string[]}
+          disabled={logsFetching}
+          onChange={(next) => {
+            setFilters((f) => ({ ...f, is_matched: next.length > 0 ? next : undefined } as LogsFilters));
+            setPage(1);
+            updateQueryParams({ is_matched: next.length > 0 ? next.join(",") : undefined, page: 1 });
+          }}
+        />
 
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Type</label>
-          <select
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px] disabled:cursor-not-allowed"
-            value={filters.is_regenerated ?? ""}
-            disabled={logsFetching}
-            onChange={(e) => {
-              setFilters((f) => ({ ...f, is_regenerated: (e.target.value as "1" | "0") || undefined }));
-              updateQueryParams({ is_regenerated: e.target.value || undefined, page: 1 });
+        <CheckboxDropdown
+          label="Type"
+          options={[
+            { value: "0", label: "Original" },
+            { value: "1", label: "🔄 Regenerated" },
+          ]}
+          selected={(filters.is_regenerated ?? []) as string[]}
+          disabled={logsFetching}
+          onChange={(next) => {
+            setFilters((f) => ({ ...f, is_regenerated: next.length > 0 ? next : undefined } as LogsFilters));
+            setPage(1);
+            updateQueryParams({ is_regenerated: next.length > 0 ? next.join(",") : undefined, page: 1 });
+          }}
+        />
+
+        {((filters.bidder_id?.length ?? 0) + (filters.profile_id?.length ?? 0) + (filters.is_matched?.length ?? 0) + (filters.is_regenerated?.length ?? 0) > 0) && (
+          <button
+            onClick={() => {
+              setFilters({});
+              updateQueryParams({ bidder_id: undefined, profile_id: undefined, is_matched: undefined, is_regenerated: undefined, page: 1 });
               setPage(1);
             }}
+            className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-2.5 py-2 self-end transition-colors"
           >
-            <option value="">All types</option>
-            <option value="0">Original only</option>
-            <option value="1">🔄 Regenerated only</option>
-          </select>
-        </div>
-
-        {(filters.bidder_id || filters.profile_id) && (
-          <div className="text-xs text-blue-600 self-end pb-2">
-            Showing filtered results —{" "}
-            <button
-              onClick={() => {
-                setFilters((f) => ({ ...f, bidder_id: undefined, profile_id: undefined }));
-                updateQueryParams({ bidder_id: undefined, profile_id: undefined, page: 1 });
-                setPage(1);
-              }}
-              className="underline"
-            >
-              clear
-            </button>
-          </div>
+            <X className="w-3 h-3" />
+            Reset filters
+          </button>
         )}
       </div>
 
@@ -1174,7 +1233,7 @@ export default function LogsPage() {
                           {log.is_matched === 2 && (
                             <div className="flex items-center gap-1">
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-200">
-                                Skipped
+                                Unfit
                               </span>
                               {log.match_reason && (
                                 <button
@@ -1189,7 +1248,7 @@ export default function LogsPage() {
                           )}
                           {log.is_matched === 3 && (
                             <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                              Not a JD
+                              Not JD
                             </span>
                           )}
                           {log.is_matched === 4 && (

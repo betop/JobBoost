@@ -116,33 +116,38 @@ query "resume/generate" verb=POST {
       
         conditional {
           if ($existing_url_log != null) {
-            var.update $duplicate_log {
-              value = $existing_url_log
-            }
-          
-            // Only log the duplicate entry for non-admin keys
-            // Admin keys skip the log and proceed to AI generation
+            // If previous attempt was Not JD (3) or AI error (6), allow retry (not duplicate)
             conditional {
-              if ($is_admin == false) {
-                db.add generation_log {
-                  data = {
-                    profile_id             : $input.profile_id
-                    bidder_id              : $access.bidder_id
-                    job_url                : $input.job_url
-                    job_description_snippet: $input.job_description|substr:0:300
-                    job_description        : $input.job_description
-                    ai_provider            : ""
-                    input_tokens           : 0
-                    output_tokens          : 0
-                    resume_filename        : ""
-                    cover_letter_filename  : ""
-                    position_title         : $existing_url_log.position_title
-                    company_name           : $existing_url_log.company_name
-                    is_regenerated         : 0
-                    is_matched             : 4
-                    match_reason           : "Duplicate job URL detected"
+              if ($existing_url_log.is_matched != 3 && $existing_url_log.is_matched != 6) {
+                var.update $duplicate_log {
+                  value = $existing_url_log
+                }
+              
+                // Only log the duplicate entry for non-admin keys
+                // Admin keys skip the log and proceed to AI generation
+                conditional {
+                  if ($is_admin == false) {
+                    db.add generation_log {
+                      data = {
+                        profile_id             : $input.profile_id
+                        bidder_id              : $access.bidder_id
+                        job_url                : $input.job_url
+                        job_description_snippet: $input.job_description|substr:0:300
+                        job_description        : $input.job_description
+                        ai_provider            : ""
+                        input_tokens           : 0
+                        output_tokens          : 0
+                        resume_filename        : ""
+                        cover_letter_filename  : ""
+                        position_title         : $existing_url_log.position_title
+                        company_name           : $existing_url_log.company_name
+                        is_regenerated         : 0
+                        is_matched             : 4
+                        match_reason           : "Duplicate job URL detected"
+                      }
+                    } as $dup_log
                   }
-                } as $dup_log
+                }
               }
             }
           }
@@ -671,8 +676,9 @@ query "resume/generate" verb=POST {
     }
   
     // ==================== REPOST DETECTION (company + title) ====================
-    // After AI parsed the position_title and company_name, check if this same
-    // company + title combo was already applied to by this bidder
+    // Find the most recent same company + title + profile record.
+    // If found within the last 15 days => reposted (blocked).
+    // If found older than 15 days => treat as matched.
     var $repost_log {
       value = null
     }
@@ -691,20 +697,38 @@ query "resume/generate" verb=POST {
       
         conditional {
           if ($existing_title_log != null) {
-            var.update $repost_log {
-              value = $existing_title_log
+            var $repost_cutoff {
+              value = now|add_secs_to_timestamp:-1296000
             }
           
-            var.update $repost_applied_date {
-              value = $existing_title_log.created_at
-            }
-          
-            var.update $is_matched {
-              value = 5
-            }
-          
-            var.update $match_reason {
-              value = "Same company and position found in previous application"
+            conditional {
+              if ($existing_title_log.created_at >= $repost_cutoff) {
+                var.update $repost_log {
+                  value = $existing_title_log
+                }
+              
+                var.update $repost_applied_date {
+                  value = $existing_title_log.created_at
+                }
+              
+                var.update $is_matched {
+                  value = 5
+                }
+              
+                var.update $match_reason {
+                  value = "Same company and position found in previous application (within 15 days)"
+                }
+              }
+            
+              else {
+                var.update $is_matched {
+                  value = 1
+                }
+              
+                var.update $match_reason {
+                  value = "Previous same company and position is older than 15 days"
+                }
+              }
             }
           }
         }

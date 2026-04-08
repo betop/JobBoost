@@ -71,9 +71,11 @@ function showNotJobDescription(reason) {
   document.getElementById("notJdClose").addEventListener("click", () => window.close());
 }
 
-function showMismatch(reason) {
+function showMismatch(reason, canContinue = true) {
   document.getElementById("spinner").style.display = "none";
-  document.getElementById("statusText").textContent = "Profile mismatch detected.";
+  document.getElementById("statusText").textContent = canContinue
+    ? "Profile mismatch detected."
+    : "Apply blocked: profile mismatch.";
   for (const s of STEPS) {
     const el = document.getElementById("step-" + s);
     if (el) el.style.display = "none";
@@ -81,20 +83,35 @@ function showMismatch(reason) {
   if (reason) document.getElementById("mismatchReason").textContent = reason;
   document.getElementById("mismatchBanner").style.display = "block";
 
-  document.getElementById("mismatchContinue").addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "mismatchConfirmed" });
-    document.getElementById("mismatchBanner").style.display = "none";
-    document.getElementById("spinner").style.display = "block";
-    for (const s of STEPS) {
-      const el = document.getElementById("step-" + s);
-      if (el) { el.style.display = "flex"; el.className = "step pending"; }
-    }
-    document.getElementById("step-ai").className = "step active";
-    document.getElementById("statusText").textContent = STATUS_MAP.ai;
-  });
+  const continueBtn = document.getElementById("mismatchContinue");
+  const cancelBtn = document.getElementById("mismatchCancel");
+
+  if (!canContinue) {
+    if (continueBtn) continueBtn.style.display = "none";
+    if (cancelBtn) cancelBtn.textContent = "Close";
+  } else {
+    if (continueBtn) continueBtn.style.display = "";
+    if (cancelBtn) cancelBtn.textContent = "Cancel";
+  }
+
+  if (canContinue) {
+    document.getElementById("mismatchContinue").addEventListener("click", () => {
+      chrome.runtime.sendMessage({ action: "mismatchConfirmed" });
+      document.getElementById("mismatchBanner").style.display = "none";
+      document.getElementById("spinner").style.display = "block";
+      for (const s of STEPS) {
+        const el = document.getElementById("step-" + s);
+        if (el) { el.style.display = "flex"; el.className = "step pending"; }
+      }
+      document.getElementById("step-ai").className = "step active";
+      document.getElementById("statusText").textContent = STATUS_MAP.ai;
+    });
+  }
 
   document.getElementById("mismatchCancel").addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "mismatchCancelled" });
+    if (canContinue) {
+      chrome.runtime.sendMessage({ action: "mismatchCancelled" });
+    }
     window.close();
   });
 }
@@ -111,9 +128,11 @@ function showDuplicate(detail) {
   document.getElementById("duplicateClose").addEventListener("click", () => window.close());
 }
 
-function showReposted(detail) {
+function showReposted(detail, canContinue = true) {
   document.getElementById("spinner").style.display = "none";
-  document.getElementById("statusText").textContent = "Possible repost detected.";
+  document.getElementById("statusText").textContent = canContinue
+    ? "Possible repost detected."
+    : "Apply blocked: reposted job.";
   for (const s of STEPS) {
     const el = document.getElementById("step-" + s);
     if (el) el.style.display = "none";
@@ -121,20 +140,33 @@ function showReposted(detail) {
   if (detail) document.getElementById("repostedDetail").textContent = detail;
   document.getElementById("repostedBanner").style.display = "block";
 
-  document.getElementById("repostContinue").addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "repostConfirmed" });
-    document.getElementById("repostedBanner").style.display = "none";
-    document.getElementById("spinner").style.display = "block";
-    for (const s of STEPS) {
-      const el = document.getElementById("step-" + s);
-      if (el) { el.style.display = "flex"; el.className = "step pending"; }
-    }
-    document.getElementById("step-resume").className = "step active";
-    document.getElementById("statusText").textContent = STATUS_MAP.resume;
-  });
+  const continueBtn = document.getElementById("repostContinue");
+  const cancelBtn = document.getElementById("repostCancel");
+  if (!canContinue) {
+    if (continueBtn) continueBtn.style.display = "none";
+    if (cancelBtn) cancelBtn.textContent = "Close";
+  } else {
+    if (continueBtn) continueBtn.style.display = "";
+    if (cancelBtn) cancelBtn.textContent = "Cancel";
+  }
+  if (canContinue) {
+    document.getElementById("repostContinue").addEventListener("click", () => {
+      chrome.runtime.sendMessage({ action: "repostConfirmed" });
+      document.getElementById("repostedBanner").style.display = "none";
+      document.getElementById("spinner").style.display = "block";
+      for (const s of STEPS) {
+        const el = document.getElementById("step-" + s);
+        if (el) { el.style.display = "flex"; el.className = "step pending"; }
+      }
+      document.getElementById("step-resume").className = "step active";
+      document.getElementById("statusText").textContent = STATUS_MAP.resume;
+    });
+  }
 
   document.getElementById("repostCancel").addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "repostCancelled" });
+    if (canContinue) {
+      chrome.runtime.sendMessage({ action: "repostCancelled" });
+    }
     window.close();
   });
 }
@@ -218,8 +250,12 @@ chrome.runtime.onMessage.addListener((message) => {
       showDuplicate(reason);
     } else if (step === "reposted") {
       showReposted(reason);
+    } else if (step === "reposted_blocked") {
+      showReposted(reason, false);
     } else if (step === "mismatch") {
       showMismatch(reason);
+    } else if (step === "mismatch_blocked") {
+      showMismatch(reason, false);
     } else if (step === "ready") {
       showReady();
     } else if (step === "admin_override") {
