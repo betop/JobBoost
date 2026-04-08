@@ -491,35 +491,33 @@ query "resume/generate" verb=POST {
           value = `($ai_resp.response.result.usage|get:"output_tokens") + 0`
         }
       
-        // Parse JSON response
+        // Parse JSON response (robust cleanup for code-fences / wrappers)
         var $clean_response {
           value = $response_text
             |replace:"```json\n":""
+            |replace:"```JSON\n":""
             |replace:"```\n":""
             |replace:"```":""
             |trim
         }
       
-        // Try parsing JSON; if it fails (e.g. extra trailing }), trim it and retry
+        // Try parsing JSON; if it fails, remove last character and retry
         var $parsed_response {
           value = null
         }
       
         try_catch {
           try {
+            // First attempt: parse cleaned response as-is
             var.update $parsed_response {
               value = $clean_response|json_decode
             }
           }
         
           catch {
-            // Remove trailing } and retry (AI sometimes returns an extra closing brace)
+            // Second attempt: remove last character (common extra trailing brace issue)
             var $trimmed_response {
-              value = $clean_response|regex_replace:"}[s]*$":""|trim
-            }
-          
-            var.update $trimmed_response {
-              value = $trimmed_response ~ "}"
+              value = $clean_response|regex_replace:".$":""|trim
             }
           
             try_catch {
@@ -532,7 +530,7 @@ query "resume/generate" verb=POST {
               catch {
                 // JSON is truly invalid — $parsed_response stays null, handled below
                 debug.log {
-                  value = "JSON parse failed even after trimming extra brace: " ~ $error
+                  value = "JSON parse failed after second attempt: " ~ $error
                 }
               }
             }
