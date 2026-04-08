@@ -67,9 +67,6 @@ export interface GenerationLog {
 
 export interface LogsListResponse {
   items: GenerationLog[];
-  total: number;
-  total_input_tokens: number;
-  total_output_tokens: number;
 }
 
 export interface LogsStatsResponse {

@@ -479,10 +479,10 @@ export default function LogsPage() {
     router.push(`?${params.toString()}`, { scroll: false } as any);
   };
 
-  // ── API call: only depends on dateFrom/dateTo (date range changes only) ──
+  // ── API call: fetch ALL logs once, date filtering is done client-side ──
   const { data: logsData, isLoading: logsLoading, isFetching: logsFetching } = useQuery({
-    queryKey: ["generation-logs", dateFrom, dateTo],
-    queryFn: () => logsService.list({ period: "custom", date_from: dateFrom, date_to: dateTo }),
+    queryKey: ["generation-logs"],
+    queryFn: () => logsService.list({}),
     staleTime: 5 * 60 * 1000,       // 5 min — data stays fresh, no refetch on remount
     gcTime: 30 * 60 * 1000,          // 30 min — keep in cache even after unmount
     placeholderData: keepPreviousData, // show previous data while new range loads
@@ -559,8 +559,34 @@ export default function LogsPage() {
     setPage(1);
   }
 
-  // ── All rows from API (date-range only) ──
-  const allRows: GenerationLog[] = useMemo(() => logsData?.items ?? [], [logsData?.items]);
+  // ── All rows from API, enriched with names and filtered by date client-side ──
+  const allRows: GenerationLog[] = useMemo(() => {
+    const items = logsData?.items ?? [];
+
+    // Build name lookup maps from already-fetched bidders/profiles
+    const profileMap = new Map<string, string>();
+    const bidderMap = new Map<string, string>();
+    if (profiles) for (const p of profiles) profileMap.set(p.id, p.full_name);
+    if (bidders) for (const b of bidders) bidderMap.set(b.id, b.full_name);
+
+    // Enrich + date filter in a single pass
+    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : 0;
+    const to = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
+
+    const result: GenerationLog[] = [];
+    for (const log of items) {
+      if (dateFrom || dateTo) {
+        const t = new Date(log.created_at).getTime();
+        if (t < from || t > to) continue;
+      }
+      result.push({
+        ...log,
+        profile_name: log.profile_name || profileMap.get(log.profile_id) || "",
+        bidder_name: log.bidder_name || bidderMap.get(log.bidder_id) || "",
+      });
+    }
+    return result;
+  }, [logsData?.items, dateFrom, dateTo, profiles, bidders]);
 
   // ── Client-side filtering: bidder, profile, match status, type, search ──
   const filtered = useMemo(() => {
