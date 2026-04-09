@@ -550,7 +550,7 @@ query "resume/generate" verb=POST {
             }
           
             var.update $match_reason {
-              value = "AI processing error: invalid JSON response"
+              value = "AI processing error: invalid JSON response. Please try again."
             }
           }
         }
@@ -646,7 +646,7 @@ query "resume/generate" verb=POST {
         }
       
         var.update $match_reason {
-          value = "AI processing error: " ~ $error
+          value = "AI processing error: " ~ $error ~ ". Please try again."
         }
       }
     }

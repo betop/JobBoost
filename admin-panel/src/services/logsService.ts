@@ -101,10 +101,14 @@ export interface LogsFilters {
 
 export interface RegenerateResponse {
   skipped: boolean;
+  log_id?: string;
   is_matched: number;
   match_reason: string;
   resume_text: string;
+  cover_letter_text?: string;
   resume_filename: string;
+  cover_letter_filename?: string;
+  is_admin?: boolean;
 }
 
 export const logsService = {
@@ -144,8 +148,11 @@ export const logsService = {
     return response.data;
   },
 
-  regenerate: async (logId: string): Promise<RegenerateResponse> => {
-    const response = await api.post(`/resume/regenerate`, { log_id: logId });
+  regenerate: async (logId: string, forceGenerate = false): Promise<RegenerateResponse> => {
+    const response = await api.post(`/resume/regenerate`, {
+      log_id: logId,
+      force_generate: forceGenerate || undefined,
+    });
     return response.data;
   },
 };

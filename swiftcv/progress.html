@@ -24,8 +24,14 @@
       .steps { margin-top: 16px; border-top: 1px solid #e5e7eb; padding-top: 16px; }
       .done-banner { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; margin-top: 12px; }
       .done-banner p { color: #16a34a; font-weight: 600; margin: 0; }
-      .error-banner { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; margin-top: 12px; }
-      .error-banner p { color: #dc2626; font-size: 13px; margin: 0; }
+      .error-banner { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
+      .error-banner p { color: #dc2626; font-size: 13px; margin: 0 0 12px; }
+      .error-banner .error-btns { display: flex; gap: 8px; }
+      .error-banner .error-btns button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .error-banner .btn-error-close { background: #e5e7eb; color: #374151; }
+      .error-banner .btn-error-close:hover { background: #d1d5db; }
+      .error-banner .btn-error-retry { background: #dc2626; color: #fff; }
+      .error-banner .btn-error-retry:hover { background: #b91c1c; }
       .skipped-banner { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
       .skipped-banner .skipped-title { color: #92400e; font-weight: 600; font-size: 14px; margin: 0 0 6px; }
       .skipped-banner .skipped-body { color: #78350f; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
@@ -109,6 +115,10 @@
         </div>
         <div id="errorBanner" class="error-banner" style="display:none">
           <p id="errorText">An error occurred.</p>
+          <div class="error-btns">
+            <button class="btn-error-close" id="errorClose">Close</button>
+            <button class="btn-error-retry" id="errorRetry" style="display:none">Try Again</button>
+          </div>
         </div>
         <div id="skippedBanner" class="skipped-banner" style="display:none">
           <p class="skipped-title">⚠️ Job not qualified — not 100% remote</p>

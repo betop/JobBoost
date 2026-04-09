@@ -369,6 +369,59 @@ async function generateResume(jobDescription, jobUrl = "") {
     });
   }
 
+  function waitForRetryDecision() {
+    return new Promise((resolve) => {
+      function handler(message) {
+        if (message.action === "retryGeneration") {
+          chrome.runtime.onMessage.removeListener(handler);
+          resolve(true);
+        } else if (message.action === "retryCancelled") {
+          chrome.runtime.onMessage.removeListener(handler);
+          resolve(false);
+        }
+      }
+      chrome.runtime.onMessage.addListener(handler);
+      setTimeout(() => { chrome.runtime.onMessage.removeListener(handler); resolve(false); }, 300000);
+    });
+  }
+
+  async function callGenerateApi(requestBody) {
+    const response = await fetch(`${XANO_RESUME_URL}/resume/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      let message = "Failed to generate resume";
+      try {
+        const errorData = await response.json();
+
+        if (errorData?.message === "DUPLICATE_URL" && errorData?.payload) {
+          const p = errorData.payload;
+          console.log("[BG] Duplicate URL detected:", p);
+          const appliedDate = p.applied_date
+            ? new Date(p.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+            : "unknown date";
+          const detail = (p.position_title || "") + (p.company_name ? " at " + p.company_name : "") + " — applied on " + appliedDate;
+          sendProgress("duplicate", undefined, detail);
+          return null;
+        }
+
+        message = errorData?.message || errorData?.error || message;
+
+        if (EXTENSION_ENV === "prod" && (message.includes("version") || message.includes("Version"))) {
+          message = message + " — Please update the SwiftCV extension to the latest version.";
+        }
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    return response.json();
+  }
+
   // Re-call generate API with force_generate=true (admin only)
   async function retryWithForce(jd, url) {
     sendProgress("ai");
@@ -384,25 +437,19 @@ async function generateResume(jobDescription, jobUrl = "") {
       forceBody.extension_version = chrome.runtime.getManifest().version;
     }
 
-    const resp = await fetch(`${XANO_RESUME_URL}/resume/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(forceBody),
-    });
-
-    if (!resp.ok) {
-      const errData = await resp.json().catch(() => ({}));
-      throw new Error(errData?.message || "Force generate failed");
-    }
-
-    const forceData = await resp.json();
+    const forceData = await callGenerateApi(forceBody);
+    if (!forceData) return;
     console.log("[BG] Force generate response:", JSON.stringify(forceData));
 
     await syncProfilesFromGenerateResponse(forceData);
 
-    // Even with force, if AI still errored out, show error
+    // Even with force, if AI still errored out, let user retry
     if (forceData.is_matched === 6) {
-      sendProgress("error", forceData.match_reason || "AI processing error. Please try again.");
+      sendProgress("ai_error", forceData.match_reason || "AI processing error. Please try again.");
+      const retry = await waitForRetryDecision();
+      if (retry) {
+        await retryWithForce(jd, url);
+      }
       return;
     }
 
@@ -440,8 +487,6 @@ async function generateResume(jobDescription, jobUrl = "") {
   }
 
   try {
-    sendProgress("ai");
-
     const generateBody = {
       profile_id: extensionState.profileId,
       job_description: jobDescription,
@@ -453,73 +498,43 @@ async function generateResume(jobDescription, jobUrl = "") {
     if (EXTENSION_ENV === "prod") {
       generateBody.extension_version = chrome.runtime.getManifest().version;
     }
-
-    const response = await fetch(`${XANO_RESUME_URL}/resume/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(generateBody),
-    });
-
-    if (!response.ok) {
-      let message = "Failed to generate resume";
-      try {
-        const errorData = await response.json();
-
-        // Check if this is a duplicate URL detection
-        if (errorData?.message === "DUPLICATE_URL" && errorData?.payload) {
-          const p = errorData.payload;
-          console.log("[BG] Duplicate URL detected:", p);
-          const appliedDate = p.applied_date
-            ? new Date(p.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-            : "unknown date";
-          const detail = (p.position_title || "") + (p.company_name ? " at " + p.company_name : "") + " — applied on " + appliedDate;
-          sendProgress("duplicate", undefined, detail);
-          return;
-        }
-
-        message = errorData?.message || errorData?.error || message;
-        
-        // Check if this is a version mismatch error (only relevant in prod)
-        if (EXTENSION_ENV === "prod" && (message.includes("version") || message.includes("Version"))) {
-          message = message + " — Please update the SwiftCV extension to the latest version.";
-        }
-      } catch (_) {}
-      throw new Error(message);
-    }
-
-    const data = await response.json();
-    console.log("Xano response:", JSON.stringify(data));
-
-    await syncProfilesFromGenerateResponse(data);
-
-    const isAdmin = data.is_admin === true;
-
-    // If admin + duplicate was found (but API still generated), show warning
-    if (isAdmin && data.duplicate_info) {
-      const d = data.duplicate_info;
-      const appliedDate = d.created_at
-        ? new Date(d.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-        : "unknown date";
-      const detail = (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + " — applied on " + appliedDate;
-      console.log("[BG] Admin: duplicate detected but proceeding:", detail);
-      sendProgress("admin_warning", "Duplicate URL detected", detail + "\n\n(Admin override: resume was still generated)");
-    }
-
-    // If AI processing failed (is_matched === 6), show error
-    if (data.is_matched === 6) {
-      console.log("[BG] AI processing error:", data.match_reason);
-      if (isAdmin) {
-        sendProgress("admin_override", data.match_reason || "AI processing error", "error");
-        const confirmed = await waitForAdminDecision();
-        if (confirmed) {
-          await retryWithForce(jobDescription, jobUrl);
-          return;
-        }
+    let data;
+    let isAdmin = false;
+    while (true) {
+      sendProgress("ai");
+      data = await callGenerateApi(generateBody);
+      if (!data) {
+        return;
       }
-      sendProgress("error", data.match_reason || "AI processing error. Please try again.");
-      return;
+
+      console.log("Xano response:", JSON.stringify(data));
+
+      await syncProfilesFromGenerateResponse(data);
+      isAdmin = data.is_admin === true;
+
+      // If admin + duplicate was found (but API still generated), show warning
+      if (isAdmin && data.duplicate_info) {
+        const d = data.duplicate_info;
+        const appliedDate = d.created_at
+          ? new Date(d.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+          : "unknown date";
+        const detail = (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + " — applied on " + appliedDate;
+        console.log("[BG] Admin: duplicate detected but proceeding:", detail);
+        sendProgress("admin_warning", "Duplicate URL detected", detail + "\n\n(Admin override: resume was still generated)");
+      }
+
+      // If AI processing failed (is_matched === 6), ask user to try again
+      if (data.is_matched === 6) {
+        console.log("[BG] AI processing error:", data.match_reason);
+        sendProgress("ai_error", data.match_reason || "AI processing error. Please try again.");
+        const retry = await waitForRetryDecision();
+        if (retry) {
+          continue;
+        }
+        return;
+      }
+
+      break;
     }
 
     // If the content is not a real job description (is_matched === 3), warn the user

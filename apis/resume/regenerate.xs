@@ -1,11 +1,12 @@
-// Regenerate resume only (no cover letter) using stored job description from DB
-// OPTIMIZED FOR SPEED: single AI call, max_tokens=5000, optimized substrings
+// Regenerate resume and cover letter using the stored job description from an existing log
+// Mirrors the main generate flow, but remains admin-only.
 query "resume/regenerate" verb=POST {
   api_group = "resume"
   auth = "admin"
 
   input {
-    uuid log_id
+    uuid log_id?
+    bool force_generate?
   }
 
   stack {
@@ -29,15 +30,11 @@ query "resume/regenerate" verb=POST {
       error = "No job description stored for this log"
     }
   
-    var $claude_auth {
-      value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
+    // Regeneration is admin-only; use a reserved bidder id for admin-triggered logs
+    var $admin_bidder_id {
+      value = "00000000-0000-0000-0000-000000000000"
     }
   
-    var $job_description {
-      value = $original_log.job_description
-    }
-  
-    // Load profile
     db.get profile {
       field_name = "id"
       field_value = $original_log.profile_id
@@ -48,7 +45,6 @@ query "resume/regenerate" verb=POST {
       error = "Profile not found"
     }
   
-    // Load education, work experience, rules
     db.query education {
       where = $db.education.profile_id == $prof.id
       sort = {education.start_date: "asc"}
@@ -86,8 +82,40 @@ query "resume/regenerate" verb=POST {
           }
         }
       
+        var $location_display {
+          value = $w.location
+        }
+      
+        var $promotion_note_display {
+          value = ""
+        }
+      
+        var $title_display {
+          value = $w.job_title
+        }
+      
+        var $paren_parts {
+          value = $w.job_title|split:"("
+        }
+      
+        conditional {
+          if (`$paren_parts.length` > 1) {
+            var $closing_parts {
+              value = ($paren_parts|last)|split:")"
+            }
+          
+            var.update $promotion_note_display {
+              value = $closing_parts|first
+            }
+          
+            var.update $title_display {
+              value = ($paren_parts|first)|trim
+            }
+          }
+        }
+      
         var.update $work_text {
-          value = $work_text ~ $w.job_title ~ " at " ~ $w.company_name ~ " (" ~ $w.start_date ~ " - " ~ $end_label ~ ") "
+          value = $work_text ~ $title_display ~ " | " ~ $w.company_name ~ " | " ~ $location_display ~ " | " ~ $w.start_date ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
         }
       }
     }
@@ -105,33 +133,20 @@ query "resume/regenerate" verb=POST {
       }
     }
   
-    // Build rules text
-    var $rules_text {
+    // Build system prompt from active rules in DB
+    var $system_prompt {
       value = ""
     }
   
     foreach ($rules) {
       each as $r {
-        var.update $rules_text {
-          value = $rules_text ~ $r.sentence ~ " "
+        var.update $system_prompt {
+          value = $system_prompt ~ $r.sentence ~ " "
         }
       }
     }
   
-    // Build prompt — 3 states: skip (not remote), mismatch (domain), match
-    var $system_prompt {
-      value = "You are an expert resume writer. Evaluate the job description in two steps and return ONLY a single valid JSON object. The resume field must be a structured JSON object following the exact schema provided — NOT an HTMLstring."
-    }
-  
-    var $skip_schema {
-      value = {}
-        |set:"status":"skip"
-        |set:"reason":"Job requires relocation or at least 1 day in office — not 100% remote"
-        |set:"resume":""
-        |set:"position_title":""
-        |set:"company_name":""
-    }
-  
+    // Build resume schema object for JSON examples
     var $resume_schema {
       value = {}
         |set:"header":({}
@@ -156,11 +171,12 @@ query "resume/regenerate" verb=POST {
           |push:({}
             |set:"company":"Name"
             |set:"title":"Most Recent Title"
-            |set:"date_range":"Mon YYYY – Mon YYYY"
-            |set:"location":"Remote|Onsite|Hybrid"
-            |set:"company_summary":"italic company description with **bold** tools inline."
+            |set:"date_range":"Mon YYYY - Mon YYYY"
+            |set:"location":"Work location, leave blank if not exist"
+            |set:"promotion_note":"Promotion note for special cases, otherwise leave blank"
+            |set:"company_summary":"italic company description with bold tools inline."
             |set:"highlights":([]
-              |push:"bullet **tool** action result."
+              |push:"bullet tool action result."
             )
             |set:"tech_stack":"Tool1, Tool2"
           )
@@ -182,18 +198,48 @@ query "resume/regenerate" verb=POST {
         |set:"key_projects":([]
           |push:({}
             |set:"name":"Name: Subtitle"
-            |set:"context":"Company  |  Year"
-            |set:"description":"Narrative **bold** terms."
+            |set:"context":"Company | Year"
+            |set:"description":"Narrative bold terms."
             |set:"tech":"Tool1, Tool2"
           )
         )
         |set:"awards_recognition":([]
           |push:({}
             |set:"name":"Award: Subtitle"
-            |set:"context":"Company  |  Year"
-            |set:"description":"One sentence **bold** impact."
+            |set:"context":"Company | Year"
+            |set:"description":"One sentence bold impact."
           )
         )
+    }
+  
+    var $skip_schema {
+      value = {}
+        |set:"status":"skip"
+        |set:"reason":"<reason>"
+        |set:"resume":""
+        |set:"cover_letter":""
+        |set:"position_title":""
+        |set:"company_name":""
+    }
+  
+    var $not_jd_schema {
+      value = {}
+        |set:"status":"not_job_description"
+        |set:"reason":"<explain why this is not a job description>"
+        |set:"resume":""
+        |set:"cover_letter":""
+        |set:"position_title":""
+        |set:"company_name":""
+    }
+  
+    var $match_schema {
+      value = {}
+        |set:"status":"match"
+        |set:"reason":"Just keep empty"
+        |set:"resume":$resume_schema
+        |set:"cover_letter":"<full tailored cover letter as HTML>"
+        |set:"position_title":"<title>"
+        |set:"company_name":"<company>"
     }
   
     var $mismatch_schema {
@@ -201,31 +247,33 @@ query "resume/regenerate" verb=POST {
         |set:"status":"mismatch"
         |set:"reason":"<explain why domain does not align>"
         |set:"resume":$resume_schema
-        |set:"cover_letter":"<full tailored cover letter as HTML — required even for mismatch>"
-        |set:"position_title":"<title>"
-        |set:"company_name":"<company>"
-    }
-  
-    var $match_schema {
-      value = {}
-        |set:"status":"match"
-        |set:"reason":"<explain why candidate is a strong fit>"
-        |set:"resume":$resume_schema
         |set:"cover_letter":"<full tailored cover letter as HTML>"
         |set:"position_title":"<title>"
         |set:"company_name":"<company>"
     }
   
-    var $consolidated_prompt {
-      value = "STEP 1 — REMOTE CHECK:\nIf the job requires relocation, mentions hybrid, onsite, in-office, visiting office, or specifies ANY number of days/weeks/months in office, return status=skip immediately. Do NOT generate a resume.\n\nSTEP 2 — DOMAIN MATCH (only if 100% remote):\nIf the job domain does NOT align with the candidate target category, return status=mismatch AND still generate a full tailored resume as HTML.\nIf the job domain DOES align, return status=match AND generate a full tailored resume as HTML.\n\nRules applied to all resumes: " ~ $rules_text ~ "\n\n=== CANDIDATE PROFILE ===\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\n=== WORK EXPERIENCE ===\n" ~ $work_text ~ "\n\n=== EDUCATION ===\n" ~ $edu_text ~ "\n\n=== JOB DESCRIPTION ===\n" ~ ($job_description|substr:0:2000) ~ "\n\nReturn exactly ONE of these JSON schemas:\nIf skip: " ~ ($skip_schema|json_encode) ~ "\nIf mismatch: " ~ ($mismatch_schema|json_encode) ~ "\nIf match: " ~ ($match_schema|json_encode)
-    }
-  
+    // Build user prompt with candidate profile and job description
     var $user_prompt {
-      value = ""
+      value = "STEP 0 - CONTENT VALIDATION:\n\nFirst, check if the provided text is actually a job description/job posting. If the text is NOT a real job description (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps.\n\nSTEP 1 - REMOTE CHECK:\n\nIf job description doesn't provide 100% remote position and only requires either relocation, hybrid, onsite, in-office, or at least 1 day office visit, return status=skip. And if job requires Security Clearance or Public trust, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch. If job description requires Staff level Engineer or higher level Engineer than current role in the profile, return status=mismatch. \n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($original_log.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION: " ~ ($not_jd_schema|json_encode) ~ "\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
     }
   
-    // Output variables
-    // is_matched: 1=match, 0=mismatch, 2=skip
+    conditional {
+      if ($input.force_generate) {
+        var.update $user_prompt {
+          value = "IMPORTANT: SKIP all validation steps. Do NOT return not_job_description or skip status. Always generate a full tailored resume and cover letter. Treat this as status=match regardless of remote policy or domain alignment.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($original_log.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY this JSON structure (status MUST be match):\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+        }
+      }
+    }
+  
+    var $claude_auth {
+      value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
+    }
+  
+    var $is_admin {
+      value = true
+    }
+  
+    // is_matched: 1=match, 0=mismatch, 2=skip, 3=not_job_description
     var $is_matched {
       value = 1
     }
@@ -246,6 +294,10 @@ query "resume/regenerate" verb=POST {
       value = ""
     }
   
+    var $company_name {
+      value = ""
+    }
+  
     var $input_tokens {
       value = 0
     }
@@ -254,7 +306,39 @@ query "resume/regenerate" verb=POST {
       value = 0
     }
   
-    // Single AI call - OPTIMIZED max_tokens
+    var $response_text {
+      value = ""
+    }
+  
+    var $resume_filename {
+      value = $prof.full_name ~ ".pdf"
+    }
+  
+    var $cover_letter_filename {
+      value = "Cover Letter.pdf"
+    }
+  
+    var $job_description_snippet {
+      value = $original_log.job_description|substr:0:300
+    }
+  
+    // Determine original_log_id for regeneration chain
+    var $original_log_id {
+      value = $original_log.original_log_id
+    }
+  
+    conditional {
+      if ($original_log.original_log_id == null) {
+        var.update $original_log_id {
+          value = $original_log.id
+        }
+      }
+    }
+  
+    var $log {
+      value = null
+    }
+  
     try_catch {
       try {
         api.request {
@@ -262,11 +346,12 @@ query "resume/regenerate" verb=POST {
           method = "POST"
           params = {}
             |set:"model":"claude-haiku-4-5"
-            |set:"max_tokens":5000
+            |set:"max_tokens":6000
+            |set:"system":$system_prompt
             |set:"messages":([]
               |push:({}
                 |set:"role":"user"
-                |set:"content":$consolidated_prompt ~ "\n\n" ~ $user_prompt
+                |set:"content":$user_prompt
               )
             )
           headers = []
@@ -276,9 +361,22 @@ query "resume/regenerate" verb=POST {
           timeout = 300
         } as $ai_resp
       
-        var $response_text {
+        var.update $response_text {
           value = $ai_resp.response.result.content|first|get:"text"
         }
+      
+        db.add debug_ai_response {
+          data = {
+            profile_id             : $original_log.profile_id
+            bidder_id              : $admin_bidder_id
+            ai_provider            : "claude"
+            input_tokens           : $input_tokens
+            output_tokens          : $output_tokens
+            raw_response           : $response_text
+            job_url                : $original_log.job_url
+            job_description_snippet: $original_log.job_description|substr:0:300
+          }
+        } as $debug_log
       
         var.update $input_tokens {
           value = `($ai_resp.response.result.usage|get:"input_tokens") + 0`
@@ -288,16 +386,40 @@ query "resume/regenerate" verb=POST {
           value = `($ai_resp.response.result.usage|get:"output_tokens") + 0`
         }
       
-        // Parse response
+        db.add generation_log {
+          data = {
+            profile_id             : $original_log.profile_id
+            bidder_id              : $admin_bidder_id
+            job_url                : $original_log.job_url
+            job_description_snippet: $job_description_snippet
+            job_description        : $original_log.job_description
+            ai_provider            : "claude"
+            input_tokens           : $input_tokens
+            output_tokens          : $output_tokens
+            resume_filename        : $resume_filename
+            cover_letter_filename  : $cover_letter_filename
+            position_title         : ""
+            company_name           : ""
+            is_regenerated         : 1
+            original_log_id        : $original_log_id
+            is_matched             : 6
+            match_reason           : "AI response received, pending processing"
+          }
+        } as $pre_decode_log
+      
+        var.update $log {
+          value = $pre_decode_log
+        }
+      
         var $clean_response {
           value = $response_text
             |replace:"```json\n":""
+            |replace:"```JSON\n":""
             |replace:"```\n":""
             |replace:"```":""
             |trim
         }
       
-        // Try parsing JSON; if it fails (e.g. extra trailing }), trim it and retry
         var $parsed_response {
           value = null
         }
@@ -310,13 +432,8 @@ query "resume/regenerate" verb=POST {
           }
         
           catch {
-            // Remove trailing } and retry (AI sometimes returns an extra closing brace)
             var $trimmed_response {
-              value = $clean_response|regex_replace:"}[s]*$":""|trim
-            }
-          
-            var.update $trimmed_response {
-              value = $trimmed_response ~ "}"
+              value = $clean_response|regex_replace:".$":""|trim
             }
           
             try_catch {
@@ -327,16 +444,14 @@ query "resume/regenerate" verb=POST {
               }
             
               catch {
-                // JSON is truly invalid — $parsed_response stays null, handled below
                 debug.log {
-                  value = "JSON parse failed even after trimming extra brace"
+                  value = "JSON parse failed after second attempt: " ~ $error
                 }
               }
             }
           }
         }
       
-        // If JSON parsing failed completely, mark as error
         conditional {
           if ($parsed_response == null) {
             var.update $is_matched {
@@ -344,12 +459,23 @@ query "resume/regenerate" verb=POST {
             }
           
             var.update $match_reason {
-              value = "AI processing error: invalid JSON response"
+              value = "AI processing error: invalid JSON response. Please try again."
             }
           }
         }
       
-        // Extract fields by status
+        conditional {
+          if ($parsed_response != null && $parsed_response.status == "not_job_description") {
+            var.update $is_matched {
+              value = 3
+            }
+          
+            var.update $match_reason {
+              value = $parsed_response.reason
+            }
+          }
+        }
+      
         conditional {
           if ($parsed_response != null && $parsed_response.status == "skip") {
             var.update $is_matched {
@@ -383,6 +509,10 @@ query "resume/regenerate" verb=POST {
             var.update $position_title {
               value = $parsed_response.position_title
             }
+          
+            var.update $company_name {
+              value = $parsed_response.company_name
+            }
           }
         }
       
@@ -407,13 +537,17 @@ query "resume/regenerate" verb=POST {
             var.update $position_title {
               value = $parsed_response.position_title
             }
+          
+            var.update $company_name {
+              value = $parsed_response.company_name
+            }
           }
         }
       }
     
       catch {
         debug.log {
-          value = "Regenerate AI call failed"
+          value = "AI call failed: " ~ $error
         }
       
         var.update $is_matched {
@@ -421,55 +555,74 @@ query "resume/regenerate" verb=POST {
         }
       
         var.update $match_reason {
-          value = "AI processing error"
+          value = "AI processing error: " ~ $error ~ ". Please try again."
         }
       }
-    }
-  
-    var $resume_filename {
-      value = $prof.full_name ~ ".pdf"
-    }
-  
-    // Determine original_log_id for regeneration chain
-    var $original_log_id {
-      value = $original_log.original_log_id
     }
   
     conditional {
-      if ($original_log.original_log_id == null) {
-        var.update $original_log_id {
-          value = $original_log.id
+      if ($log == null) {
+        db.add generation_log {
+          data = {
+            profile_id             : $original_log.profile_id
+            bidder_id              : $admin_bidder_id
+            job_url                : $original_log.job_url
+            job_description_snippet: $job_description_snippet
+            job_description        : $original_log.job_description
+            ai_provider            : "claude"
+            input_tokens           : $input_tokens
+            output_tokens          : $output_tokens
+            resume_filename        : $resume_filename
+            cover_letter_filename  : $cover_letter_filename
+            position_title         : $position_title
+            company_name           : $company_name
+            is_regenerated         : 1
+            original_log_id        : $original_log_id
+            is_matched             : $is_matched
+            match_reason           : $match_reason
+          }
+        } as $final_log
+      
+        var.update $log {
+          value = $final_log
+        }
+      }
+    
+      else {
+        db.edit generation_log {
+          field_name = "id"
+          field_value = $log.id
+          data = {
+            input_tokens         : $input_tokens
+            output_tokens        : $output_tokens
+            resume_filename      : $resume_filename
+            cover_letter_filename: $cover_letter_filename
+            position_title       : $position_title
+            company_name         : $company_name
+            is_matched           : $is_matched
+            match_reason         : $match_reason
+          }
+        } as $updated_log
+      
+        var.update $log {
+          value = $updated_log
         }
       }
     }
-  
-    db.add generation_log {
-      data = {
-        profile_id             : $original_log.profile_id
-        bidder_id              : $original_log.bidder_id
-        job_url                : $original_log.job_url
-        job_description_snippet: $original_log.job_description_snippet
-        job_description        : $original_log.job_description
-        ai_provider            : "claude"
-        input_tokens           : $input_tokens
-        output_tokens          : $output_tokens
-        resume_filename        : $resume_filename
-        cover_letter_filename  : ""
-        position_title         : $position_title
-        company_name           : $original_log.company_name
-        is_regenerated         : 1
-        original_log_id        : $original_log_id
-        is_matched             : $is_matched
-        match_reason           : $match_reason
-      }
-    } as $log
   }
 
   response = {
-    is_matched       : $is_matched
-    match_reason     : $match_reason
-    resume_text      : $resume_text
-    cover_letter_text: $cover_letter_text
-    resume_filename  : $resume_filename
+    log_id               : $log.id
+    is_matched           : $is_matched
+    match_reason         : $match_reason
+    applied_date         : ""
+    is_admin             : $is_admin
+    duplicate_info       : null
+    resume_text          : $resume_text
+    cover_letter_text    : $cover_letter_text
+    resume_filename      : $resume_filename
+    cover_letter_filename: $cover_letter_filename
+    user_prompt          : $user_prompt
+    skipped              : ($is_matched == 2)
   }
 }

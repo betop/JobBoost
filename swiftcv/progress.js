@@ -39,11 +39,36 @@ function showDone() {
   setTimeout(() => window.close(), 3000);
 }
 
-function showError(msg) {
+function showError(msg, canRetry = false) {
   document.getElementById("spinner").style.display = "none";
   document.getElementById("statusText").textContent = STATUS_MAP.error;
   const banner = document.getElementById("errorBanner");
   document.getElementById("errorText").textContent = msg || "An unexpected error occurred.";
+  const retryBtn = document.getElementById("errorRetry");
+  const closeBtn = document.getElementById("errorClose");
+  if (retryBtn) retryBtn.style.display = canRetry ? "" : "none";
+  if (closeBtn) closeBtn.textContent = canRetry ? "Cancel" : "Close";
+  if (retryBtn) {
+    retryBtn.onclick = () => {
+      chrome.runtime.sendMessage({ action: "retryGeneration" });
+      banner.style.display = "none";
+      document.getElementById("spinner").style.display = "block";
+      for (const s of STEPS) {
+        const el = document.getElementById("step-" + s);
+        if (el) { el.style.display = "flex"; el.className = "step pending"; }
+      }
+      document.getElementById("step-ai").className = "step active";
+      document.getElementById("statusText").textContent = STATUS_MAP.ai;
+    };
+  }
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      if (canRetry) {
+        chrome.runtime.sendMessage({ action: "retryCancelled" });
+      }
+      window.close();
+    };
+  }
   banner.style.display = "block";
 }
 
@@ -207,22 +232,34 @@ function showAdminOverride(reason, statusType) {
   document.getElementById("adminOverrideDetail").textContent = reason || "The AI returned a non-standard status for this job.";
   document.getElementById("adminOverrideBanner").style.display = "block";
 
-  document.getElementById("adminOverrideContinue").addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "adminOverrideConfirmed" });
-    document.getElementById("adminOverrideBanner").style.display = "none";
-    document.getElementById("spinner").style.display = "block";
-    for (const s of STEPS) {
-      const el = document.getElementById("step-" + s);
-      if (el) { el.style.display = "flex"; el.className = "step pending"; }
-    }
-    document.getElementById("step-ai").className = "step active";
-    document.getElementById("statusText").textContent = STATUS_MAP.ai;
-  });
+  const continueBtn = document.getElementById("adminOverrideContinue");
+  const cancelBtn = document.getElementById("adminOverrideCancel");
+  const canContinue = statusType !== "error";
+  if (continueBtn) continueBtn.style.display = canContinue ? "" : "none";
+  if (cancelBtn) cancelBtn.textContent = canContinue ? "Cancel" : "Close";
 
-  document.getElementById("adminOverrideCancel").addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "adminOverrideCancelled" });
-    window.close();
-  });
+  if (continueBtn) {
+    continueBtn.onclick = () => {
+      chrome.runtime.sendMessage({ action: "adminOverrideConfirmed" });
+      document.getElementById("adminOverrideBanner").style.display = "none";
+      document.getElementById("spinner").style.display = "block";
+      for (const s of STEPS) {
+        const el = document.getElementById("step-" + s);
+        if (el) { el.style.display = "flex"; el.className = "step pending"; }
+      }
+      document.getElementById("step-ai").className = "step active";
+      document.getElementById("statusText").textContent = STATUS_MAP.ai;
+    };
+  }
+
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      if (canContinue) {
+        chrome.runtime.sendMessage({ action: "adminOverrideCancelled" });
+      }
+      window.close();
+    };
+  }
 }
 
 // Admin warning: info-only banner (e.g. duplicate detected but resume was generated)
@@ -240,6 +277,8 @@ chrome.runtime.onMessage.addListener((message) => {
     const { step, error, reason } = message;
     if (step === "done") {
       showDone();
+    } else if (step === "ai_error") {
+      showError(error || reason || "AI processing error. Please try again.", true);
     } else if (step === "error") {
       showError(error);
     } else if (step === "skipped") {

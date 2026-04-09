@@ -118,6 +118,8 @@ const PRICING = {
   openai: { input: 0.15, output: 0.6 },
 };
 
+const ADMIN_BIDDER_ID = "00000000-0000-0000-0000-000000000000";
+
 function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
   const rates = provider === "claude" ? PRICING.claude : PRICING.openai;
   return (inputTokens / 1_000_000) * rates.input + (outputTokens / 1_000_000) * rates.output;
@@ -205,29 +207,82 @@ function RegenerateModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [skipped, setSkipped] = useState(false);
-  const [mismatchWarning, setMismatchWarning] = useState<string | null>(null);
-  const [mismatchResult, setMismatchResult] = useState<{ resume_text: string; resume_filename: string } | null>(null);
+  const [statusResult, setStatusResult] = useState<{
+    is_matched: number;
+    match_reason: string;
+    resume_text: string;
+    resume_filename: string;
+  } | null>(null);
 
-  async function handleRegenerate() {
+  function getStatusMeta(isMatched: number) {
+    switch (isMatched) {
+      case 0:
+        return {
+          title: "Job may not match your profile",
+          description: "This regeneration completed with a mismatch warning. As an admin, you can still continue.",
+          tone: "amber" as const,
+          allowGoAnyway: true,
+          allowRetry: false,
+        };
+      case 2:
+        return {
+          title: "Job Not Qualified",
+          description: "This job appears to be hybrid, onsite, or otherwise outside the remote rules.",
+          tone: "amber" as const,
+          allowGoAnyway: true,
+          allowRetry: false,
+        };
+      case 3:
+        return {
+          title: "Not a Job Description",
+          description: "The stored content looks like a non-job page. As an admin, you can still force regeneration.",
+          tone: "amber" as const,
+          allowGoAnyway: true,
+          allowRetry: false,
+        };
+      case 6:
+        return {
+          title: "AI Processing Error",
+          description: "The model response could not be processed. Please try again.",
+          tone: "red" as const,
+          allowGoAnyway: false,
+          allowRetry: true,
+        };
+      default:
+        return {
+          title: "Status Review",
+          description: "Review the result before continuing.",
+          tone: "amber" as const,
+          allowGoAnyway: false,
+          allowRetry: false,
+        };
+    }
+  }
+
+  async function handleRegenerate(forceGenerate = false) {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await logsService.regenerate(log.id);
-      if (result.skipped || result.is_matched === 2) {
-        setSkipped(true);
+      const result = await logsService.regenerate(log.id, forceGenerate);
+      if (result.is_matched === 1) {
+        await downloadResumePDF(result.resume_text, result.resume_filename);
         setDone(true);
+        setStatusResult(null);
+        onSuccess();
         return;
       }
-      if (result.is_matched === 0) {
-        setMismatchWarning(result.match_reason || "This job may not match your profile.");
-        setMismatchResult({ resume_text: result.resume_text, resume_filename: result.resume_filename });
-        setIsLoading(false);
+
+      if (result.is_matched === 0 || result.is_matched === 2 || result.is_matched === 3 || result.is_matched === 6) {
+        setStatusResult({
+          is_matched: result.is_matched,
+          match_reason: result.match_reason || "No reason provided.",
+          resume_text: result.resume_text,
+          resume_filename: result.resume_filename,
+        });
         return;
       }
-      await downloadResumePDF(result.resume_text, result.resume_filename);
-      setDone(true);
-      onSuccess();
+
+      setError("Unexpected regeneration status returned.");
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Regeneration failed. Please try again.";
       setError(msg);
@@ -236,17 +291,36 @@ function RegenerateModal({
     }
   }
 
-  async function handleDownloadAnyway() {
-    if (!mismatchResult) return;
+  async function handleGoAnyway() {
+    if (!statusResult) return;
+
+    if (statusResult.is_matched === 0 && statusResult.resume_text) {
+      try {
+        await downloadResumePDF(statusResult.resume_text, statusResult.resume_filename);
+        setDone(true);
+        setStatusResult(null);
+        onSuccess();
+      } catch (e: unknown) {
+        const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Download failed.";
+        setError(msg);
+      }
+      return;
+    }
+
     try {
-      await downloadResumePDF(mismatchResult.resume_text, mismatchResult.resume_filename);
-      setDone(true);
-      onSuccess();
+      await handleRegenerate(true);
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Download failed.";
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Forced regeneration failed.";
       setError(msg);
     }
   }
+
+  async function handleTryAgain() {
+    setStatusResult(null);
+    await handleRegenerate(false);
+  }
+
+  const statusMeta = statusResult ? getStatusMeta(statusResult.is_matched) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -263,34 +337,16 @@ function RegenerateModal({
         <div className="px-6 py-5">
           {done ? (
             <div className="text-center py-4">
-              {skipped ? (
-                <>
-                  <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <span className="text-2xl">⚠️</span>
-                  </div>
-                  <p className="font-semibold text-gray-900">Job Not Qualified</p>
-                  <p className="text-sm text-gray-500 mt-1 leading-relaxed">
-                    This job appears to be <span className="font-medium text-amber-700">hybrid or onsite</span> and requires office visits.
-                    Only 100% remote jobs are supported — resume generation was skipped.
-                  </p>
-                  <button onClick={onClose} className="mt-5 px-6 py-2 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 transition-colors">
-                    OK, Got It
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <RefreshCw className="w-6 h-6 text-emerald-600" />
-                  </div>
-                  <p className="font-semibold text-gray-900">Resume regenerated &amp; downloaded!</p>
-                  <p className="text-sm text-gray-500 mt-1">The PDF has been saved to your downloads. A new log entry has been created and marked as regenerated.</p>
-                </>
-              )}
-              {!skipped && (
-                <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700">
-                  Close
-                </button>
-              )}
+              <>
+                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <RefreshCw className="w-6 h-6 text-emerald-600" />
+                </div>
+                <p className="font-semibold text-gray-900">Resume regenerated &amp; downloaded!</p>
+                <p className="text-sm text-gray-500 mt-1">The PDF has been saved to your downloads. A new log entry has been created and marked as regenerated.</p>
+              </>
+              <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700">
+                Close
+              </button>
             </div>
           ) : (
             <>
@@ -322,24 +378,33 @@ function RegenerateModal({
                   {error}
                 </div>
               )}
-              {mismatchWarning ? (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              {statusResult && statusMeta ? (
+                <div className={`rounded-lg p-4 border ${statusMeta.tone === "red" ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
                   <div className="flex items-start gap-2 mb-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${statusMeta.tone === "red" ? "text-red-600" : "text-amber-600"}`} />
                     <div>
-                      <p className="font-semibold text-amber-900 text-sm">Job may not match your profile</p>
-                      <p className="text-sm text-amber-700 mt-1">{mismatchWarning}</p>
+                      <p className={`font-semibold text-sm ${statusMeta.tone === "red" ? "text-red-900" : "text-amber-900"}`}>{statusMeta.title}</p>
+                      <p className={`text-sm mt-1 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusMeta.description}</p>
+                      <p className={`text-sm mt-2 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusResult.match_reason || "No reason provided."}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={onClose}
                       className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
-                      Cancel
+                      Close
                     </button>
-                    <button onClick={handleDownloadAnyway}
-                      className="flex-1 px-3 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 flex items-center justify-center gap-2">
-                      Download Anyway
-                    </button>
+                    {statusMeta.allowRetry && (
+                      <button onClick={handleTryAgain} disabled={isLoading}
+                        className="flex-1 px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                        {isLoading ? <><LoadingSpinner size="sm" />Retrying…</> : <>Try Again</>}
+                      </button>
+                    )}
+                    {statusMeta.allowGoAnyway && (
+                      <button onClick={handleGoAnyway} disabled={isLoading}
+                        className="flex-1 px-3 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                        {isLoading ? <><LoadingSpinner size="sm" />Processing…</> : <>Go Anyway</>}
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -662,19 +727,35 @@ export default function LogsPage() {
         const t = new Date(log.created_at).getTime();
         if (t < from || t > to) continue;
       }
+      const bidderId = (log.bidder_id ?? "").trim();
+      const isAdminBidder = bidderId === "" || bidderId === ADMIN_BIDDER_ID;
       result.push({
         ...log,
         profile_name: log.profile_name || profileMap.get(log.profile_id) || "",
-        bidder_name: log.bidder_name || bidderMap.get(log.bidder_id) || "",
+        bidder_name: log.bidder_name || (isAdminBidder ? "Admin" : bidderMap.get(bidderId) || ""),
       });
     }
     return result;
   }, [logsData?.items, dateFrom, dateTo, profiles, bidders]);
 
+  const bidderOptions = useMemo(() => {
+    const options = (bidders ?? []).map((b) => ({ value: b.id, label: b.full_name }));
+    const hasAdminRows = allRows.some((log) => {
+      const bidderId = (log.bidder_id ?? "").trim();
+      return bidderId === "" || bidderId === ADMIN_BIDDER_ID;
+    });
+    if (!hasAdminRows) return options;
+    return [{ value: ADMIN_BIDDER_ID, label: "Admin" }, ...options];
+  }, [bidders, allRows]);
+
   // ── Client-side filtering: bidder, profile, match status, type, search ──
   const filtered = useMemo(() => {
     return allRows.filter((log) => {
-      if (filters.bidder_id && filters.bidder_id.length > 0 && !filters.bidder_id.includes(log.bidder_id)) return false;
+      if (filters.bidder_id && filters.bidder_id.length > 0) {
+        const bidderId = (log.bidder_id ?? "").trim();
+        const normalizedBidderId = bidderId === "" ? ADMIN_BIDDER_ID : bidderId;
+        if (!filters.bidder_id.includes(normalizedBidderId)) return false;
+      }
       if (filters.profile_id && filters.profile_id.length > 0 && !filters.profile_id.includes(log.profile_id)) return false;
       if (filters.is_matched && filters.is_matched.length > 0 && !filters.is_matched.includes(String(log.is_matched) as any)) return false;
       if (filters.is_regenerated && filters.is_regenerated.length > 0 && !filters.is_regenerated.includes(String(log.is_regenerated) as any)) return false;
@@ -977,7 +1058,7 @@ export default function LogsPage() {
 
         <CheckboxDropdown
           label="Bidder"
-          options={(bidders ?? []).map((b) => ({ value: b.id, label: b.full_name }))}
+          options={bidderOptions}
           selected={filters.bidder_id ?? []}
           disabled={logsFetching}
           onChange={(next) => {
