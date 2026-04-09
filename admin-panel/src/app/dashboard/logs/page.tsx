@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { toZonedTime, format } from "date-fns-tz";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { logsService, LogsFilters, GenerationLog } from "@/services/logsService";
@@ -570,28 +571,38 @@ export default function LogsPage() {
     setStatsPeriod(period);
     
     // Resolve date range from period or URL params
+    const EST = "America/New_York";
+    function toESTDateString(date: string | Date, hour: number, minute: number): string {
+      const d = typeof date === "string" ? new Date(date) : date;
+      const est = toZonedTime(d, EST);
+      est.setHours(hour, minute, 0, 0);
+      return format(est, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: EST });
+    }
+
     if (period === "custom") {
       const lastWeek = getLastWeekRange();
-      setDateFrom(params.get("date_from") || lastWeek.from);
-      setDateTo(params.get("date_to") || lastWeek.to);
+      const from = params.get("date_from") || lastWeek.from;
+      const to = params.get("date_to") || lastWeek.to;
+      setDateFrom(toESTDateString(from, 0, 0));
+      setDateTo(toESTDateString(to, 23, 59));
     } else if (period === "today") {
-      setDateFrom(today);
-      setDateTo(today);
+      setDateFrom(toESTDateString(today, 0, 0));
+      setDateTo(toESTDateString(today, 23, 59));
     } else if (period === "week") {
       const now = new Date();
       const dayOfWeek = now.getDay();
       const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
       const weekStart = new Date(now);
       weekStart.setDate(now.getDate() + mondayOffset);
-      setDateFrom(weekStart.toISOString().split("T")[0]);
-      setDateTo(today);
+      setDateFrom(toESTDateString(weekStart, 0, 0));
+      setDateTo(toESTDateString(today, 23, 59));
     } else if (period === "month") {
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      setDateFrom(monthStart.toISOString().split("T")[0]);
-      setDateTo(today);
+      setDateFrom(toESTDateString(monthStart, 0, 0));
+      setDateTo(toESTDateString(today, 23, 59));
     } else if (period === "all") {
-      setDateFrom("2020-01-01");
-      setDateTo(today);
+      setDateFrom(toESTDateString("2020-01-01", 0, 0));
+      setDateTo(toESTDateString(today, 23, 59));
     }
     
     // Load client-side filters
@@ -718,8 +729,8 @@ export default function LogsPage() {
     if (bidders) for (const b of bidders) bidderMap.set(b.id, b.full_name);
 
     // Enrich + date filter in a single pass
-    const from = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : 0;
-    const to = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : Infinity;
+    const from = dateFrom ? new Date(dateFrom).getTime() : 0;
+    const to = dateTo ? new Date(dateTo).getTime() : Infinity;
 
     const result: GenerationLog[] = [];
     for (const log of items) {

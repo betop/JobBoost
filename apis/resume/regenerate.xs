@@ -413,8 +413,13 @@ query "resume/regenerate" verb=POST {
       
         var $clean_response {
           value = $response_text
+            |replace:"```json\r\n":""
             |replace:"```json\n":""
+            |replace:"```JSON\r\n":""
             |replace:"```JSON\n":""
+            |replace:"```json":""
+            |replace:"```JSON":""
+            |replace:"```\r\n":""
             |replace:"```\n":""
             |replace:"```":""
             |trim
@@ -444,8 +449,22 @@ query "resume/regenerate" verb=POST {
               }
             
               catch {
-                debug.log {
-                  value = "JSON parse failed after second attempt: " ~ $error
+                var $trimmed_response_2 {
+                  value = $trimmed_response|regex_replace:".$":""|trim
+                }
+
+                try_catch {
+                  try {
+                    var.update $parsed_response {
+                      value = $trimmed_response_2|json_decode
+                    }
+                  }
+
+                  catch {
+                    debug.log {
+                      value = "JSON parse failed after third attempt: " ~ $error
+                    }
+                  }
                 }
               }
             }
