@@ -159,10 +159,10 @@ export default function DashboardPage() {
               + Create New Profile
             </Link>
             <Link
-              href="/dashboard/bidders/new"
+              href="/dashboard/users/new"
               className="block px-4 py-2 text-sm text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
             >
-              + Add New Bidder
+              + Add New User
             </Link>
             <Link
               href="/dashboard/tokens"

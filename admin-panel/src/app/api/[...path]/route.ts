@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const XANO_BASES: Record<string, string> = {
   auth:             "https://x8ki-letl-twmt.n7.xano.io/api:Vbfe5lun:v1",
   profiles:         "https://x8ki-letl-twmt.n7.xano.io/api:YZl-BhQi:v1",
-  bidders:          "https://x8ki-letl-twmt.n7.xano.io/api:I8ZiQ9Me:v1",
+  users:            "https://x8ki-letl-twmt.n7.xano.io/api:I8ZiQ9Me:v1",
   rules:            "https://x8ki-letl-twmt.n7.xano.io/api:99AB050c:v1",
   tokens:           "https://x8ki-letl-twmt.n7.xano.io/api:KWCAt72v:v1",
   "access-control": "https://x8ki-letl-twmt.n7.xano.io/api:Ucs3etMr:v1",

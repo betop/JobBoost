@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { tokenService, type Token } from "@/services/tokenService";
-import { bidderService } from "@/services/bidderService";
+import { userService } from "@/services/userService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
@@ -43,8 +43,8 @@ export default function TokensPage() {
   });
 
   const { data: bidders = [] } = useQuery({
-    queryKey: ["bidders"],
-    queryFn: bidderService.getAll,
+    queryKey: ["users", "bidder"],
+    queryFn: () => userService.getAll("bidder"),
   });
 
   const { register, handleSubmit, reset } = useForm();

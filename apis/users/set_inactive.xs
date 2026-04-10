@@ -1,6 +1,6 @@
-// Deactivate a bidder (PATCH /bidders/:id/deactivate)
-query "bidders/{id}/deactivate" verb=PATCH {
-  api_group = "bidders"
+// Deactivate a user — sets is_active to false (PATCH /users/:id/deactivate)
+query "users/{id}/deactivate" verb=PATCH {
+  api_group = "users"
   auth = "users"
 
   input {
@@ -11,18 +11,18 @@ query "bidders/{id}/deactivate" verb=PATCH {
     db.get users {
       field_name = "id"
       field_value = $input.id
-    } as $b
+    } as $user
   
-    precondition ($b != null) {
+    precondition ($user != null) {
       error_type = "notfound"
-      error = "Bidder not found"
+      error = "User not found"
     }
   
     db.patch users {
       field_name = "id"
-      field_value = $b.id
+      field_value = $user.id
       data = {is_active: false, updated_at: now}
-    } as $updated_user
+    } as $updated
   }
 
   response = {success: true}

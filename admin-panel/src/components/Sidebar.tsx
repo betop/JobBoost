@@ -22,7 +22,7 @@ import { cn } from "@/utils/cn";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Profiles", href: "/dashboard/profiles", icon: Users },
-  { name: "Bidders", href: "/dashboard/bidders", icon: UserCheck },
+  { name: "Users", href: "/dashboard/users", icon: UserCheck },
   { name: "Keys", href: "/dashboard/tokens", icon: Key },
   { name: "Rules", href: "/dashboard/rules", icon: FileText },
   { name: "Extensions", href: "/dashboard/versions", icon: Package },

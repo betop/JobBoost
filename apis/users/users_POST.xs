@@ -1,11 +1,13 @@
-// Create a bidder — supports one or more profiles via profile_ids array
-query bidders verb=POST {
-  api_group = "bidders"
+// Create a user (bidder or admin) — supports one or more profiles via profile_ids array
+query users verb=POST {
+  api_group = "users"
   auth = "users"
 
   input {
     text full_name?
     email email? filters=trim|lower
+    text type?
+    text password?
     uuid[] profile_ids?
     bool is_active?
   }
@@ -19,6 +21,18 @@ query bidders verb=POST {
     precondition ($input.email != null) {
       error_type = "badrequest"
       error = "email is required"
+    }
+  
+    var $user_type {
+      value = $input.type
+    }
+  
+    conditional {
+      if ($user_type == null) {
+        var.update $user_type {
+          value = "bidder"
+        }
+      }
     }
   
     var $ids {
@@ -38,11 +52,23 @@ query bidders verb=POST {
         created_at : now
         full_name  : $input.full_name
         email      : $input.email
+        type       : $user_type
         profile_ids: $ids
         is_active  : $input.is_active
         updated_at : now
       }
     } as $b
+  
+    // If password provided (for admin users), hash and store it
+    conditional {
+      if ($input.password != null) {
+        db.patch users {
+          field_name = "id"
+          field_value = $b.id
+          data = {password_hash: $input.password}
+        } as $b
+      }
+    }
   
     // Resolve profile names
     var $profile_names {
@@ -71,6 +97,7 @@ query bidders verb=POST {
     id           : $b.id
     full_name    : $b.full_name
     email        : $b.email
+    type         : $b.type
     profile_ids  : $b.profile_ids
     profile_names: $profile_names
     is_active    : $b.is_active

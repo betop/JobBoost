@@ -1,6 +1,6 @@
-// Get bidder by id — returns profile_ids array and profile_names
-query "bidders/{id}" verb=GET {
-  api_group = "bidders"
+// Get user by id — returns profile_ids array and profile_names
+query "users/{id}" verb=GET {
+  api_group = "users"
   auth = "users"
 
   input {
@@ -15,7 +15,7 @@ query "bidders/{id}" verb=GET {
   
     precondition ($b != null) {
       error_type = "notfound"
-      error = "Bidder not found"
+      error = "User not found"
     }
   
     // Resolve profile names
@@ -45,6 +45,7 @@ query "bidders/{id}" verb=GET {
     id           : $b.id
     full_name    : $b.full_name
     email        : $b.email
+    type         : $b.type
     profile_ids  : $b.profile_ids
     profile_names: $profile_names
     is_active    : $b.is_active

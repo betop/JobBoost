@@ -8,7 +8,7 @@ import { logsService, LogsFilters, GenerationLog } from "@/services/logsService"
 import * as logCache from "@/services/logCache";
 import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
 import { downloadResumePDF } from "@/utils/pdfDownload";
-import { bidderService } from "@/services/bidderService";
+import { userService } from "@/services/userService";
 import { profileService } from "@/services/profileService";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import {
@@ -751,8 +751,8 @@ export default function LogsPage() {
   }, [dateFrom, dateTo]);
 
   const { data: bidders } = useQuery({
-    queryKey: ["bidders"],
-    queryFn: bidderService.getAll,
+    queryKey: ["users", "bidder"],
+    queryFn: () => userService.getAll("bidder"),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });

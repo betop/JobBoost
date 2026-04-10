@@ -1,12 +1,13 @@
-// Update bidder — supports one or more profiles via profile_ids array (v2)
-query "bidders/{id}" verb=PUT {
-  api_group = "bidders"
+// Update user — supports one or more profiles via profile_ids array
+query "users/{id}" verb=PUT {
+  api_group = "users"
   auth = "users"
 
   input {
     uuid id?
     text full_name?
     email email? filters=trim|lower
+    text type?
     uuid[] profile_ids?
     bool is_active?
   }
@@ -19,7 +20,7 @@ query "bidders/{id}" verb=PUT {
   
     precondition ($b != null) {
       error_type = "notfound"
-      error = "Bidder not found"
+      error = "User not found"
     }
   
     var $payload {
@@ -38,6 +39,14 @@ query "bidders/{id}" verb=PUT {
       if ($input.email != null) {
         var.update $payload.email {
           value = $input.email
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.type != null) {
+        var.update $payload.type {
+          value = $input.type
         }
       }
     }
@@ -68,6 +77,7 @@ query "bidders/{id}" verb=PUT {
       data = $payload
     } as $b
   
+    // Resolve profile names
     var $profile_names {
       value = []
     }
@@ -94,6 +104,7 @@ query "bidders/{id}" verb=PUT {
     id           : $b.id
     full_name    : $b.full_name
     email        : $b.email
+    type         : $b.type
     profile_ids  : $b.profile_ids
     profile_names: $profile_names
     is_active    : $b.is_active

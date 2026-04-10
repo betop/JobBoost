@@ -1,6 +1,6 @@
-// Delete bidder (also removes associated tokens)
-query "bidders/{id}" verb=DELETE {
-  api_group = "bidders"
+// Delete user (also removes associated tokens)
+query "users/{id}" verb=DELETE {
+  api_group = "users"
   auth = "users"
 
   input {
@@ -15,15 +15,16 @@ query "bidders/{id}" verb=DELETE {
   
     precondition ($b != null) {
       error_type = "notfound"
-      error = "Bidder not found"
+      error = "User not found"
     }
   
+    // Delete associated tokens
     db.query access_token {
-      where = $db.access_token.bidder_id == $b.id
+      where = $db.access_token.bidder_id == $input.id
       return = {type: "list"}
-    } as $token_list
+    } as $tokens
   
-    foreach ($token_list) {
+    foreach ($tokens) {
       each as $t {
         db.del access_token {
           field_name = "id"
@@ -34,7 +35,7 @@ query "bidders/{id}" verb=DELETE {
   
     db.del users {
       field_name = "id"
-      field_value = $b.id
+      field_value = $input.id
     }
   }
 
