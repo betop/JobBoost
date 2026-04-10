@@ -29,9 +29,9 @@ api.interceptors.response.use(
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin-auth");
       // Only redirect if not already on login page
-      // if (!window.location.pathname.includes("/login")) {
-      //   window.location.href = "/login";
-      // }
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

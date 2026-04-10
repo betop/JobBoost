@@ -66,8 +66,8 @@ export default function DashboardLayout({
   // Handle unauthenticated state
   useEffect(() => {
     if (authStatus === "unauthenticated") {
-      // logout();
-      // router.push("/login");
+      logout();
+      router.push("/login");
     }
   }, [authStatus, logout, router]);
 

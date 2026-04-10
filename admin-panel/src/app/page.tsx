@@ -25,7 +25,7 @@ export default function Home() {
     if (token && isAuthenticated) {
       window.location.href = "/dashboard";
     } else {
-      // window.location.href = "/login";
+      window.location.href = "/login";
     }
     setChecked(true);
   }, []);
