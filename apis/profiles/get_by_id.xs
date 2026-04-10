@@ -1,7 +1,7 @@
 // Get profile by id (includes education + work)
 query "profiles/{id}" verb=GET {
   api_group = "profiles"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

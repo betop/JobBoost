@@ -1,14 +1,14 @@
 // Delete bidder (also removes associated tokens)
 query "bidders/{id}" verb=DELETE {
   api_group = "bidders"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?
   }
 
   stack {
-    db.get bidder {
+    db.get users {
       field_name = "id"
       field_value = $input.id
     } as $b
@@ -32,7 +32,7 @@ query "bidders/{id}" verb=DELETE {
       }
     }
   
-    db.del bidder {
+    db.del users {
       field_name = "id"
       field_value = $b.id
     }

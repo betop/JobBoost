@@ -1,7 +1,7 @@
 // Update bidder — supports one or more profiles via profile_ids array (v2)
 query "bidders/{id}" verb=PUT {
   api_group = "bidders"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?
@@ -12,7 +12,7 @@ query "bidders/{id}" verb=PUT {
   }
 
   stack {
-    db.get bidder {
+    db.get users {
       field_name = "id"
       field_value = $input.id
     } as $b
@@ -62,7 +62,7 @@ query "bidders/{id}" verb=PUT {
       value = now
     }
   
-    db.patch bidder {
+    db.patch users {
       field_name = "id"
       field_value = $b.id
       data = $payload

@@ -1,7 +1,7 @@
 // List all rules
 query rules verb=GET {
   api_group = "rules"
-  auth = "admin"
+  auth = "users"
 
   input {
   }

@@ -29,7 +29,7 @@ query "public/validate-token" verb=POST {
     }
   
     // Get the bidder
-    db.get bidder {
+    db.get users {
       field_name = "id"
       field_value = $access.bidder_id
     } as $bid
@@ -44,11 +44,17 @@ query "public/validate-token" verb=POST {
       error = "Bidder account is inactive"
     }
   
+    // Check if user is super_admin (has access to all profiles)
+    var $is_super_admin {
+      value = ($bid.type == "super_admin")
+    }
+  
+    // For non-super_admin users, check if they have assigned profiles
     var $profile_count {
       value = $bid.profile_ids|count
     }
   
-    precondition ($profile_count > 0) {
+    precondition ($is_super_admin || $profile_count > 0) {
       error_type = "notfound"
       error = "No profiles assigned to this bidder"
     }
@@ -62,21 +68,57 @@ query "public/validate-token" verb=POST {
       value = []
     }
   
-    foreach ($bid.profile_ids) {
-      each as $pid {
-        db.get profile {
-          field_name = "id"
-          field_value = $pid
-        } as $prof
+    var $final_profile_ids {
+      value = []
+    }
+  
+    // For super_admin, load ALL profiles; otherwise use assigned profile_ids
+    conditional {
+      if ($is_super_admin) {
+        db.query profile {
+          sort = {profile.created_at: "desc"}
+          return = {type: "list"}
+        } as $all_profiles
       
-        conditional {
-          if ($prof != null) {
+        foreach ($all_profiles) {
+          each as $prof {
+            var.update $final_profile_ids {
+              value = $final_profile_ids|push:$prof.id
+            }
+          
             var.update $profile_names {
               value = $profile_names|push:$prof.full_name
             }
           
             var.update $resume_templates {
               value = $resume_templates|push:$prof.resume_template
+            }
+          }
+        }
+      }
+    
+      else {
+        var.update $final_profile_ids {
+          value = $bid.profile_ids
+        }
+      
+        foreach ($bid.profile_ids) {
+          each as $pid {
+            db.get profile {
+              field_name = "id"
+              field_value = $pid
+            } as $prof
+          
+            conditional {
+              if ($prof != null) {
+                var.update $profile_names {
+                  value = $profile_names|push:$prof.full_name
+                }
+              
+                var.update $resume_templates {
+                  value = $resume_templates|push:$prof.resume_template
+                }
+              }
             }
           }
         }
@@ -88,12 +130,18 @@ query "public/validate-token" verb=POST {
       field_name = "id"
       field_value = $access.id
       data = {is_used: true}
+    } as $updated_access
+  
+    // Determine if user is admin based on user type
+    var $is_admin {
+      value = ($bid.type == "admin" || $bid.type == "super_admin")
     }
   }
 
   response = {
-    profile_ids     : $bid.profile_ids
+    profile_ids     : $final_profile_ids
     profile_names   : $profile_names
     resume_templates: $resume_templates
+    is_admin        : $is_admin
   }
 }

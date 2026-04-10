@@ -2,7 +2,7 @@
 // Mirrors the main generate flow, but remains admin-only.
 query "resume/regenerate" verb=POST {
   api_group = "resume"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid log_id?
@@ -13,6 +13,17 @@ query "resume/regenerate" verb=POST {
     precondition ($input.log_id != null) {
       error_type = "badrequest"
       error = "log_id is required"
+    }
+  
+    // Verify the authenticated user is an admin
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $auth_user
+  
+    precondition ($auth_user != null && ($auth_user.type == "admin" || $auth_user.type == "super_admin")) {
+      error_type = "accessdenied"
+      error = "Only admin users can regenerate resumes"
     }
   
     db.get generation_log {
@@ -212,24 +223,20 @@ query "resume/regenerate" verb=POST {
         )
     }
   
+    // Skip schema - no resume/cover_letter needed, just status and reason
     var $skip_schema {
       value = {}
         |set:"status":"skip"
         |set:"reason":"<reason>"
-        |set:"resume":""
-        |set:"cover_letter":""
-        |set:"position_title":""
-        |set:"company_name":""
+        |set:"position_title":"<title if identifiable>"
+        |set:"company_name":"<company if identifiable>"
     }
   
+    // Not JD schema - no resume/cover_letter needed
     var $not_jd_schema {
       value = {}
         |set:"status":"not_job_description"
         |set:"reason":"<explain why this is not a job description>"
-        |set:"resume":""
-        |set:"cover_letter":""
-        |set:"position_title":""
-        |set:"company_name":""
     }
   
     var $match_schema {
@@ -242,19 +249,18 @@ query "resume/regenerate" verb=POST {
         |set:"company_name":"<company>"
     }
   
+    // Mismatch schema - no resume/cover_letter needed, just status and reason
     var $mismatch_schema {
       value = {}
         |set:"status":"mismatch"
         |set:"reason":"<explain why domain does not align>"
-        |set:"resume":$resume_schema
-        |set:"cover_letter":"<full tailored cover letter as HTML>"
         |set:"position_title":"<title>"
         |set:"company_name":"<company>"
     }
   
     // Build user prompt with candidate profile and job description
     var $user_prompt {
-      value = "STEP 0 - CONTENT VALIDATION:\n\nFirst, check if the provided text is actually a job description/job posting. If the text is NOT a real job description (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps.\n\nSTEP 1 - REMOTE CHECK:\n\nIf job description doesn't provide 100% remote position and only requires either relocation, hybrid, onsite, in-office, or at least 1 day office visit, return status=skip. And if job requires Security Clearance or Public trust, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match.\nOtherwise: return status=mismatch. If job description requires Staff level Engineer or higher level Engineer than current role in the profile, return status=mismatch. \n\nFor match and mismatch: Generate full tailored resume and cover letter.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($original_log.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION: " ~ ($not_jd_schema|json_encode) ~ "\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+      value = "STEP 0 - CONTENT VALIDATION:\n\nFirst, check if the provided text is actually a job description/job posting. If the text is NOT a real job description (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps.\n\nSTEP 1 - REMOTE CHECK:\n\nIf job description doesn't provide 100% remote position and only requires either relocation, hybrid, onsite, in-office, or at least 1 day office visit, return status=skip. And if job requires Security Clearance or Public trust, return status=skip. Do NOT generate resume or cover letter.\n\nSTEP 2 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match and generate full tailored resume and cover letter.\nOtherwise: return status=mismatch with reason only (NO resume or cover letter). If job description requires Staff level Engineer or higher level Engineer than current role in the profile, return status=mismatch.\n\nIMPORTANT: ONLY status=match generates resume and cover letter. All other statuses return status and reason only.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($original_log.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION: " ~ ($not_jd_schema|json_encode) ~ "\n\nSKIP: " ~ ($skip_schema|json_encode) ~ "\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nMISMATCH: " ~ ($mismatch_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
     }
   
     conditional {
@@ -308,6 +314,11 @@ query "resume/regenerate" verb=POST {
   
     var $response_text {
       value = ""
+    }
+  
+    // Initialize content_record as null - will be set when AI call is made
+    var $content_record {
+      value = null
     }
   
     var $resume_filename {
@@ -365,18 +376,10 @@ query "resume/regenerate" verb=POST {
           value = $ai_resp.response.result.content|first|get:"text"
         }
       
-        db.add debug_ai_response {
-          data = {
-            profile_id             : $original_log.profile_id
-            bidder_id              : $admin_bidder_id
-            ai_provider            : "claude"
-            input_tokens           : $input_tokens
-            output_tokens          : $output_tokens
-            raw_response           : $response_text
-            job_url                : $original_log.job_url
-            job_description_snippet: $original_log.job_description|substr:0:300
-          }
-        } as $debug_log
+        // Save resume/cover letter content for reference
+        db.add resume_content {
+          data = {raw_response: $response_text}
+        } as $content_record
       
         var.update $input_tokens {
           value = `($ai_resp.response.result.usage|get:"input_tokens") + 0`
@@ -404,6 +407,7 @@ query "resume/regenerate" verb=POST {
             original_log_id        : $original_log_id
             is_matched             : 6
             match_reason           : "AI response received, pending processing"
+            content_id             : $content_record.id
           }
         } as $pre_decode_log
       
@@ -413,13 +417,8 @@ query "resume/regenerate" verb=POST {
       
         var $clean_response {
           value = $response_text
-            |replace:"```json\r\n":""
             |replace:"```json\n":""
-            |replace:"```JSON\r\n":""
             |replace:"```JSON\n":""
-            |replace:"```json":""
-            |replace:"```JSON":""
-            |replace:"```\r\n":""
             |replace:"```\n":""
             |replace:"```":""
             |trim
@@ -449,22 +448,8 @@ query "resume/regenerate" verb=POST {
               }
             
               catch {
-                var $trimmed_response_2 {
-                  value = $trimmed_response|regex_replace:".$":""|trim
-                }
-
-                try_catch {
-                  try {
-                    var.update $parsed_response {
-                      value = $trimmed_response_2|json_decode
-                    }
-                  }
-
-                  catch {
-                    debug.log {
-                      value = "JSON parse failed after third attempt: " ~ $error
-                    }
-                  }
+                debug.log {
+                  value = "JSON parse failed after second attempt: " ~ $error
                 }
               }
             }
@@ -504,6 +489,23 @@ query "resume/regenerate" verb=POST {
             var.update $match_reason {
               value = $parsed_response.reason
             }
+          
+            // Capture position/company if available from skip response
+            conditional {
+              if ($parsed_response.position_title != null) {
+                var.update $position_title {
+                  value = $parsed_response.position_title
+                }
+              }
+            }
+          
+            conditional {
+              if ($parsed_response.company_name != null) {
+                var.update $company_name {
+                  value = $parsed_response.company_name
+                }
+              }
+            }
           }
         }
       
@@ -517,14 +519,7 @@ query "resume/regenerate" verb=POST {
               value = $parsed_response.reason
             }
           
-            var.update $resume_text {
-              value = $parsed_response.resume
-            }
-          
-            var.update $cover_letter_text {
-              value = $parsed_response.cover_letter
-            }
-          
+            // No resume/cover_letter for mismatch - just capture position/company
             var.update $position_title {
               value = $parsed_response.position_title
             }
@@ -599,6 +594,7 @@ query "resume/regenerate" verb=POST {
             original_log_id        : $original_log_id
             is_matched             : $is_matched
             match_reason           : $match_reason
+            content_id             : $content_record.id
           }
         } as $final_log
       

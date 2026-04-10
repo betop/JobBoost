@@ -1,7 +1,7 @@
 // List profiles
 query profiles verb=GET {
   api_group = "profiles"
-  auth = "admin"
+  auth = "users"
 
   input {
   }

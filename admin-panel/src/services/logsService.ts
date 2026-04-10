@@ -1,19 +1,39 @@
 import api from "./api";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 type LogsPeriod = "today" | "week" | "month" | "custom";
 
-function toStartOfDayISO(dateString: string): string {
-  return new Date(`${dateString}T00:00:00`).toISOString();
+const EST = "America/New_York";
+
+/**
+ * Returns an ISO string representing 00:00:00 EST on the given YYYY-MM-DD date.
+ */
+function toStartOfDayEST(dateString: string): string {
+  return fromZonedTime(`${dateString}T00:00:00`, EST).toISOString();
 }
 
-function toEndOfDayISO(dateString: string): string {
-  return new Date(`${dateString}T23:59:59.999`).toISOString();
+/**
+ * Returns an ISO string representing 23:59:59.999 EST on the given YYYY-MM-DD date.
+ */
+function toEndOfDayEST(dateString: string): string {
+  return fromZonedTime(`${dateString}T23:59:59.999`, EST).toISOString();
 }
 
-function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
+/** Returns today's date as YYYY-MM-DD in EST. */
+function todayEST(): string {
+  const est = toZonedTime(new Date(), EST);
+  const year = est.getFullYear();
+  const month = `${est.getMonth() + 1}`.padStart(2, "0");
+  const day = `${est.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Returns YYYY-MM-DD in EST for the given Date object. */
+function formatESTDate(date: Date): string {
+  const est = toZonedTime(date, EST);
+  const year = est.getFullYear();
+  const month = `${est.getMonth() + 1}`.padStart(2, "0");
+  const day = `${est.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -22,23 +42,28 @@ function getDateRangeForPeriod(period?: LogsPeriod): { dateFrom?: string; dateTo
     return {};
   }
 
-  const now = new Date();
-  const today = formatLocalDate(now);
+  const today = todayEST();
+  const nowEST = toZonedTime(new Date(), EST);
 
   if (period === "today") {
     return { dateFrom: today, dateTo: today };
   }
 
   if (period === "week") {
-    const dayOfWeek = now.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() + mondayOffset);
-    return { dateFrom: formatLocalDate(weekStart), dateTo: today };
+    // Week = Sunday 00:00 EST – Saturday 23:59 EST
+    const dayOfWeek = nowEST.getDay(); // 0=Sun
+    const weekStart = new Date(nowEST);
+    weekStart.setDate(nowEST.getDate() - dayOfWeek); // back to Sunday
+    return { dateFrom: formatESTDate(weekStart), dateTo: today };
   }
 
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { dateFrom: formatLocalDate(monthStart), dateTo: today };
+  if (period === "month") {
+    // Month = 1st of current month 00:00 EST – today 23:59 EST
+    const monthStart = new Date(nowEST.getFullYear(), nowEST.getMonth(), 1);
+    return { dateFrom: formatESTDate(monthStart), dateTo: today };
+  }
+
+  return {};
 }
 
 export interface GenerationLog {
@@ -67,6 +92,11 @@ export interface GenerationLog {
 
 export interface LogsListResponse {
   items: GenerationLog[];
+  total_count: number;
+  cur_page: number;
+  next_page: number | null;
+  prev_page: number | null;
+  per_page: number;
 }
 
 export interface LogsStatsResponse {
@@ -112,18 +142,18 @@ export interface RegenerateResponse {
 }
 
 export const logsService = {
-  /** Fetch logs for a date range only — no bidder/profile/status filtering (done client-side) */
+  /** Fetch logs for a date range — no bidder/profile/status filtering (done client-side) */
   list: async (filters: LogsFilters = {}): Promise<LogsListResponse> => {
     const params = new URLSearchParams();
     const periodRange = getDateRangeForPeriod(filters.period);
     const effectiveDateFrom = filters.date_from ?? periodRange.dateFrom;
     const effectiveDateTo = filters.date_to ?? periodRange.dateTo;
 
-    if (effectiveDateFrom) params.set("date_from", toStartOfDayISO(effectiveDateFrom));
-    if (effectiveDateTo) params.set("date_to", toEndOfDayISO(effectiveDateTo));
-    if (!effectiveDateFrom && !effectiveDateTo && filters.period && filters.period !== "custom") {
-      params.set("period", filters.period);
-    }
+    if (effectiveDateFrom) params.set("date_from", toStartOfDayEST(effectiveDateFrom));
+    if (effectiveDateTo) params.set("date_to", toEndOfDayEST(effectiveDateTo));
+    // Always use large per_page to avoid Xano's default cap cutting results
+    params.set("per_page", "5000");
+    params.set("page", "1");
     const response = await api.get(`/logs/list?${params.toString()}`);
     return response.data;
   },
@@ -142,8 +172,8 @@ export const logsService = {
 
     if (profile_id) params.set("profile_id", profile_id);
     if (bidder_id) params.set("bidder_id", bidder_id);
-    if (effectiveDateFrom) params.set("date_from", toStartOfDayISO(effectiveDateFrom));
-    if (effectiveDateTo) params.set("date_to", toEndOfDayISO(effectiveDateTo));
+    if (effectiveDateFrom) params.set("date_from", toStartOfDayEST(effectiveDateFrom));
+    if (effectiveDateTo) params.set("date_to", toEndOfDayEST(effectiveDateTo));
     const response = await api.get(`/logs/stats?${params.toString()}`);
     return response.data;
   },

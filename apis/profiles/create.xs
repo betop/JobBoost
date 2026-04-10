@@ -1,7 +1,7 @@
 // Create profile with nested education + work
 query profiles verb=POST {
   api_group = "profiles"
-  auth = "admin"
+  auth = "users"
 
   input {
     text full_name?

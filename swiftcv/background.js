@@ -567,7 +567,9 @@ async function generateResume(jobDescription, jobUrl = "") {
       return;
     }
 
-    // If company+title match found in previous applications (is_matched === 5), block apply
+    // If company+title match found in previous applications (is_matched === 5)
+    // - non-admin: block apply
+    // - admin: allow explicit override confirmation
     if (data.is_matched === 5) {
       const appliedDate = data.applied_date
         ? new Date(data.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
@@ -575,6 +577,15 @@ async function generateResume(jobDescription, jobUrl = "") {
       const detail = (data.match_reason || "Same company and position found in previous application")
         + (appliedDate ? " (applied on " + appliedDate + ")" : "");
       console.log("[BG] Repost detected:", detail);
+      
+      if (isAdmin) {
+        sendProgress("admin_override", detail, "reposted");
+        const confirmed = await waitForAdminDecision();
+        if (confirmed) {
+          await retryWithForce(jobDescription, jobUrl);
+          return;
+        }
+      }
       sendProgress("reposted_blocked", undefined, detail);
       return;
     }
@@ -613,22 +624,10 @@ async function generateResume(jobDescription, jobUrl = "") {
         return;
       }
 
-      // User confirmed — update the log status to "applied"
-      try {
-        await fetch(`${XANO_RESUME_URL}/resume/confirm_log`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            log_id: data.log_id,
-            token: extensionState.token,
-          }),
-        });
-      } catch (e) {
-        console.warn("[BG] Failed to confirm mismatch status:", e);
-      }
-
-      wasMismatched = true;
-      sendProgress("ai");
+      // User confirmed — call API again with force_generate to actually generate resume
+      console.log("[BG] Admin confirmed mismatch override, calling retryWithForce");
+      await retryWithForce(jobDescription, jobUrl);
+      return;
     }
 
     // resume_text is now a JSON object from the new schema (or a string for legacy)

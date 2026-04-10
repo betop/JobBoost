@@ -1,7 +1,7 @@
 // Create a rule
 query rules verb=POST {
   api_group = "rules"
-  auth = "admin"
+  auth = "users"
 
   input {
     text sentence?

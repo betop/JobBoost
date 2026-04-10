@@ -1,8 +1,10 @@
 // List generation logs — lightweight version
 // Returns raw logs without enrichment (name lookups done client-side)
+// NOTE: Frontend always sends explicit date_from/date_to in EST.
+//       The period fallback below is kept only as a safety net.
 query "logs/list" verb=GET {
   api_group = "logs"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid profile_id?
@@ -11,10 +13,13 @@ query "logs/list" verb=GET {
     timestamp date_to?
     text period?
     int is_matched?
+    int page?=1
+    int per_page?=100
   }
 
   stack {
-    // Calculate date_from based on period if date_from not explicitly provided
+    // Use explicit date_from/date_to from frontend (always EST-aligned)
+    // Period fallback: only triggers when frontend doesn't send dates
     var $resolved_from {
       value = $input.date_from
     }
@@ -24,33 +29,12 @@ query "logs/list" verb=GET {
     }
   
     conditional {
-      if ($input.period == "week" && $input.date_from == null) {
-        var $neg_week {
-          value = 0 - 604800
-        }
-      
+      if ($input.period == "today" && $input.date_from == null) {
+        // Start of current calendar day in server-local time (UTC)
+        // Frontend should always send the correct EST timestamps instead
         var.update $resolved_from {
-          value = now|add_secs_to_timestamp:$neg_week
-        }
-      }
-    
-      elseif ($input.period == "month" && $input.date_from == null) {
-        var $neg_month {
-          value = 0 - 2592000
-        }
-      
-        var.update $resolved_from {
-          value = now|add_secs_to_timestamp:$neg_month
-        }
-      }
-    
-      elseif ($input.period == "today" && $input.date_from == null) {
-        var $neg_day {
-          value = 0 - 86400
-        }
-      
-        var.update $resolved_from {
-          value = now|add_secs_to_timestamp:$neg_day
+          value = now
+            |transform_timestamp:"today midnight"
         }
       }
     }
@@ -63,13 +47,23 @@ query "logs/list" verb=GET {
       value = $resolved_to != null
     }
   
-    // Fetch logs — date range only in WHERE
+    // Fetch logs with pagination
     db.query generation_log {
       where = (($has_from == false || $db.generation_log.created_at >= $resolved_from) && ($has_to == false || $db.generation_log.created_at <= $resolved_to))
       sort = {generation_log.created_at: "desc"}
-      return = {type: "list"}
+      return = {
+        type  : "list"
+        paging: {page: $input.page, per_page: $input.per_page}
+      }
     } as $logs
   }
 
-  response = {items: $logs}
+  response = {
+    items      : $logs.items
+    total_count: $logs.itemsReceived
+    cur_page   : $logs.curPage
+    next_page  : $logs.nextPage
+    prev_page  : $logs.prevPage
+    per_page   : $logs.perPage
+  }
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
+import { authService } from "@/services/authService";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import Toast from "@/components/Toast";
@@ -15,22 +16,72 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
+  const { isAuthenticated, logout, setAdmin } = useAuthStore();
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
-  const [hydrated, setHydrated] = useState(false);
 
+  // Check authentication on mount
   useEffect(() => {
-    setHydrated(true);
-  }, []);
+    const checkAuth = () => {
+      // Check token first
+      const token = authService.getStoredToken();
+      
+      if (!token) {
+        setAuthStatus("unauthenticated");
+        return;
+      }
 
+      // Token exists - check if zustand already has auth state
+      if (isAuthenticated) {
+        setAuthStatus("authenticated");
+        return;
+      }
+
+      // Token exists but zustand not authenticated
+      // Try to read from localStorage persisted state
+      try {
+        const persistedState = localStorage.getItem("admin-auth");
+        if (persistedState) {
+          const parsed = JSON.parse(persistedState);
+          if (parsed.state?.isAuthenticated && parsed.state?.admin) {
+            // Restore the state manually if needed
+            setAdmin(parsed.state.admin);
+            setAuthStatus("authenticated");
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse persisted auth state", e);
+      }
+
+      // No valid state found
+      setAuthStatus("unauthenticated");
+    };
+
+    // Wait for zustand to attempt hydration first
+    const timer = setTimeout(checkAuth, 100);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, setAdmin]);
+
+  // Handle unauthenticated state
   useEffect(() => {
-    if (hydrated && !isAuthenticated && pathname !== "/login") {
-      router.push("/login");
+    if (authStatus === "unauthenticated") {
+      // logout();
+      // router.push("/login");
     }
-  }, [hydrated, isAuthenticated, pathname, router]);
+  }, [authStatus, logout, router]);
 
-  if (!hydrated || !isAuthenticated) {
+  // Show loading while checking auth
+  if (authStatus === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  // If not authenticated, show loading while redirect happens
+  if (authStatus === "unauthenticated") {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>

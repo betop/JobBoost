@@ -1,7 +1,7 @@
 // Update profile (optional nested replace)
 query "profiles/{id}" verb=PUT {
   api_group = "profiles"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

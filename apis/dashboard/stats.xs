@@ -1,7 +1,7 @@
 // Dashboard stats
 query "dashboard/stats" verb=GET {
   api_group = "dashboard"
-  auth = "admin"
+  auth = "users"
 
   input {
   }
@@ -11,7 +11,7 @@ query "dashboard/stats" verb=GET {
       return = {type: "count"}
     } as $total_profiles
   
-    db.query bidder {
+    db.query users {
       return = {type: "count"}
     } as $total_bidders
   

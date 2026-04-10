@@ -1,7 +1,7 @@
 // Update a rule
 query "rules/{id}" verb=PUT {
   api_group = "rules"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

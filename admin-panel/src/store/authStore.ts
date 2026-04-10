@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 interface Admin {
   id: string;
@@ -27,6 +27,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "admin-auth",
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );

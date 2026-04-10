@@ -6,7 +6,7 @@
 // Returns: {id, extension_name, version, release_date, is_current}
 query "extensions/versions" verb=POST {
   api_group = "extension_mgmt"
-  auth = "admin"
+  auth = "users"
 
   input {
     text extension_name? filters=trim|lower

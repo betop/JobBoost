@@ -1,7 +1,7 @@
 // List all access control records (enriched from access_token)
 query "access-control" verb=GET {
   api_group = "access-control"
-  auth = "admin"
+  auth = "users"
 
   input {
   }
@@ -36,7 +36,7 @@ query "access-control" verb=GET {
       
         conditional {
           if ($t.bidder_id != null) {
-            db.get bidder {
+            db.get users {
               field_name = "id"
               field_value = $t.bidder_id
             } as $bid
@@ -74,7 +74,7 @@ query "access-control" verb=GET {
       
         conditional {
           if ($t.created_by_admin_id != null) {
-            db.get admin {
+            db.get "" {
               field_name = "id"
               field_value = $t.created_by_admin_id
             } as $adm

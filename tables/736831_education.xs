@@ -3,7 +3,10 @@ table education {
 
   schema {
     uuid id
-    timestamp created_at?=now
+    timestamp created_at?=now {
+      visibility = "private"
+    }
+  
     uuid profile_id? {
       table = "profile"
     }

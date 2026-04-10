@@ -1,7 +1,7 @@
 // Delete profile (only if not linked to bidder)
 query "profiles/{id}" verb=DELETE {
   api_group = "profiles"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?
@@ -18,8 +18,8 @@ query "profiles/{id}" verb=DELETE {
       error = "Profile not found"
     }
   
-    db.query bidder {
-      where = $db.bidder.profile_id == $p.id
+    db.query users {
+      where = $db.users.profile_id == $p.id
       return = {type: "count"}
     } as $bidder_count
   

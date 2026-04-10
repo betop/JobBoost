@@ -1,7 +1,7 @@
 // Get rule by id
 query "rules/{id}" verb=GET {
   api_group = "rules"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

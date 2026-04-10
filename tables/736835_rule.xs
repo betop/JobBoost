@@ -3,12 +3,15 @@ table rule {
 
   schema {
     uuid id
-    timestamp created_at?=now
+    timestamp created_at?=now {
+      visibility = "private"
+    }
+  
     text sentence?
     text target_section?
     bool is_active?
     uuid created_by_admin_id? {
-      table = "admin"
+      table = "users"
     }
   
     timestamp updated_at?

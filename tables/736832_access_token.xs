@@ -6,18 +6,17 @@ table access_token {
     timestamp created_at?=now
     text token?
     uuid bidder_id? {
-      table = "bidder"
+      table = "users"
     }
   
     uuid created_by_admin_id? {
-      table = "admin"
+      table = "users"
     }
   
     timestamp issued_at?=now
     timestamp expires_at?
     bool is_used?
     bool is_active?=true
-    bool is_admin?
     text token_hash?
   }
 

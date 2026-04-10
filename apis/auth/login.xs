@@ -1,4 +1,4 @@
-// Admin login
+// Admin login (users table)
 query "auth/login" verb=POST {
   api_group = "auth"
 
@@ -8,19 +8,31 @@ query "auth/login" verb=POST {
   }
 
   stack {
-    db.get admin {
+    db.get users {
       field_name = "email"
       field_value = $input.email
-    } as $admin
+    } as $user
   
-    precondition ($admin != null) {
+    precondition ($user != null) {
       error_type = "accessdenied"
       error = "Invalid email or password"
     }
   
+    precondition ($user.type == "admin" || $user.type == "super_admin") {
+      error_type = "accessdenied"
+      error = "Invalid email or password"
+    }
+  
+    // Admin users require approval from super_admin before they can login
+    // super_admin users bypass this check
+    precondition ($user.type == "super_admin" || $user.is_approved) {
+      error_type = "accessdenied"
+      error = "Your account is pending approval"
+    }
+  
     security.check_password {
       text_password = $input.password
-      hash_password = $admin.password_hash
+      hash_password = $user.password_hash
     } as $pass_ok
   
     precondition ($pass_ok) {
@@ -29,10 +41,10 @@ query "auth/login" verb=POST {
     }
   
     security.create_auth_token {
-      table = "admin"
+      table = "users"
       extras = {}
       expiration = 86400
-      id = $admin.id
+      id = $user.id
     } as $authToken
   }
 
@@ -40,9 +52,9 @@ query "auth/login" verb=POST {
     token: $authToken
     admin: ```
       {
-        id: $admin.id
-        email: $admin.email
-        name: $admin.name
+        id: $user.id
+        email: $user.email
+        name: $user.full_name
       }
       ```
   }

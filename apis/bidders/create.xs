@@ -1,7 +1,7 @@
 // Create a bidder — supports one or more profiles via profile_ids array
 query bidders verb=POST {
   api_group = "bidders"
-  auth = "admin"
+  auth = "users"
 
   input {
     text full_name?
@@ -33,7 +33,7 @@ query bidders verb=POST {
       }
     }
   
-    db.add bidder {
+    db.add users {
       data = {
         created_at : now
         full_name  : $input.full_name

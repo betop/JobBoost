@@ -1,7 +1,7 @@
 // Update expiration date on an access token
 query "access-control/{id}/expiration" verb=PATCH {
   api_group = "access-control"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

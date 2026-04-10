@@ -528,13 +528,57 @@ function getLastWeekRange(): { from: string; to: string } {
   return { from: fmt(lastMon), to: fmt(lastSun) };
 }
 
+// ── EST date helpers (used throughout LogsPage) ──
+const EST_TZ = "America/New_York";
+
+function todayInEST(): string {
+  const est = toZonedTime(new Date(), EST_TZ);
+  return `${est.getFullYear()}-${String(est.getMonth() + 1).padStart(2, "0")}-${String(est.getDate()).padStart(2, "0")}`;
+}
+
+function formatESTLocalDate(date: Date): string {
+  const est = toZonedTime(date, EST_TZ);
+  return `${est.getFullYear()}-${String(est.getMonth() + 1).padStart(2, "0")}-${String(est.getDate()).padStart(2, "0")}`;
+}
+
+/** Returns the YYYY-MM-DD range for each period, all in EST. */
+function getESTDateRange(period: LogsPeriod, customFrom?: string, customTo?: string): { from: string; to: string } | null {
+  const today = todayInEST();
+  const nowEST = toZonedTime(new Date(), EST_TZ);
+
+  if (period === "today") {
+    return { from: today, to: today };
+  }
+  if (period === "week") {
+    // Sun 00:00 – Sat 23:59 EST
+    const dayOfWeek = nowEST.getDay(); // 0=Sun
+    const sun = new Date(nowEST);
+    sun.setDate(nowEST.getDate() - dayOfWeek);
+    return { from: formatESTLocalDate(sun), to: today };
+  }
+  if (period === "month") {
+    // 1st of current month – today
+    const first = new Date(nowEST.getFullYear(), nowEST.getMonth(), 1);
+    return { from: formatESTLocalDate(first), to: today };
+  }
+  if (period === "all") {
+    // No lower bound — send a very early date so Xano returns everything
+    return null; // caller will send no date_from / date_to
+  }
+  if (period === "custom") {
+    const lastWeek = getLastWeekRange();
+    return { from: customFrom ?? lastWeek.from, to: customTo ?? lastWeek.to };
+  }
+  return { from: today, to: today };
+}
+
 export default function LogsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   
-  // Get today's date in YYYY-MM-DD format
-  const today = new Date().toISOString().split('T')[0];
+  // Get today's date as YYYY-MM-DD in EST
+  const today = todayInEST();
   
   // Date range state — only these trigger API calls
   const [statsPeriod, setStatsPeriod] = useState<LogsPeriod>("today");
@@ -570,39 +614,17 @@ export default function LogsPage() {
     const period = (params.get("statsPeriod") as LogsPeriod) || "today";
     setStatsPeriod(period);
     
-    // Resolve date range from period or URL params
-    const EST = "America/New_York";
-    function toESTDateString(date: string | Date, hour: number, minute: number): string {
-      const d = typeof date === "string" ? new Date(date) : date;
-      const est = toZonedTime(d, EST);
-      est.setHours(hour, minute, 0, 0);
-      return format(est, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: EST });
-    }
-
-    if (period === "custom") {
-      const lastWeek = getLastWeekRange();
-      const from = params.get("date_from") || lastWeek.from;
-      const to = params.get("date_to") || lastWeek.to;
-      setDateFrom(toESTDateString(from, 0, 0));
-      setDateTo(toESTDateString(to, 23, 59));
-    } else if (period === "today") {
-      setDateFrom(toESTDateString(today, 0, 0));
-      setDateTo(toESTDateString(today, 23, 59));
-    } else if (period === "week") {
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() + mondayOffset);
-      setDateFrom(toESTDateString(weekStart, 0, 0));
-      setDateTo(toESTDateString(today, 23, 59));
-    } else if (period === "month") {
-      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      setDateFrom(toESTDateString(monthStart, 0, 0));
-      setDateTo(toESTDateString(today, 23, 59));
-    } else if (period === "all") {
-      setDateFrom(toESTDateString("2020-01-01", 0, 0));
-      setDateTo(toESTDateString(today, 23, 59));
+    // Resolve date range using EST-correct helper
+    const customFrom = params.get("date_from") ?? undefined;
+    const customTo   = params.get("date_to")   ?? undefined;
+    const range = getESTDateRange(period, customFrom, customTo);
+    if (range) {
+      setDateFrom(range.from);
+      setDateTo(range.to);
+    } else {
+      // "all time" — no date bounds
+      setDateFrom("");
+      setDateTo("");
     }
     
     // Load client-side filters
@@ -638,10 +660,14 @@ export default function LogsPage() {
     router.push(`?${params.toString()}`, { scroll: false } as any);
   };
 
-  // ── API call: fetch ALL logs once, date filtering is done client-side ──
+  // ── API call: fetch logs for the active date range, re-fetch when range changes ──
   const { data: logsData, isLoading: logsLoading, isFetching: logsFetching } = useQuery({
-    queryKey: ["generation-logs"],
-    queryFn: () => logsService.list({}),
+    queryKey: ["generation-logs", dateFrom, dateTo],
+    // For "all time" dateFrom/dateTo are empty strings — pass undefined so no date filter is sent
+    queryFn: () => logsService.list({
+      date_from: dateFrom || undefined,
+      date_to:   dateTo   || undefined,
+    }),
     staleTime: 5 * 60 * 1000,       // 5 min — data stays fresh, no refetch on remount
     gcTime: 30 * 60 * 1000,          // 30 min — keep in cache even after unmount
     placeholderData: keepPreviousData, // show previous data while new range loads
@@ -673,35 +699,20 @@ export default function LogsPage() {
     setStatsPeriod(period);
     setPage(1);
     
+    const range = getESTDateRange(period);
     if (period === "custom") {
-      // Default custom range to last week (Mon–Sun)
       const lastWeek = getLastWeekRange();
       setDateFrom(lastWeek.from);
       setDateTo(lastWeek.to);
       updateQueryParams({ statsPeriod: period, date_from: lastWeek.from, date_to: lastWeek.to, page: 1 });
-    } else if (period === "today") {
-      setDateFrom(today);
-      setDateTo(today);
-      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
-    } else if (period === "week") {
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() + mondayOffset);
-      const from = weekStart.toISOString().split("T")[0];
-      setDateFrom(from);
-      setDateTo(today);
-      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
-    } else if (period === "month") {
-      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const from = monthStart.toISOString().split("T")[0];
-      setDateFrom(from);
-      setDateTo(today);
-      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
     } else if (period === "all") {
-      setDateFrom("2020-01-01");
-      setDateTo(today);
+      // No date bounds — fetch everything
+      setDateFrom("");
+      setDateTo("");
+      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
+    } else if (range) {
+      setDateFrom(range.from);
+      setDateTo(range.to);
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
     }
   }
@@ -718,7 +729,7 @@ export default function LogsPage() {
     setPage(1);
   }
 
-  // ── All rows from API, enriched with names and filtered by date client-side ──
+  // ── All rows from API, enriched with names ──
   const allRows: GenerationLog[] = useMemo(() => {
     const items = logsData?.items ?? [];
 
@@ -728,16 +739,8 @@ export default function LogsPage() {
     if (profiles) for (const p of profiles) profileMap.set(p.id, p.full_name);
     if (bidders) for (const b of bidders) bidderMap.set(b.id, b.full_name);
 
-    // Enrich + date filter in a single pass
-    const from = dateFrom ? new Date(dateFrom).getTime() : 0;
-    const to = dateTo ? new Date(dateTo).getTime() : Infinity;
-
     const result: GenerationLog[] = [];
     for (const log of items) {
-      if (dateFrom || dateTo) {
-        const t = new Date(log.created_at).getTime();
-        if (t < from || t > to) continue;
-      }
       const bidderId = (log.bidder_id ?? "").trim();
       const isAdminBidder = bidderId === "" || bidderId === ADMIN_BIDDER_ID;
       result.push({
@@ -747,7 +750,7 @@ export default function LogsPage() {
       });
     }
     return result;
-  }, [logsData?.items, dateFrom, dateTo, profiles, bidders]);
+  }, [logsData?.items, profiles, bidders]);
 
   const bidderOptions = useMemo(() => {
     const options = (bidders ?? []).map((b) => ({ value: b.id, label: b.full_name }));

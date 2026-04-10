@@ -1,12 +1,11 @@
 // Generate a new token for a bidder
 query "tokens/generate" verb=POST {
   api_group = "tokens"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid bidder_id?
     timestamp expiration_date?
-    bool is_admin?
   }
 
   stack {
@@ -15,7 +14,7 @@ query "tokens/generate" verb=POST {
       error = "bidder_id is required"
     }
   
-    db.get bidder {
+    db.get users {
       field_name = "id"
       field_value = $input.bidder_id
     } as $bid
@@ -49,9 +48,13 @@ query "tokens/generate" verb=POST {
         expires_at         : $input.expiration_date
         is_used            : false
         is_active          : true
-        is_admin           : $input.is_admin
       }
     } as $t
+  
+    // Determine if user is admin based on user type
+    var $is_admin {
+      value = ($bid.type == "admin" || $bid.type == "super_admin")
+    }
   }
 
   response = {
@@ -59,10 +62,11 @@ query "tokens/generate" verb=POST {
     token          : $t.token
     bidder_id      : $t.bidder_id
     bidder_name    : $bid.full_name
+    user_type      : $bid.type
     issued_date    : $t.issued_at
     expiration_date: $t.expires_at
     is_used        : $t.is_used
     is_active      : $t.is_active
-    is_admin       : $t.is_admin
+    is_admin       : $is_admin
   }
 }

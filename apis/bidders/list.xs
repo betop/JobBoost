@@ -1,14 +1,14 @@
 // List all bidders — returns profile_ids and profile_names arrays
 query bidders verb=GET {
   api_group = "bidders"
-  auth = "admin"
+  auth = "users"
 
   input {
   }
 
   stack {
-    db.query bidder {
-      sort = {bidder.created_at: "desc"}
+    db.query users {
+      sort = {users.created_at: "desc"}
       return = {type: "list"}
     } as $bidders
   

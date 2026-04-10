@@ -1,7 +1,7 @@
 // Verify admin password without creating a new token
 query "auth/verify-password" verb=POST {
   api_group = "auth"
-  auth = "admin"
+  auth = "users"
 
   input {
     email email? filters=trim|lower
@@ -9,7 +9,7 @@ query "auth/verify-password" verb=POST {
   }
 
   stack {
-    db.get admin {
+    db.get users {
       field_name = "email"
       field_value = $input.email
     } as $admin

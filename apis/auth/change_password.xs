@@ -1,7 +1,7 @@
 // Change password for the currently authenticated admin
 query "auth/change-password" verb=POST {
   api_group = "auth"
-  auth = "admin"
+  auth = "users"
 
   input {
     email email? filters=trim|lower
@@ -26,7 +26,7 @@ query "auth/change-password" verb=POST {
     }
   
     // Look up admin by email
-    db.get admin {
+    db.get users {
       field_name = "email"
       field_value = $input.email
     } as $admin
@@ -48,7 +48,7 @@ query "auth/change-password" verb=POST {
     }
   
     // Update the password (Xano auto-hashes password-type fields on patch)
-    db.patch admin {
+    db.patch users {
       field_name = "id"
       field_value = $admin.id
       data = {password_hash: $input.new_password}

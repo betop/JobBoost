@@ -1,7 +1,7 @@
 // Revoke access (set is_active = false on the token)
 query "access-control/{id}/revoke" verb=PATCH {
   api_group = "access-control"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

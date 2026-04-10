@@ -1,24 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuthStore } from "@/store/authStore";
+import { authService } from "@/services/authService";
 
 export default function Home() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const [hydrated, setHydrated] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    setHydrated(true);
-  }, []);
+    // Simple check - if token exists, go to dashboard, otherwise login
+    const token = authService.getStoredToken();
+    
+    // Also check persisted auth state
+    let isAuthenticated = false;
+    try {
+      const persistedState = localStorage.getItem("admin-auth");
+      if (persistedState) {
+        const parsed = JSON.parse(persistedState);
+        isAuthenticated = parsed.state?.isAuthenticated === true;
+      }
+    } catch (e) {
+      // ignore
+    }
 
-  useEffect(() => {
-    if (!hydrated) return;
-    if (isAuthenticated) {
+    if (token && isAuthenticated) {
       window.location.href = "/dashboard";
     } else {
-      window.location.href = "/login";
+      // window.location.href = "/login";
     }
-  }, [hydrated, isAuthenticated]);
+    setChecked(true);
+  }, []);
 
   return (
     <div className="flex items-center justify-center min-h-screen">

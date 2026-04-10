@@ -1,7 +1,7 @@
 // Delete a token
 query "tokens/{id}" verb=DELETE {
   api_group = "tokens"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

@@ -1,7 +1,7 @@
 // PATCH /extensions/versions/{id}/set-current
 query "extensions/versions/{id}/set-current" verb=PATCH {
   api_group = "extension_mgmt"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

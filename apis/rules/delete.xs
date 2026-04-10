@@ -1,7 +1,7 @@
 // Delete a rule
 query "rules/{id}" verb=DELETE {
   api_group = "rules"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

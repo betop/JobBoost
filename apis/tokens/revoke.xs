@@ -1,7 +1,7 @@
 // Revoke a token
 query "tokens/{id}/revoke" verb=PATCH {
   api_group = "tokens"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

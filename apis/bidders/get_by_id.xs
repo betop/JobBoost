@@ -1,14 +1,14 @@
 // Get bidder by id — returns profile_ids array and profile_names
 query "bidders/{id}" verb=GET {
   api_group = "bidders"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?
   }
 
   stack {
-    db.get bidder {
+    db.get users {
       field_name = "id"
       field_value = $input.id
     } as $b

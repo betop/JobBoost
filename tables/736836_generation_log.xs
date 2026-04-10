@@ -9,7 +9,7 @@ table generation_log {
     }
   
     uuid bidder_id? {
-      table = "bidder"
+      table = "users"
     }
   
     text job_url?
@@ -27,6 +27,9 @@ table generation_log {
     int is_matched?
     text match_reason?
     bool is_applied?
+    uuid content_id? {
+      table = "resume_content"
+    }
   }
 
   index = [

@@ -1,7 +1,7 @@
 // Extend or clear the expiration date on a token
 query "tokens/{id}/extend" verb=PATCH {
   api_group = "tokens"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid id?

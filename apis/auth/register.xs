@@ -25,7 +25,8 @@ query "auth/register" verb=POST {
     }
   
     // Block registration if any admin already exists
-    db.query admin {
+    db.query users {
+      where = {} == true
       return = {type: "count"}
     } as $admin_count
   
@@ -35,7 +36,7 @@ query "auth/register" verb=POST {
     }
   
     // Check email not already taken
-    db.get admin {
+    db.get users {
       field_name = "email"
       field_value = $input.email
     } as $existing
@@ -45,18 +46,21 @@ query "auth/register" verb=POST {
       error = "An account with this email already exists"
     }
   
-    db.add admin {
+    db.add users {
       data = {
         created_at   : now
-        name         : $input.name
+        full_name    : $input.name
         email        : $input.email
         password_hash: $input.password
+        type         : "admin"
+        is_active    : true
+        is_approved  : true
         updated_at   : now
       }
     } as $admin
   
     security.create_auth_token {
-      table = "admin"
+      table = "users"
       extras = {}
       expiration = 86400
       id = $admin.id
@@ -69,7 +73,7 @@ query "auth/register" verb=POST {
       {
         id   : $admin.id
         email: $admin.email
-        name : $admin.name
+        name : $admin.full_name
       }
       ```
   }

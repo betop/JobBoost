@@ -6,7 +6,7 @@
 // Edit an existing extension version (admin auth required)
 query "extensions/versions/{extension_version_id}" verb=PATCH {
   api_group = "extension_mgmt"
-  auth = "admin"
+  auth = "users"
 
   input {
     uuid extension_version_id

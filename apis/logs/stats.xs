@@ -2,7 +2,7 @@
 // Returns per-day counts and top bidders/profiles for a date range
 query "logs/stats" verb=GET {
   api_group = "logs"
-  auth = "admin"
+  auth = "users"
 
   input {
     text period?=month
