@@ -4,6 +4,7 @@ table generation_log {
   schema {
     uuid id
     timestamp created_at?=now
+    timestamp updated_at?=now
     uuid profile_id? {
       table = "profile"
     }
@@ -35,6 +36,7 @@ table generation_log {
   index = [
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
+    {type: "btree", field: [{name: "updated_at", op: "desc"}]}
     {type: "btree", field: [{name: "profile_id", op: "asc"}]}
     {type: "btree", field: [{name: "bidder_id", op: "asc"}]}
     {type: "btree", field: [{name: "job_url", op: "asc"}]}

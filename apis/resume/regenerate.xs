@@ -616,6 +616,7 @@ query "resume/regenerate" verb=POST {
             company_name         : $company_name
             is_matched           : $is_matched
             match_reason         : $match_reason
+            updated_at           : now
           }
         } as $updated_log
       

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { toZonedTime, format } from "date-fns-tz";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { logsService, LogsFilters, GenerationLog } from "@/services/logsService";
+import * as logCache from "@/services/logCache";
+import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
 import { downloadResumePDF } from "@/utils/pdfDownload";
 import { bidderService } from "@/services/bidderService";
 import { profileService } from "@/services/profileService";
@@ -660,36 +662,120 @@ export default function LogsPage() {
     router.push(`?${params.toString()}`, { scroll: false } as any);
   };
 
-  // ── API call: fetch logs for the active date range, re-fetch when range changes ──
-  const { data: logsData, isLoading: logsLoading, isFetching: logsFetching } = useQuery({
-    queryKey: ["generation-logs", dateFrom, dateTo],
-    // For "all time" dateFrom/dateTo are empty strings — pass undefined so no date filter is sent
-    queryFn: () => logsService.list({
-      date_from: dateFrom || undefined,
-      date_to:   dateTo   || undefined,
-    }),
-    staleTime: 5 * 60 * 1000,       // 5 min — data stays fresh, no refetch on remount
-    gcTime: 30 * 60 * 1000,          // 30 min — keep in cache even after unmount
-    placeholderData: keepPreviousData, // show previous data while new range loads
-  });
+  // ── Cache-driven log state ──
+  // `cachedRows` is the slice of the global cache visible for the current date range.
+  // It updates whenever the cache is refreshed by the fetch effect below.
+  const [cachedRows, setCachedRows]     = useState<GenerationLog[]>([]);
+  const [logsLoading, setLogsLoading]   = useState(false);
+  const [logsFetching, setLogsFetching] = useState(false);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+
+  /**
+   * Reads the current cache slice for the active date window into state.
+   * Called after every successful fetch/merge.
+   */
+  const flushCacheToState = useCallback(async (from: string, to: string) => {
+    const fromISO = from ? toStartOfDayEST(from) : undefined;
+    const toISO   = to   ? toEndOfDayEST(to)     : undefined;
+    const records = await logCache.getCachedRecords(fromISO, toISO);
+    setCachedRows(records);
+  }, []);
+
+  /**
+   * Main fetch effect — runs whenever dateFrom/dateTo changes (i.e. tab switch).
+   *
+   * Strategy:
+   * 1. First ever visit (IndexedDB empty) → full paginated load, no date limit for
+   *    "all time", or date-bounded for specific periods. Marks initialLoadDone.
+   * 2. Subsequent tab switches → delta fetch only (updated_since = lastSyncAt).
+   *    The server returns records where created_at OR updated_at >= lastSyncAt,
+   *    so new records from ANY user and any edits (is_applied, is_matched) are
+   *    picked up automatically. Cache is then filtered client-side for the tab.
+   * 3. "All time" tab (dateFrom="" dateTo=""): no date filter sent to server.
+   */
+  useEffect(() => {
+    fetchAbortRef.current?.abort();
+    const abortCtrl = new AbortController();
+    fetchAbortRef.current = abortCtrl;
+
+    async function doFetch() {
+      const isAllTime = !dateFrom && !dateTo;
+
+      const initialDone = await logCache.isInitialLoadDone();
+
+      if (!initialDone) {
+        setLogsLoading(true);
+      } else {
+        setLogsFetching(true);
+        // Immediately show the cached slice while the delta loads in background
+        await flushCacheToState(dateFrom, dateTo);
+      }
+
+      try {
+        if (!initialDone) {
+          // ── Full initial load (first visit or after clearCache) ──
+          await logCache.markSyncStart();
+          const records = await logsService.listAllPages(
+            isAllTime ? undefined : dateFrom,
+            isAllTime ? undefined : dateTo,
+          );
+          if (abortCtrl.signal.aborted) return;
+          await logCache.mergeRecords(records);
+          await logCache.setInitialLoadDone(true);
+        } else {
+          // ── Delta fetch: only records touched since last sync ──
+          const lastSync = await logCache.getLastSyncAt();
+          if (lastSync) {
+            await logCache.markSyncStart();
+            const deltaRecords = await logsService.listDelta(lastSync);
+            if (abortCtrl.signal.aborted) return;
+            await logCache.mergeRecords(deltaRecords);
+          }
+        }
+
+        await flushCacheToState(dateFrom, dateTo);
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === "AbortError") return;
+        console.error("[LogsPage] fetch error", err);
+      } finally {
+        if (!abortCtrl.signal.aborted) {
+          setLogsLoading(false);
+          setLogsFetching(false);
+        }
+      }
+    }
+
+    doFetch();
+    return () => { abortCtrl.abort(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo]);
 
   const { data: bidders } = useQuery({
     queryKey: ["bidders"],
     queryFn: bidderService.getAll,
-    staleTime: 10 * 60 * 1000,  // bidders rarely change
+    staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
   const { data: profiles } = useQuery({
     queryKey: ["profiles"],
     queryFn: profileService.getAll,
-    staleTime: 10 * 60 * 1000,  // profiles rarely change
+    staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
 
   async function refreshData() {
     setIsRefreshing(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ["generation-logs"] });
+      await logCache.clearCache();
+      const isAllTime = !dateFrom && !dateTo;
+      await logCache.markSyncStart();
+      const records = await logsService.listAllPages(
+        isAllTime ? undefined : dateFrom,
+        isAllTime ? undefined : dateTo,
+      );
+      await logCache.mergeRecords(records);
+      await logCache.setInitialLoadDone(true);
+      await flushCacheToState(dateFrom, dateTo);
     } finally {
       setIsRefreshing(false);
     }
@@ -729,9 +815,9 @@ export default function LogsPage() {
     setPage(1);
   }
 
-  // ── All rows from API, enriched with names ──
+  // ── All rows from cache, enriched with names ──
   const allRows: GenerationLog[] = useMemo(() => {
-    const items = logsData?.items ?? [];
+    const items = cachedRows;
 
     // Build name lookup maps from already-fetched bidders/profiles
     const profileMap = new Map<string, string>();
@@ -750,7 +836,7 @@ export default function LogsPage() {
       });
     }
     return result;
-  }, [logsData?.items, profiles, bidders]);
+  }, [cachedRows, profiles, bidders]);
 
   const bidderOptions = useMemo(() => {
     const options = (bidders ?? []).map((b) => ({ value: b.id, label: b.full_name }));
@@ -875,8 +961,15 @@ export default function LogsPage() {
         <RegenerateModal
           log={regenerateLog}
           onClose={() => setRegenerateLog(null)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ["generation-logs"] });
+          onSuccess={async () => {
+            // Delta-sync so the new regenerated log appears immediately
+            const lastSync = await logCache.getLastSyncAt();
+            if (lastSync) {
+              await logCache.markSyncStart();
+              const delta = await logsService.listDelta(lastSync);
+              await logCache.mergeRecords(delta);
+              await flushCacheToState(dateFrom, dateTo);
+            }
             queryClient.invalidateQueries({ queryKey: ["logs-stats"] });
           }}
         />
@@ -959,7 +1052,7 @@ export default function LogsPage() {
       )}
 
       {/* Stats cards */}
-      {logsLoading && !logsData ? (
+      {logsLoading ? (
         <div className="flex justify-center py-8"><LoadingSpinner /></div>
       ) : (
         <div className={`space-y-3 mb-8 transition-opacity duration-200 ${logsFetching ? "opacity-50" : "opacity-100"}`}>
@@ -1192,7 +1285,7 @@ export default function LogsPage() {
           </div>
         </div>
 
-        {logsLoading && !logsData ? (
+        {logsLoading && !cachedRows.length ? (
           <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
         ) : !allRows.length ? (
           <div className="text-center py-16 text-gray-400">
@@ -1435,8 +1528,8 @@ export default function LogsPage() {
                 <span className="text-gray-300">·</span>
                 <span className="font-semibold text-emerald-700">
                   {formatCost(
-                    (logsData?.items ?? []).reduce(
-                      (s, l) => s + calcCost(l.ai_provider, l.input_tokens ?? 0, l.output_tokens ?? 0), 0
+                    allRows.reduce(
+                      (s: number, l: GenerationLog) => s + calcCost(l.ai_provider, l.input_tokens ?? 0, l.output_tokens ?? 0), 0
                     )
                   )}
                 </span>

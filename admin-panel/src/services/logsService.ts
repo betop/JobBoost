@@ -8,14 +8,14 @@ const EST = "America/New_York";
 /**
  * Returns an ISO string representing 00:00:00 EST on the given YYYY-MM-DD date.
  */
-function toStartOfDayEST(dateString: string): string {
+export function toStartOfDayEST(dateString: string): string {
   return fromZonedTime(`${dateString}T00:00:00`, EST).toISOString();
 }
 
 /**
  * Returns an ISO string representing 23:59:59.999 EST on the given YYYY-MM-DD date.
  */
-function toEndOfDayEST(dateString: string): string {
+export function toEndOfDayEST(dateString: string): string {
   return fromZonedTime(`${dateString}T23:59:59.999`, EST).toISOString();
 }
 
@@ -151,11 +151,64 @@ export const logsService = {
 
     if (effectiveDateFrom) params.set("date_from", toStartOfDayEST(effectiveDateFrom));
     if (effectiveDateTo) params.set("date_to", toEndOfDayEST(effectiveDateTo));
-    // Always use large per_page to avoid Xano's default cap cutting results
-    params.set("per_page", "5000");
+    params.set("per_page", "1000");
     params.set("page", "1");
     const response = await api.get(`/logs/list?${params.toString()}`);
     return response.data;
+  },
+
+  /**
+   * Fetch ALL pages for a given date range, accumulating into one array.
+   * Used for full initial loads (especially "all time").
+   */
+  listAllPages: async (dateFrom?: string, dateTo?: string): Promise<GenerationLog[]> => {
+    const allItems: GenerationLog[] = [];
+    let page = 1;
+    const perPage = 1000;
+
+    while (true) {
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("date_from", toStartOfDayEST(dateFrom));
+      if (dateTo)   params.set("date_to",   toEndOfDayEST(dateTo));
+      params.set("per_page", String(perPage));
+      params.set("page",     String(page));
+
+      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
+      const data = response.data;
+      allItems.push(...data.items);
+
+      // Stop when there's no next page
+      if (!data.next_page || data.items.length < perPage) break;
+      page++;
+    }
+
+    return allItems;
+  },
+
+  /**
+   * Delta fetch: returns all records whose created_at OR updated_at >= updatedSince.
+   * Paginated to handle large deltas.
+   */
+  listDelta: async (updatedSince: string): Promise<GenerationLog[]> => {
+    const allItems: GenerationLog[] = [];
+    let page = 1;
+    const perPage = 1000;
+
+    while (true) {
+      const params = new URLSearchParams();
+      params.set("updated_since", updatedSince);
+      params.set("per_page", String(perPage));
+      params.set("page",     String(page));
+
+      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
+      const data = response.data;
+      allItems.push(...data.items);
+
+      if (!data.next_page || data.items.length < perPage) break;
+      page++;
+    }
+
+    return allItems;
   },
 
   stats: async (

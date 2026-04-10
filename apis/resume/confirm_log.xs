@@ -54,7 +54,7 @@ query "resume/confirm_log" verb=POST {
     db.edit generation_log {
       field_name = "id"
       field_value = $input.log_id
-      data = {is_applied: true}
+      data = {is_applied: true, updated_at: now}
     } as $updated_log
   }
 
