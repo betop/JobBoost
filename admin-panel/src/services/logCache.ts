@@ -2,7 +2,7 @@
  * logCache.ts — IndexedDB-backed cache for generation logs.
  *
  * Persists across page refreshes and browser restarts.
- * Each browser/device has its own cache — this is per-client, not per-user.
+ * Each admin uses their own browser, so one DB per browser is sufficient.
  *
  * Stores:
  *   "logs"  — all GenerationLog records, keyed by id
