@@ -4,18 +4,39 @@ export interface Token {
   id: string;
   token: string;
   bidder_id: string;
-  bidder_name: string;
+  user_name: string;
   issued_date: string;
   expiration_date?: string;
   is_used: boolean;
   is_active: boolean;
-  is_admin: boolean;
 }
 
 export interface GenerateTokenInput {
   bidder_id: string;
   expiration_date?: string;
-  is_admin?: boolean;
+}
+
+export interface TokenRequest {
+  id: string;
+  requested_by: string;
+  requester_name: string;
+  bidder_id: string;
+  user_name: string;
+  expiration_date?: string;
+  status: "pending" | "approved" | "declined";
+  admin_notes?: string;
+  review_notes?: string;
+  reviewed_by?: string;
+  reviewer_name?: string;
+  reviewed_at?: string;
+  generated_token_id?: string;
+  created_at: string;
+}
+
+export interface CreateTokenRequestInput {
+  bidder_id: string;
+  expiration_date?: string;
+  notes?: string;
 }
 
 export const tokenService = {
@@ -27,7 +48,6 @@ export const tokenService = {
   generate: async (input: GenerateTokenInput): Promise<Token> => {
     const payload: Partial<GenerateTokenInput> = { bidder_id: input.bidder_id };
     if (input.expiration_date) payload.expiration_date = input.expiration_date;
-    if (input.is_admin) payload.is_admin = true;
     const response = await api.post("/tokens/generate", payload);
     return response.data;
   },
@@ -40,11 +60,28 @@ export const tokenService = {
     await api.patch(`/tokens/${id}/extend`, { expiration_date: expiration_date || null });
   },
 
-  toggleAdmin: async (id: string, is_admin: boolean): Promise<void> => {
-    await api.patch(`/tokens/${id}/toggle-admin`, { is_admin });
-  },
-
   delete: async (id: string): Promise<void> => {
     await api.delete(`/tokens/${id}`);
+  },
+
+  // Token Request endpoints
+  createRequest: async (input: CreateTokenRequestInput): Promise<TokenRequest> => {
+    const response = await api.post("/tokens/request", input);
+    return response.data;
+  },
+
+  getRequests: async (status?: string): Promise<TokenRequest[]> => {
+    const params = status ? { status } : {};
+    const response = await api.get("/tokens/requests", { params });
+    return response.data;
+  },
+
+  approveRequest: async (id: string, review_notes?: string): Promise<{ token: string }> => {
+    const response = await api.patch(`/tokens/requests/${id}/approve`, { review_notes });
+    return response.data;
+  },
+
+  declineRequest: async (id: string, review_notes?: string): Promise<void> => {
+    await api.patch(`/tokens/requests/${id}/decline`, { review_notes });
   },
 };

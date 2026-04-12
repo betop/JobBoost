@@ -31,14 +31,31 @@ export default function ProfilesPage() {
     }
   };
 
+  // Extract unique filter options from data
+  const jobCategories = [...new Set(profiles.map((p: Profile) => p.job_category).filter((v): v is string => !!v))];
+  const locations = [...new Set(profiles.map((p: Profile) => p.location).filter((v): v is string => !!v))];
+
   const columns = [
-    { key: "full_name", label: "Full Name" },
-    { key: "email", label: "Email" },
-    { key: "job_category", label: "Category", render: (value: string) => value || "—" },
-    { key: "location", label: "Location", render: (value: string) => value || "-" },
+    { key: "full_name", label: "Full Name", sortable: true },
+    { key: "email", label: "Email", sortable: true },
+    {
+      key: "job_category",
+      label: "Category",
+      sortable: true,
+      filterOptions: jobCategories.map((c: string) => ({ value: c, label: c })),
+      render: (value: string) => value || "—",
+    },
+    {
+      key: "location",
+      label: "Location",
+      sortable: true,
+      filterOptions: locations.map((l: string) => ({ value: l, label: l })),
+      render: (value: string) => value || "-",
+    },
     {
       key: "created_at",
       label: "Created Date",
+      sortable: true,
       render: (value: string) => formatDate(value),
     },
     {

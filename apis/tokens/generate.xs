@@ -50,23 +50,17 @@ query "tokens/generate" verb=POST {
         is_active          : true
       }
     } as $t
-  
-    // Determine if user is admin based on user type
-    var $is_admin {
-      value = ($bid.type == "admin" || $bid.type == "super_admin")
-    }
   }
 
   response = {
     id             : $t.id
     token          : $t.token
     bidder_id      : $t.bidder_id
-    bidder_name    : $bid.full_name
+    user_name      : $bid.full_name
     user_type      : $bid.type
     issued_date    : $t.issued_at
     expiration_date: $t.expires_at
     is_used        : $t.is_used
     is_active      : $t.is_active
-    is_admin       : $is_admin
   }
 }

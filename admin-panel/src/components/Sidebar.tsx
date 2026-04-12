@@ -23,7 +23,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, superOnly: false },
   { name: "Profiles", href: "/dashboard/profiles", icon: Users, superOnly: false },
   { name: "Users", href: "/dashboard/users", icon: UserCheck, superOnly: false },
-  { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: true },
+  { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: false },
   { name: "Rules", href: "/dashboard/rules", icon: FileText, superOnly: true },
   { name: "Extensions", href: "/dashboard/versions", icon: Package, superOnly: true },
   { name: "Generation Logs", href: "/dashboard/logs", icon: Activity, superOnly: false },

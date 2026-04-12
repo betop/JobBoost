@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { tokenService, type Token } from "@/services/tokenService";
+import { tokenService, type Token, type TokenRequest } from "@/services/tokenService";
 import { userService } from "@/services/userService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
@@ -11,44 +11,122 @@ import Modal from "@/components/Modal";
 import Select from "@/components/Select";
 import Input from "@/components/Input";
 import PasswordConfirmModal from "@/components/PasswordConfirmModal";
-import { Plus, Copy, XCircle, Trash2, CalendarClock, Eye, EyeOff, Shield } from "lucide-react";
+import {
+  Plus,
+  Copy,
+  XCircle,
+  Trash2,
+  CalendarClock,
+  Eye,
+  EyeOff,
+  Clock,
+  CheckCircle,
+  X,
+  Send,
+  MessageSquare,
+} from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
-import { useState } from "react";
 import { useUIStore } from "@/store/uiStore";
+import { useAuthStore } from "@/store/authStore";
 import { useForm } from "react-hook-form";
 
 export default function TokensPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
+  const admin = useAuthStore((state) => state.admin);
+  const isSuperAdmin = admin?.type === "super_admin";
+
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [showActionConfirm, setShowActionConfirm] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ type: 'generate' | 'revoke' | 'delete' | 'extend' | 'toggle_admin'; id?: string; data?: any } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    type: "generate" | "revoke" | "delete" | "extend" | "approve" | "decline";
+    id?: string;
+    data?: any;
+  } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [extendToken, setExtendToken] = useState<Token | null>(null);
   const [extendDate, setExtendDate] = useState("");
   const [hiddenTokens, setHiddenTokens] = useState<Set<string>>(new Set());
+  const [reviewModalRequest, setReviewModalRequest] = useState<TokenRequest | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [requestTab, setRequestTab] = useState<"pending" | "all">("pending");
+  const [activeTab, setActiveTab] = useState<"keys" | "requests">("keys");
 
   useEffect(() => {
     if (!isPasswordVerified) {
-      setShowPasswordConfirm(true);
+      if (isSuperAdmin) {
+        setShowPasswordConfirm(true);
+      } else {
+        // Admins skip password verification
+        setIsPasswordVerified(true);
+      }
     }
-  }, [isPasswordVerified]);
+  }, [isPasswordVerified, isSuperAdmin]);
 
-  const { data: tokens = [], isLoading, refetch } = useQuery({
+  // ── Data Queries ──────────────────────────────────────────────────
+  const {
+    data: tokens = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["tokens"],
     queryFn: tokenService.getAll,
     enabled: isPasswordVerified,
   });
 
-  const { data: bidders = [] } = useQuery({
-    queryKey: ["users", "bidder"],
-    queryFn: () => userService.getAll("bidder"),
+  // Super admin: all users except super_admin; Admin: all bidders + self
+  const { data: allEligibleUsers = [] } = useQuery({
+    queryKey: ["users", "token-eligible", isSuperAdmin ? "all" : "bidder"],
+    queryFn: async () => {
+      if (isSuperAdmin) {
+        const all = await userService.getAll();
+        return all.filter((u) => u.type !== "super_admin");
+      }
+      const bidders = await userService.getAll("bidder");
+      // Add self (admin) if not already in the list
+      if (admin && !bidders.find((b) => b.id === admin.id)) {
+        bidders.unshift({ id: admin.id, full_name: admin.name, email: admin.email, type: "admin" as const } as any);
+      }
+      return bidders;
+    },
   });
 
-  const { register, handleSubmit, reset } = useForm();
+  // Build select options with role badges for clarity
+  const userSelectOptions = useMemo(() => {
+    return allEligibleUsers.map((u) => {
+      let label = u.full_name;
+      if (u.type === "admin") {
+        label = `${u.full_name}  ★ Admin`;
+      } else if (!isSuperAdmin && u.id === admin?.id) {
+        label = `${u.full_name}  ★ You`;
+      }
+      return { value: u.id, label };
+    });
+  }, [allEligibleUsers, admin, isSuperAdmin]);
 
+  const { data: requests = [], refetch: refetchRequests } = useQuery({
+    queryKey: ["token-requests"],
+    queryFn: () => tokenService.getRequests(),
+    enabled: isPasswordVerified || !isSuperAdmin,
+  });
+
+  const pendingRequests = useMemo(
+    () => requests.filter((r) => r.status === "pending"),
+    [requests]
+  );
+
+  // ── Forms ─────────────────────────────────────────────────────────
+  const { register, handleSubmit, reset } = useForm();
+  const {
+    register: registerRequest,
+    handleSubmit: handleSubmitRequest,
+    reset: resetRequest,
+  } = useForm();
+
+  // ── Mutations (super_admin) ───────────────────────────────────────
   const generateMutation = useMutation({
     mutationFn: tokenService.generate,
     onSuccess: (data) => {
@@ -57,9 +135,7 @@ export default function TokensPage() {
       refetch();
       reset();
     },
-    onError: () => {
-      showToast("Failed to generate token", "error");
-    },
+    onError: () => showToast("Failed to generate token", "error"),
   });
 
   const revokeMutation = useMutation({
@@ -68,9 +144,7 @@ export default function TokensPage() {
       showToast("Token revoked successfully", "success");
       refetch();
     },
-    onError: () => {
-      showToast("Failed to revoke token", "error");
-    },
+    onError: () => showToast("Failed to revoke token", "error"),
   });
 
   const deleteMutation = useMutation({
@@ -79,9 +153,7 @@ export default function TokensPage() {
       showToast("Token deleted successfully", "success");
       refetch();
     },
-    onError: () => {
-      showToast("Failed to delete token", "error");
-    },
+    onError: () => showToast("Failed to delete token", "error"),
   });
 
   const extendMutation = useMutation({
@@ -93,48 +165,94 @@ export default function TokensPage() {
       setExtendDate("");
       refetch();
     },
-    onError: () => {
-      showToast("Failed to extend token", "error");
-    },
+    onError: () => showToast("Failed to extend token", "error"),
   });
 
-  const toggleAdminMutation = useMutation({
-    mutationFn: ({ id, is_admin }: { id: string; is_admin: boolean }) =>
-      tokenService.toggleAdmin(id, is_admin),
-    onSuccess: (_data, variables) => {
-      showToast(
-        variables.is_admin ? "Admin permission granted" : "Admin permission revoked",
-        "success"
-      );
+  // ── Mutations (admin request) ─────────────────────────────────────
+  const createRequestMutation = useMutation({
+    mutationFn: tokenService.createRequest,
+    onSuccess: () => {
+      showToast("Key request submitted successfully", "success");
+      setIsModalOpen(false);
+      resetRequest();
+      refetchRequests();
+    },
+    onError: () => showToast("Failed to submit key request", "error"),
+  });
+
+  // ── Mutations (super_admin review) ────────────────────────────────
+  const approveMutation = useMutation({
+    mutationFn: ({ id, review_notes }: { id: string; review_notes?: string }) =>
+      tokenService.approveRequest(id, review_notes),
+    onSuccess: () => {
+      showToast("Request approved — key generated", "success");
+      setReviewModalRequest(null);
+      setReviewNotes("");
       refetch();
+      refetchRequests();
     },
-    onError: () => {
-      showToast("Failed to update permission", "error");
-    },
+    onError: () => showToast("Failed to approve request", "error"),
   });
 
-  const onSubmit = (data: any) => {
+  const declineMutation = useMutation({
+    mutationFn: ({ id, review_notes }: { id: string; review_notes?: string }) =>
+      tokenService.declineRequest(id, review_notes),
+    onSuccess: () => {
+      showToast("Request declined", "success");
+      setReviewModalRequest(null);
+      setReviewNotes("");
+      refetchRequests();
+    },
+    onError: () => showToast("Failed to decline request", "error"),
+  });
+
+  // ── Handlers ──────────────────────────────────────────────────────
+  const onSubmitGenerate = (data: any) => {
     const payload: any = { bidder_id: data.bidder_id };
     if (data.expiration_date) payload.expiration_date = data.expiration_date;
-    setPendingAction({ type: 'generate', data: payload });
-    setShowActionConfirm(true);
+    if (isSuperAdmin) {
+      setPendingAction({ type: "generate", data: payload });
+      setShowActionConfirm(true);
+    } else {
+      generateMutation.mutate(payload);
+    }
+  };
+
+  const onSubmitRequest = (data: any) => {
+    if (!data.bidder_id) {
+      showToast("Please select a user", "error");
+      return;
+    }
+    const payload: any = {
+      bidder_id: data.bidder_id,
+    };
+    if (data.expiration_date) payload.expiration_date = data.expiration_date;
+    if (data.notes) payload.notes = data.notes;
+    createRequestMutation.mutate(payload);
   };
 
   const executePendingAction = async () => {
     if (!pendingAction) return;
-    
-    if (pendingAction.type === 'generate') {
-      generateMutation.mutate(pendingAction.data);
-    } else if (pendingAction.type === 'revoke') {
-      revokeMutation.mutate(pendingAction.id!);
-    } else if (pendingAction.type === 'delete') {
-      deleteMutation.mutate(pendingAction.id!);
-    } else if (pendingAction.type === 'extend') {
-      extendMutation.mutate({ id: pendingAction.id!, expiration_date: pendingAction.data });
-    } else if (pendingAction.type === 'toggle_admin') {
-      toggleAdminMutation.mutate({ id: pendingAction.id!, is_admin: pendingAction.data });
+    switch (pendingAction.type) {
+      case "generate":
+        generateMutation.mutate(pendingAction.data);
+        break;
+      case "revoke":
+        revokeMutation.mutate(pendingAction.id!);
+        break;
+      case "delete":
+        deleteMutation.mutate(pendingAction.id!);
+        break;
+      case "extend":
+        extendMutation.mutate({ id: pendingAction.id!, expiration_date: pendingAction.data });
+        break;
+      case "approve":
+        approveMutation.mutate({ id: pendingAction.id!, review_notes: pendingAction.data });
+        break;
+      case "decline":
+        declineMutation.mutate({ id: pendingAction.id!, review_notes: pendingAction.data });
+        break;
     }
-    
     setPendingAction(null);
     setShowActionConfirm(false);
   };
@@ -143,7 +261,6 @@ export default function TokensPage() {
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(token);
     } else {
-      // Fallback for non-secure contexts (HTTP)
       const ta = document.createElement("textarea");
       ta.value = token;
       ta.style.position = "fixed";
@@ -157,7 +274,8 @@ export default function TokensPage() {
     showToast("Token copied to clipboard", "success");
   };
 
-  const columns = [
+  // ── Token table columns ───────────────────────────────────────────
+  const tokenColumns = [
     {
       key: "token",
       label: "Key",
@@ -166,16 +284,13 @@ export default function TokensPage() {
         return (
           <div className="flex items-center gap-2">
             <code className="text-sm bg-gray-100 px-2 py-1 rounded">
-              {isHidden ? '••••••••••••••••••••' : value.substring(0, 20) + '...'}
+              {isHidden ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : value.substring(0, 20) + "..."}
             </code>
             <button
               onClick={() => {
                 const newHidden = new Set(hiddenTokens);
-                if (isHidden) {
-                  newHidden.add(row.id);
-                } else {
-                  newHidden.delete(row.id);
-                }
+                if (isHidden) newHidden.add(row.id);
+                else newHidden.delete(row.id);
                 setHiddenTokens(newHidden);
               }}
               className="p-1 text-gray-600 hover:text-gray-900"
@@ -194,17 +309,19 @@ export default function TokensPage() {
         );
       },
     },
-    { key: "bidder_name", label: "Bidder" },
-    { key: "issued_date", label: "Issued", render: (value: string) => formatDate(value) },
+    { key: "user_name", label: "User", sortable: true },
+    { key: "issued_date", label: "Issued", sortable: true, render: (value: string) => formatDate(value) },
     {
       key: "expiration_date",
       label: "Expires",
+      sortable: true,
       render: (value: string) => {
         if (!value) return <span className="text-gray-400">Never</span>;
         const isExpired = new Date(value) < new Date();
         return (
           <span className={isExpired ? "text-red-600 font-semibold" : ""}>
-            {formatDate(value)}{isExpired ? " (expired)" : ""}
+            {formatDate(value)}
+            {isExpired ? " (expired)" : ""}
           </span>
         );
       },
@@ -212,6 +329,10 @@ export default function TokensPage() {
     {
       key: "is_active",
       label: "Status",
+      filterOptions: [
+        { value: "true", label: "Active" },
+        { value: "false", label: "Revoked" },
+      ],
       render: (value: boolean) => (
         <span
           className={`px-2 py-1 text-xs font-semibold rounded-full ${
@@ -222,106 +343,183 @@ export default function TokensPage() {
         </span>
       ),
     },
-    {
-      key: "is_admin",
-      label: "Admin",
-      render: (value: boolean, row: Token) => (
-        <button
-          onClick={() => {
-            setPendingAction({ type: 'toggle_admin' as any, id: row.id, data: !value });
-            setShowActionConfirm(true);
-          }}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 ${
-            value ? "bg-amber-500" : "bg-gray-300"
-          }`}
-          title={value ? "Click to revoke admin" : "Click to grant admin"}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-              value ? "translate-x-6" : "translate-x-1"
-            }`}
-          />
-        </button>
-      ),
-    },
-    {
-      key: "id",
-      label: "Actions",
-      render: (_: any, row: Token) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setExtendToken(row); setExtendDate(""); }}
-            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-            title="Extend / Clear Expiration"
-          >
-            <CalendarClock className="w-4 h-4" />
-          </button>
-          {row.is_active && (
-            <button
-              onClick={() => {
-                setPendingAction({ type: 'revoke', id: row.id });
-                setShowActionConfirm(true);
-              }}
-              className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
-              title="Revoke"
-            >
-              <XCircle className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            onClick={() => {
-              setPendingAction({ type: 'delete', id: row.id });
-              setShowActionConfirm(true);
-            }}
-            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      ),
-    },
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "id",
+            label: "Actions",
+            render: (_: any, row: Token) => (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setExtendToken(row);
+                    setExtendDate("");
+                  }}
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                  title="Extend / Clear Expiration"
+                >
+                  <CalendarClock className="w-4 h-4" />
+                </button>
+                {row.is_active && (
+                  <button
+                    onClick={() => {
+                      setPendingAction({ type: "revoke", id: row.id });
+                      setShowActionConfirm(true);
+                    }}
+                    className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
+                    title="Revoke"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setPendingAction({ type: "delete", id: row.id });
+                    setShowActionConfirm(true);
+                  }}
+                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                  title="Delete"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ),
+          },
+        ]
+      : []),
   ];
 
+  // ── Request table columns ─────────────────────────────────────────
+  const requestColumns = [
+    ...(isSuperAdmin ? [{ key: "requester_name", label: "Requested By", sortable: true }] : []),
+    { key: "user_name", label: "User", sortable: true },
+    {
+      key: "expiration_date",
+      label: "Expiration",
+      sortable: true,
+      render: (value: string) =>
+        value ? formatDate(value) : <span className="text-gray-400">Never</span>,
+    },
+    {
+      key: "status",
+      label: "Status",
+      filterOptions: [
+        { value: "pending", label: "Pending" },
+        { value: "approved", label: "Approved" },
+        { value: "declined", label: "Declined" },
+      ],
+      render: (value: string) => {
+        const styles: Record<string, string> = {
+          pending: "bg-yellow-100 text-yellow-800",
+          approved: "bg-green-100 text-green-800",
+          declined: "bg-red-100 text-red-800",
+        };
+        return (
+          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${styles[value] || ""}`}>
+            {value.charAt(0).toUpperCase() + value.slice(1)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "admin_notes",
+      label: "Notes",
+      render: (value: string) =>
+        value ? (
+          <span className="text-sm text-gray-600 truncate max-w-[200px] block">{value}</span>
+        ) : (
+          <span className="text-gray-400">&mdash;</span>
+        ),
+    },
+    { key: "created_at", label: "Submitted", sortable: true, render: (value: string) => formatDate(value) },
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "id",
+            label: "Actions",
+            render: (_: any, row: TokenRequest) =>
+              row.status === "pending" ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setReviewModalRequest(row);
+                      setReviewNotes("");
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium bg-primary-50 text-primary-700 rounded-lg hover:bg-primary-100"
+                  >
+                    Review
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-500">
+                  {row.reviewer_name && `by ${row.reviewer_name}`}
+                </span>
+              ),
+          },
+        ]
+      : [
+          {
+            key: "review_notes",
+            label: "Review Notes",
+            render: (value: string, row: TokenRequest) =>
+              row.status !== "pending" && value ? (
+                <span className="text-sm text-gray-600">{value}</span>
+              ) : (
+                <span className="text-gray-400">&mdash;</span>
+              ),
+          },
+        ]),
+  ];
+
+  // ── Confirmation modal description ────────────────────────────────
+  const getConfirmDescription = () => {
+    if (!pendingAction) return "";
+    switch (pendingAction.type) {
+      case "delete":
+        return "Please confirm your password to delete this key";
+      case "revoke":
+        return "Please confirm your password to revoke this key";
+      case "extend":
+        return "Please confirm your password to extend this key";
+      case "approve":
+        return "Please confirm your password to approve this request";
+      case "decline":
+        return "Please confirm your password to decline this request";
+      default:
+        return "Please confirm your password to generate a new key";
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────
   return (
     <>
-      <PasswordConfirmModal
-        isOpen={showPasswordConfirm}
-        onClose={() => {
-          setShowPasswordConfirm(false);
-        }}
-        onCancel={() => {
-          router.push("/dashboard");
-        }}
-        onConfirm={() => {
-          setIsPasswordVerified(true);
-          setShowPasswordConfirm(false);
-        }}
-        title="Access Keys"
-        description="Please confirm your password to access the Keys page"
-      />
+      {isSuperAdmin && (
+        <PasswordConfirmModal
+          isOpen={showPasswordConfirm}
+          onClose={() => setShowPasswordConfirm(false)}
+          onCancel={() => router.push("/dashboard")}
+          onConfirm={() => {
+            setIsPasswordVerified(true);
+            setShowPasswordConfirm(false);
+          }}
+          title="Access Keys"
+          description="Please confirm your password to access the Keys page"
+        />
+      )}
 
-      <PasswordConfirmModal
-        isOpen={showActionConfirm}
-        onClose={() => {
-          setShowActionConfirm(false);
-          setPendingAction(null);
-        }}
-        onConfirm={executePendingAction}
-        title="Confirm Action"
-        description={
-          pendingAction?.type === 'delete'
-            ? "Please confirm your password to delete this key"
-            : pendingAction?.type === 'revoke'
-            ? "Please confirm your password to revoke this key"
-            : pendingAction?.type === 'extend'
-            ? "Please confirm your password to extend this key"
-            : pendingAction?.type === 'toggle_admin'
-            ? `Please confirm your password to ${pendingAction?.data ? 'grant' : 'revoke'} admin permission`
-            : "Please confirm your password to generate a new key"
-        }
-      />
-      
+      {isSuperAdmin && (
+        <PasswordConfirmModal
+          isOpen={showActionConfirm}
+          onClose={() => {
+            setShowActionConfirm(false);
+            setPendingAction(null);
+          }}
+          onConfirm={executePendingAction}
+          title="Confirm Action"
+          description={getConfirmDescription()}
+        />
+      )}
+
       {!isPasswordVerified ? (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
@@ -331,105 +529,292 @@ export default function TokensPage() {
         </div>
       ) : (
         <>
+          {/* Page header */}
           <div className="mb-8 flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Access Keys</h1>
-              <p className="text-gray-600 mt-2">Manage bidder access keys</p>
+              <p className="text-gray-600 mt-2">
+                {isSuperAdmin ? "Manage user access keys" : "Request and view access keys"}
+              </p>
             </div>
-            <Button onClick={() => setIsModalOpen(true)}>
+            <Button onClick={() => { setIsModalOpen(true); setGeneratedToken(null); }}>
               <Plus className="w-5 h-5" />
-          Generate Key
-        </Button>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <DataTable
-          data={tokens}
-          columns={columns}
-          searchable
-          searchPlaceholder="Search keys..."
-          loading={isLoading}
-        />
-      </div>
-
-      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setGeneratedToken(null); }} title="Generate Access Key">
-        {generatedToken ? (
-          <div className="p-6">
-            <p className="text-sm text-gray-600 mb-4">Key generated successfully! Copy it now as it won&apos;t be shown again.</p>
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
-              <code className="text-sm break-all">{generatedToken}</code>
-            </div>
-            <Button onClick={() => copyToClipboard(generatedToken)} className="w-full">
-              <Copy className="w-4 h-4" />
-              Copy to Clipboard
+              {isSuperAdmin ? "Generate Key" : "Request Key"}
             </Button>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-            <Select
-              label="Select Bidder"
-              options={bidders.map((b) => ({ value: b.id, label: b.full_name }))}
-              {...register("bidder_id")}
-              required
-            />
-            <Input label="Expiration Date (Optional)" type="date" {...register("expiration_date")} />
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="is_admin"
-                {...register("is_admin")}
-                className="w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
-              />
-              <label htmlFor="is_admin" className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <Shield className="w-4 h-4 text-amber-600" />
-                Admin Permission
-              </label>
-              <span className="text-xs text-gray-400">(Can override all warnings)</span>
-            </div>
-            <Button type="submit" loading={generateMutation.isPending} className="w-full">
-              Generate Token
-            </Button>
-          </form>
-        )}
-      </Modal>
 
-      <Modal
-        isOpen={extendToken !== null}
-        onClose={() => { setExtendToken(null); setExtendDate(""); }}
-        title="Extend Token Expiration"
-      >
-        <div className="p-6 space-y-4">
-          <p className="text-sm text-gray-600">
-            Set a new expiration date for this token, or clear it to make it never expire.
-            The token will also be re-activated if it was expired.
-          </p>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New Expiration Date</label>
-            <input
-              type="date"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              value={extendDate}
-              onChange={(e) => setExtendDate(e.target.value)}
-            />
-            <p className="text-xs text-gray-400 mt-1">Leave empty to remove expiration (never expires)</p>
+          {/* Pending requests banner for super_admin */}
+          {isSuperAdmin && pendingRequests.length > 0 && activeTab === "keys" && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3 cursor-pointer hover:bg-yellow-100 transition-colors" onClick={() => setActiveTab("requests")}>
+              <Clock className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+              <p className="text-sm font-medium text-yellow-800">
+                {pendingRequests.length} pending key request{pendingRequests.length > 1 ? "s" : ""} awaiting review
+              </p>
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="border-b border-gray-200 px-6 pt-4">
+              <div className="flex gap-6">
+                <button
+                  onClick={() => setActiveTab("keys")}
+                  className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === "keys"
+                      ? "border-primary-600 text-primary-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {isSuperAdmin ? "All Keys" : "My Keys"}
+                </button>
+                <button
+                  onClick={() => setActiveTab("requests")}
+                  className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    activeTab === "requests"
+                      ? "border-primary-600 text-primary-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {isSuperAdmin ? "Key Requests" : "My Requests"}
+                  {pendingRequests.length > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      {pendingRequests.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {activeTab === "keys" && (
+                <DataTable
+                  data={tokens}
+                  columns={tokenColumns}
+                  searchable
+                  searchPlaceholder="Search keys..."
+                  loading={isLoading}
+                />
+              )}
+
+              {activeTab === "requests" && (
+                <>
+                  <div className="flex items-center gap-2 mb-4">
+                    <button
+                      onClick={() => setRequestTab("pending")}
+                      className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                        requestTab === "pending"
+                          ? "bg-primary-100 text-primary-700"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      Pending{pendingRequests.length > 0 && ` (${pendingRequests.length})`}
+                    </button>
+                    <button
+                      onClick={() => setRequestTab("all")}
+                      className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                        requestTab === "all"
+                          ? "bg-primary-100 text-primary-700"
+                          : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      All
+                    </button>
+                  </div>
+                  <DataTable
+                    data={requestTab === "pending" ? pendingRequests : requests}
+                    columns={requestColumns}
+                    searchable
+                    searchPlaceholder="Search requests..."
+                  />
+                </>
+              )}
+            </div>
           </div>
-          <div className="flex gap-3">
-            <Button
-              onClick={() => {
-                setPendingAction({ type: 'extend', id: extendToken!.id, data: extendDate || undefined });
-                setShowActionConfirm(true);
-              }}
-              loading={extendMutation.isPending}
-              className="flex-1"
+
+          {/* Generate / Request modal */}
+          <Modal
+            isOpen={isModalOpen}
+            onClose={() => { setIsModalOpen(false); setGeneratedToken(null); }}
+            title={isSuperAdmin ? "Generate Access Key" : "Request Access Key"}
+          >
+            {isSuperAdmin ? (
+              generatedToken ? (
+                <div className="p-6">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Key generated successfully! Copy it now as it won&apos;t be shown again.
+                  </p>
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
+                    <code className="text-sm break-all">{generatedToken}</code>
+                  </div>
+                  <Button onClick={() => copyToClipboard(generatedToken)} className="w-full">
+                    <Copy className="w-4 h-4" />
+                    Copy to Clipboard
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit(onSubmitGenerate)} className="p-6 space-y-4">
+                  <Select
+                    label="Select User"
+                    options={userSelectOptions}
+                    {...register("bidder_id")}
+                    required
+                  />
+                  <Input label="Expiration Date (Optional)" type="date" {...register("expiration_date")} />
+                  <Button type="submit" loading={generateMutation.isPending} className="w-full">
+                    Generate Token
+                  </Button>
+                </form>
+              )
+            ) : (
+              <form onSubmit={handleSubmitRequest(onSubmitRequest)} className="p-6 space-y-4">
+                <Select
+                  label="Select User"
+                  options={userSelectOptions}
+                  {...registerRequest("bidder_id")}
+                  required
+                />
+                <Input label="Expiration Date (Optional)" type="date" {...registerRequest("expiration_date")} />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                  <textarea
+                    {...registerRequest("notes")}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                    rows={3}
+                    placeholder="Reason for this key request..."
+                  />
+                </div>
+                <Button type="submit" loading={createRequestMutation.isPending} className="w-full">
+                  <Send className="w-4 h-4" />
+                  Submit Request
+                </Button>
+              </form>
+            )}
+          </Modal>
+
+          {/* Extend modal (super_admin) */}
+          {isSuperAdmin && (
+            <Modal
+              isOpen={extendToken !== null}
+              onClose={() => { setExtendToken(null); setExtendDate(""); }}
+              title="Extend Token Expiration"
             >
-              Save
-            </Button>
-            <Button variant="ghost" onClick={() => { setExtendToken(null); setExtendDate(""); }} className="flex-1">
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Modal>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Set a new expiration date for this token, or clear it to make it never expire.
+                  The token will also be re-activated if it was expired.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">New Expiration Date</label>
+                  <input
+                    type="date"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    value={extendDate}
+                    onChange={(e) => setExtendDate(e.target.value)}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Leave empty to remove expiration (never expires)</p>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => {
+                      setPendingAction({ type: "extend", id: extendToken!.id, data: extendDate || undefined });
+                      setShowActionConfirm(true);
+                    }}
+                    loading={extendMutation.isPending}
+                    className="flex-1"
+                  >
+                    Save
+                  </Button>
+                  <Button variant="ghost" onClick={() => { setExtendToken(null); setExtendDate(""); }} className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          )}
+
+          {/* Review request modal (super_admin) */}
+          {isSuperAdmin && (
+            <Modal
+              isOpen={reviewModalRequest !== null}
+              onClose={() => { setReviewModalRequest(null); setReviewNotes(""); }}
+              title="Review Key Request"
+              size="md"
+            >
+              {reviewModalRequest && (
+                <div className="p-6 space-y-5">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Requested By</span>
+                      <p className="font-medium">{reviewModalRequest.requester_name}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">User</span>
+                      <p className="font-medium">{reviewModalRequest.user_name}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Expiration</span>
+                      <p className="font-medium">
+                        {reviewModalRequest.expiration_date
+                          ? formatDate(reviewModalRequest.expiration_date)
+                          : "Never"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Submitted</span>
+                      <p className="font-medium">{formatDate(reviewModalRequest.created_at)}</p>
+                    </div>
+                  </div>
+
+                  {reviewModalRequest.admin_notes && (
+                    <div>
+                      <span className="text-sm text-gray-500">Admin Notes</span>
+                      <p className="text-sm mt-1 bg-gray-50 p-3 rounded-lg">{reviewModalRequest.admin_notes}</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <MessageSquare className="w-4 h-4 inline mr-1" />
+                      Review Notes (Optional)
+                    </label>
+                    <textarea
+                      value={reviewNotes}
+                      onChange={(e) => setReviewNotes(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+                      rows={2}
+                      placeholder="Add a note to the admin..."
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={() => {
+                        setPendingAction({ type: "approve", id: reviewModalRequest.id, data: reviewNotes || undefined });
+                        setShowActionConfirm(true);
+                      }}
+                      loading={approveMutation.isPending}
+                      className="flex-1 !bg-green-600 hover:!bg-green-700"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setPendingAction({ type: "decline", id: reviewModalRequest.id, data: reviewNotes || undefined });
+                        setShowActionConfirm(true);
+                      }}
+                      loading={declineMutation.isPending}
+                      variant="ghost"
+                      className="flex-1 !text-red-600 hover:!bg-red-50"
+                    >
+                      <X className="w-4 h-4" />
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Modal>
+          )}
         </>
       )}
     </>

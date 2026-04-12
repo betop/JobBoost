@@ -11,7 +11,7 @@ import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/utils/cn";
 
 // Routes only accessible by super_admin
-const SUPER_ADMIN_ROUTES = ["/dashboard/tokens", "/dashboard/rules", "/dashboard/versions"];
+const SUPER_ADMIN_ROUTES = ["/dashboard/rules", "/dashboard/versions"];
 
 export default function DashboardLayout({
   children,

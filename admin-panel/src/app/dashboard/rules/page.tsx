@@ -174,6 +174,8 @@ export default function RulesPage() {
     {
       key: "target_section",
       label: "Target Section",
+      sortable: true,
+      filterOptions: targetSectionOptions,
       render: (value: string) => (
         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
           {value}
@@ -183,6 +185,10 @@ export default function RulesPage() {
     {
       key: "is_active",
       label: "Status",
+      filterOptions: [
+        { value: "true", label: "Active" },
+        { value: "false", label: "Inactive" },
+      ],
       render: (value: boolean) => (
         <span
           className={`px-2 py-1 text-xs font-semibold rounded-full ${
@@ -193,7 +199,7 @@ export default function RulesPage() {
         </span>
       ),
     },
-    { key: "created_at", label: "Created", render: (value: string) => formatDate(value) },
+    { key: "created_at", label: "Created", sortable: true, render: (value: string) => formatDate(value) },
     {
       key: "id",
       label: "Actions",

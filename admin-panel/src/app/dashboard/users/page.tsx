@@ -81,6 +81,7 @@ export default function UsersPage() {
     {
       key: "full_name",
       label: "Full Name",
+      sortable: true,
       render: (value: string, row: User) => (
         <div className="flex items-center gap-2">
           {row.type === "admin" || row.type === "super_admin" ? (
@@ -92,7 +93,7 @@ export default function UsersPage() {
         </div>
       ),
     },
-    { key: "email", label: "Email" },
+    { key: "email", label: "Email", sortable: true },
     // Role column only shown to super_admins (admins always see bidders only)
     ...(isSuperAdmin ? [{
       key: "type",
@@ -115,6 +116,10 @@ export default function UsersPage() {
     {
       key: "is_active",
       label: "Status",
+      filterOptions: [
+        { value: "true", label: "Active" },
+        { value: "false", label: "Inactive" },
+      ],
       render: (value: boolean, row: User) => {
         if (row.type === "admin" && !row.is_approved) {
           return (
@@ -134,7 +139,7 @@ export default function UsersPage() {
         );
       },
     },
-    { key: "created_at", label: "Created", render: (value: string) => formatDate(value) },
+    { key: "created_at", label: "Created", sortable: true, render: (value: string) => formatDate(value) },
     {
       key: "id",
       label: "Actions",
