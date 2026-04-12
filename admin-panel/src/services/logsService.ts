@@ -92,11 +92,6 @@ export interface GenerationLog {
 
 export interface LogsListResponse {
   items: GenerationLog[];
-  total_count: number;
-  cur_page: number;
-  next_page: number | null;
-  prev_page: number | null;
-  per_page: number;
 }
 
 export interface LogsStatsResponse {
@@ -151,64 +146,32 @@ export const logsService = {
 
     if (effectiveDateFrom) params.set("date_from", toStartOfDayEST(effectiveDateFrom));
     if (effectiveDateTo) params.set("date_to", toEndOfDayEST(effectiveDateTo));
-    params.set("per_page", "1000");
-    params.set("page", "1");
     const response = await api.get(`/logs/list?${params.toString()}`);
     return response.data;
   },
 
   /**
-   * Fetch ALL pages for a given date range, accumulating into one array.
+   * Fetch ALL logs for a given date range in a single request.
    * Used for full initial loads (especially "all time").
    */
   listAllPages: async (dateFrom?: string, dateTo?: string): Promise<GenerationLog[]> => {
-    const allItems: GenerationLog[] = [];
-    let page = 1;
-    const perPage = 1000;
+    const params = new URLSearchParams();
+    if (dateFrom) params.set("date_from", toStartOfDayEST(dateFrom));
+    if (dateTo)   params.set("date_to",   toEndOfDayEST(dateTo));
 
-    while (true) {
-      const params = new URLSearchParams();
-      if (dateFrom) params.set("date_from", toStartOfDayEST(dateFrom));
-      if (dateTo)   params.set("date_to",   toEndOfDayEST(dateTo));
-      params.set("per_page", String(perPage));
-      params.set("page",     String(page));
-
-      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
-      const data = response.data;
-      allItems.push(...data.items);
-
-      // Stop when there's no next page
-      if (!data.next_page || data.items.length < perPage) break;
-      page++;
-    }
-
-    return allItems;
+    const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
+    return response.data.items;
   },
 
   /**
    * Delta fetch: returns all records whose created_at OR updated_at >= updatedSince.
-   * Paginated to handle large deltas.
    */
   listDelta: async (updatedSince: string): Promise<GenerationLog[]> => {
-    const allItems: GenerationLog[] = [];
-    let page = 1;
-    const perPage = 1000;
+    const params = new URLSearchParams();
+    params.set("updated_since", updatedSince);
 
-    while (true) {
-      const params = new URLSearchParams();
-      params.set("updated_since", updatedSince);
-      params.set("per_page", String(perPage));
-      params.set("page",     String(page));
-
-      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
-      const data = response.data;
-      allItems.push(...data.items);
-
-      if (!data.next_page || data.items.length < perPage) break;
-      page++;
-    }
-
-    return allItems;
+    const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
+    return response.data.items;
   },
 
   stats: async (

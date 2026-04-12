@@ -19,8 +19,6 @@ query "logs/list" verb=GET {
     timestamp date_from?
     timestamp date_to?
     timestamp updated_since?
-    int page?=1
-    int per_page?=1000
   }
 
   stack {
@@ -48,10 +46,7 @@ query "logs/list" verb=GET {
         db.query generation_log {
           where = ($db.generation_log.created_at >= $input.updated_since || $db.generation_log.updated_at >= $input.updated_since)
           sort = {generation_log.created_at: "desc"}
-          return = {
-            type  : "list"
-            paging: {page: $input.page, per_page: $input.per_page}
-          }
+          return = {type: "list"}
         } as $logs
       }
     
@@ -60,10 +55,7 @@ query "logs/list" verb=GET {
         db.query generation_log {
           where = (($has_from == false || $db.generation_log.created_at >= $input.date_from) && ($has_to == false || $db.generation_log.created_at <= $input.date_to))
           sort = {generation_log.created_at: "desc"}
-          return = {
-            type  : "list"
-            paging: {page: $input.page, per_page: $input.per_page}
-          }
+          return = {type: "list"}
         } as $logs
       }
     }
@@ -73,7 +65,7 @@ query "logs/list" verb=GET {
       if ($auth_user.type == "super_admin") {
         // Super admin sees everything — no filtering needed
         var $filtered_items {
-          value = $logs.items
+          value = $logs
         }
       }
     
@@ -138,7 +130,7 @@ query "logs/list" verb=GET {
           value = []
         }
       
-        foreach ($logs.items) {
+        foreach ($logs) {
           each as $log {
             foreach ($allowed_profile_ids) {
               each as $aid {
@@ -157,12 +149,5 @@ query "logs/list" verb=GET {
     }
   }
 
-  response = {
-    items      : $filtered_items
-    total_count: $logs.itemsReceived
-    cur_page   : $logs.curPage
-    next_page  : $logs.nextPage
-    prev_page  : $logs.prevPage
-    per_page   : $logs.perPage
-  }
+  response = {items: $filtered_items}
 }
