@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { tokenService, type Token, type TokenRequest } from "@/services/tokenService";
@@ -8,7 +8,6 @@ import { userService } from "@/services/userService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
-import Select from "@/components/Select";
 import Input from "@/components/Input";
 import PasswordConfirmModal from "@/components/PasswordConfirmModal";
 import {
@@ -29,6 +28,98 @@ import { formatDate } from "@/utils/dateUtils";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import { useForm } from "react-hook-form";
+
+// ── Custom UserSelect dropdown with styled role tags ────────────────
+interface UserOption {
+  value: string;
+  label: string;
+  type: string;
+}
+
+const UserSelect = forwardRef<HTMLInputElement, {
+  label?: string;
+  options: UserOption[];
+  required?: boolean;
+  name?: string;
+  onChange?: (e: any) => void;
+  onBlur?: (e: any) => void;
+}>(({ label, options, required, name, onChange, onBlur }, ref) => {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<UserOption | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="w-full relative" ref={containerRef}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
+      <input type="hidden" ref={ref} name={name} value={selected?.value ?? ""} />
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors"
+      >
+        {selected ? (
+          <span className="flex items-center justify-between w-full">
+            <span className="text-gray-900">{selected.label}</span>
+            {selected.type === "admin" && (
+              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-violet-100 text-violet-700 border border-violet-200">
+                Admin
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="text-gray-400">Select an option</span>
+        )}
+        <svg className={`w-4 h-4 text-gray-400 ml-2 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="absolute z-50 mt-1 left-0 right-0 max-h-60 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+          {options.map((opt) => (
+            <li
+              key={opt.value}
+              onClick={() => {
+                setSelected(opt);
+                setOpen(false);
+                if (onChange) {
+                  const syntheticEvent = { target: { name, value: opt.value } };
+                  onChange(syntheticEvent);
+                }
+              }}
+              className={`flex items-center justify-between px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 transition-colors ${
+                selected?.value === opt.value ? "bg-primary-50 text-primary-700" : "text-gray-900"
+              }`}
+            >
+              <span>{opt.label}</span>
+              {opt.type === "admin" && (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-violet-100 text-violet-700 border border-violet-200">
+                  Admin
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+});
+
+UserSelect.displayName = "UserSelect";
 
 export default function TokensPage() {
   const router = useRouter();
@@ -94,18 +185,14 @@ export default function TokensPage() {
     },
   });
 
-  // Build select options with role badges for clarity
+  // Build select options with type info for styled rendering
   const userSelectOptions = useMemo(() => {
-    return allEligibleUsers.map((u) => {
-      let label = u.full_name;
-      if (u.type === "admin") {
-        label = `${u.full_name}  ★ Admin`;
-      } else if (!isSuperAdmin && u.id === admin?.id) {
-        label = `${u.full_name}  ★ You`;
-      }
-      return { value: u.id, label };
-    });
-  }, [allEligibleUsers, admin, isSuperAdmin]);
+    return allEligibleUsers.map((u) => ({
+      value: u.id,
+      label: u.full_name,
+      type: u.type,
+    }));
+  }, [allEligibleUsers]);
 
   const { data: requests = [], refetch: refetchRequests } = useQuery({
     queryKey: ["token-requests"],
@@ -653,11 +740,11 @@ export default function TokensPage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit(onSubmitGenerate)} className="p-6 space-y-4">
-                  <Select
+                  <UserSelect
                     label="Select User"
                     options={userSelectOptions}
-                    {...register("bidder_id")}
                     required
+                    {...register("bidder_id")}
                   />
                   <Input label="Expiration Date (Optional)" type="date" {...register("expiration_date")} />
                   <Button type="submit" loading={generateMutation.isPending} className="w-full">
@@ -667,11 +754,11 @@ export default function TokensPage() {
               )
             ) : (
               <form onSubmit={handleSubmitRequest(onSubmitRequest)} className="p-6 space-y-4">
-                <Select
+                <UserSelect
                   label="Select User"
                   options={userSelectOptions}
-                  {...registerRequest("bidder_id")}
                   required
+                  {...registerRequest("bidder_id")}
                 />
                 <Input label="Expiration Date (Optional)" type="date" {...registerRequest("expiration_date")} />
                 <div>
