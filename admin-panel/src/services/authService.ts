@@ -17,6 +17,7 @@ export interface LoginResponse {
     id: string;
     email: string;
     name: string;
+    type: "admin" | "super_admin";
   };
 }
 
@@ -26,7 +27,7 @@ export const authService = {
     return response.data;
   },
 
-  register: async (credentials: RegisterCredentials): Promise<LoginResponse> => {
+  register: async (credentials: RegisterCredentials): Promise<{ message: string }> => {
     const response = await api.post("/auth/register", credentials);
     return response.data;
   },
@@ -41,5 +42,10 @@ export const authService = {
 
   setToken: (token: string) => {
     localStorage.setItem("admin_token", token);
+  },
+
+  getMe: async (): Promise<{ id: string; email: string; name: string; type: "admin" | "super_admin" }> => {
+    const response = await api.get("/auth/me");
+    return response.data;
   },
 };

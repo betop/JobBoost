@@ -1,4 +1,5 @@
 // Update user — supports one or more profiles via profile_ids array
+// assigned_bidder_ids can be set by super_admin to assign bidders to an admin
 query "users/{id}" verb=PUT {
   api_group = "users"
   auth = "users"
@@ -9,7 +10,9 @@ query "users/{id}" verb=PUT {
     email email? filters=trim|lower
     text type?
     uuid[] profile_ids?
+    uuid[] assigned_bidder_ids?
     bool is_active?
+    bool is_approved?
   }
 
   stack {
@@ -60,9 +63,25 @@ query "users/{id}" verb=PUT {
     }
   
     conditional {
+      if ($input.assigned_bidder_ids != null) {
+        var.update $payload.assigned_bidder_ids {
+          value = $input.assigned_bidder_ids
+        }
+      }
+    }
+  
+    conditional {
       if ($input.is_active != null) {
         var.update $payload.is_active {
           value = $input.is_active
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.is_approved != null) {
+        var.update $payload.is_approved {
+          value = $input.is_approved
         }
       }
     }
@@ -108,6 +127,7 @@ query "users/{id}" verb=PUT {
     profile_ids  : $b.profile_ids
     profile_names: $profile_names
     is_active    : $b.is_active
+    is_approved  : $b.is_approved
     created_at   : $b.created_at
   }
 }

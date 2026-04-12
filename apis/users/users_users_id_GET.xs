@@ -42,13 +42,15 @@ query "users/{id}" verb=GET {
   }
 
   response = {
-    id           : $b.id
-    full_name    : $b.full_name
-    email        : $b.email
-    type         : $b.type
-    profile_ids  : $b.profile_ids
-    profile_names: $profile_names
-    is_active    : $b.is_active
-    created_at   : $b.created_at
+    id                 : $b.id
+    full_name          : $b.full_name
+    email              : $b.email
+    type               : $b.type
+    profile_ids        : $b.profile_ids
+    profile_names      : $profile_names
+    assigned_bidder_ids: $b.assigned_bidder_ids
+    is_active          : $b.is_active
+    is_approved        : $b.is_approved
+    created_at         : $b.created_at
   }
 }

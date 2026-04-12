@@ -10,6 +10,7 @@ import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
 import { downloadResumePDF } from "@/utils/pdfDownload";
 import { userService } from "@/services/userService";
 import { profileService } from "@/services/profileService";
+import { useAuthStore } from "@/store/authStore";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   Activity,
@@ -578,6 +579,7 @@ export default function LogsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const admin = useAuthStore((state) => state.admin);
   
   // Get today's date as YYYY-MM-DD in EST
   const today = todayInEST();
@@ -835,8 +837,19 @@ export default function LogsPage() {
         bidder_name: log.bidder_name || (isAdminBidder ? "Admin" : bidderMap.get(bidderId) || ""),
       });
     }
+
+    // Access control: admins see only logs for their assigned/created profiles
+    if (admin?.type !== "super_admin" && profiles && profiles.length > 0) {
+      const allowedProfileIds = new Set(profiles.map((p) => p.id));
+      return result.filter((log) => allowedProfileIds.has(log.profile_id));
+    }
+    // If admin is not super_admin and no profiles loaded yet, show nothing
+    if (admin?.type !== "super_admin" && (!profiles || profiles.length === 0)) {
+      return [];
+    }
+
     return result;
-  }, [cachedRows, profiles, bidders]);
+  }, [cachedRows, profiles, bidders, admin]);
 
   const bidderOptions = useMemo(() => {
     const options = (bidders ?? []).map((b) => ({ value: b.id, label: b.full_name }));

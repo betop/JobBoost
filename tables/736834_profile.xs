@@ -13,6 +13,9 @@ table profile {
     text job_category?
     int resume_template?=1
     timestamp updated_at?
+    uuid created_by? {
+      table = "users"
+    }
   }
 
   index = [

@@ -1,4 +1,4 @@
-// Admin registration (one-time setup — blocked if any admin already exists)
+// Admin registration — creates a new admin account pending super admin approval
 query "auth/register" verb=POST {
   api_group = "auth"
 
@@ -24,17 +24,6 @@ query "auth/register" verb=POST {
       error = "password is required"
     }
   
-    // Block registration if any admin already exists
-    db.query users {
-      where = {} == true
-      return = {type: "count"}
-    } as $admin_count
-  
-    precondition ($admin_count == 0) {
-      error_type = "accessdenied"
-      error = "Registration is disabled. An admin account already exists."
-    }
-  
     // Check email not already taken
     db.get users {
       field_name = "email"
@@ -54,27 +43,13 @@ query "auth/register" verb=POST {
         password_hash: $input.password
         type         : "admin"
         is_active    : true
-        is_approved  : true
+        is_approved  : false
         updated_at   : now
       }
     } as $admin
-  
-    security.create_auth_token {
-      table = "users"
-      extras = {}
-      expiration = 86400
-      id = $admin.id
-    } as $authToken
   }
 
   response = {
-    token: $authToken
-    admin: ```
-      {
-        id   : $admin.id
-        email: $admin.email
-        name : $admin.full_name
-      }
-      ```
+    message: "Your account has been created and is pending approval from a super admin."
   }
 }

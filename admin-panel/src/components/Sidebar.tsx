@@ -20,14 +20,14 @@ import { authService } from "@/services/authService";
 import { cn } from "@/utils/cn";
 
 const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Profiles", href: "/dashboard/profiles", icon: Users },
-  { name: "Users", href: "/dashboard/users", icon: UserCheck },
-  { name: "Keys", href: "/dashboard/tokens", icon: Key },
-  { name: "Rules", href: "/dashboard/rules", icon: FileText },
-  { name: "Extensions", href: "/dashboard/versions", icon: Package },
-  { name: "Generation Logs", href: "/dashboard/logs", icon: Activity },
-  { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, superOnly: false },
+  { name: "Profiles", href: "/dashboard/profiles", icon: Users, superOnly: false },
+  { name: "Users", href: "/dashboard/users", icon: UserCheck, superOnly: false },
+  { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: true },
+  { name: "Rules", href: "/dashboard/rules", icon: FileText, superOnly: true },
+  { name: "Extensions", href: "/dashboard/versions", icon: Package, superOnly: true },
+  { name: "Generation Logs", href: "/dashboard/logs", icon: Activity, superOnly: false },
+  { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail, superOnly: false },
 ];
 
 export default function Sidebar() {
@@ -42,6 +42,9 @@ export default function Sidebar() {
     logout();
     router.push("/login");
   };
+
+  const isSuperAdmin = admin?.type === "super_admin";
+  const visibleNav = navigation.filter((item) => !item.superOnly || isSuperAdmin);
 
   return (
     <>
@@ -66,7 +69,7 @@ export default function Sidebar() {
           </div>
 
           <nav className="flex-1 px-4 py-6 space-y-2">
-            {navigation.map((item) => {
+            {visibleNav.map((item) => {
               const Icon = item.icon;
               const isActive =
                 item.href === "/dashboard"

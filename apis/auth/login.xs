@@ -55,6 +55,7 @@ query "auth/login" verb=POST {
         id: $user.id
         email: $user.email
         name: $user.full_name
+        type: $user.type
       }
       ```
   }

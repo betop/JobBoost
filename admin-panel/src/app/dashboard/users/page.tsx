@@ -4,14 +4,16 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { userService, type User, type UserType } from "@/services/userService";
+import { useAuthStore } from "@/store/authStore";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
-import { Edit, Trash2, UserX, Plus, Shield, User as UserIcon } from "lucide-react";
+import { Edit, Trash2, UserX, Plus, Shield, User as UserIcon, CheckCircle } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 
-const TYPE_TABS: { label: string; value: UserType | "all" }[] = [
+// Tabs only shown to super_admin
+const SUPER_ADMIN_TABS: { label: string; value: UserType | "all" }[] = [
   { label: "All Users", value: "all" },
   { label: "Admins", value: "admin" },
   { label: "Bidders", value: "bidder" },
@@ -26,14 +28,24 @@ const TYPE_BADGE: Record<string, { label: string; className: string }> = {
 export default function UsersPage() {
   const router = useRouter();
   const showToast = useUIStore((state) => state.showToast);
+  const admin = useAuthStore((state) => state.admin);
+  const isSuperAdmin = admin?.type === "super_admin";
+
   const [activeTab, setActiveTab] = useState<UserType | "all">("all");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
+  const [approveId, setApproveId] = useState<string | null>(null);
 
-  const { data: users = [], isLoading, refetch } = useQuery({
-    queryKey: ["users", activeTab],
-    queryFn: () => userService.getAll(activeTab === "all" ? undefined : activeTab),
+  // Admins always see only bidders; super_admins use the tab filter
+  const queryType = isSuperAdmin ? (activeTab === "all" ? undefined : activeTab) : "bidder";
+
+  const { data: rawUsers = [], isLoading, refetch } = useQuery({
+    queryKey: ["users", isSuperAdmin ? activeTab : "bidder"],
+    queryFn: () => userService.getAll(queryType),
   });
+
+  // Never show super_admin in the users list
+  const users = rawUsers.filter((u) => u.type !== "super_admin");
 
   const handleDelete = async (id: string) => {
     try {
@@ -55,6 +67,16 @@ export default function UsersPage() {
     }
   };
 
+  const handleApprove = async (id: string) => {
+    try {
+      await userService.approve(id);
+      showToast("Admin approved successfully", "success");
+      refetch();
+    } catch {
+      showToast("Failed to approve admin", "error");
+    }
+  };
+
   const columns = [
     {
       key: "full_name",
@@ -71,7 +93,8 @@ export default function UsersPage() {
       ),
     },
     { key: "email", label: "Email" },
-    {
+    // Role column only shown to super_admins (admins always see bidders only)
+    ...(isSuperAdmin ? [{
       key: "type",
       label: "Role",
       render: (value: string) => {
@@ -82,7 +105,7 @@ export default function UsersPage() {
           </span>
         );
       },
-    },
+    }] : []),
     {
       key: "profile_names",
       label: "Profiles",
@@ -92,15 +115,24 @@ export default function UsersPage() {
     {
       key: "is_active",
       label: "Status",
-      render: (value: boolean) => (
-        <span
-          className={`px-2 py-1 text-xs font-semibold rounded-full ${
-            value ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-          }`}
-        >
-          {value ? "Active" : "Inactive"}
-        </span>
-      ),
+      render: (value: boolean, row: User) => {
+        if (row.type === "admin" && !row.is_approved) {
+          return (
+            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+              Pending Approval
+            </span>
+          );
+        }
+        return (
+          <span
+            className={`px-2 py-1 text-xs font-semibold rounded-full ${
+              value ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+            }`}
+          >
+            {value ? "Active" : "Inactive"}
+          </span>
+        );
+      },
     },
     { key: "created_at", label: "Created", render: (value: string) => formatDate(value) },
     {
@@ -108,6 +140,15 @@ export default function UsersPage() {
       label: "Actions",
       render: (_: unknown, row: User) => (
         <div className="flex items-center gap-2">
+          {isSuperAdmin && row.type === "admin" && !row.is_approved && (
+            <button
+              onClick={() => setApproveId(row.id)}
+              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"
+              title="Approve"
+            >
+              <CheckCircle className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => router.push(`/dashboard/users/${row.id}/edit`)}
             className="p-1.5 text-green-600 hover:bg-green-50 rounded"
@@ -139,7 +180,9 @@ export default function UsersPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Users</h1>
-          <p className="text-gray-600 mt-2">Manage admins and bidders</p>
+          <p className="text-gray-600 mt-2">
+            {isSuperAdmin ? "Manage admins and bidders" : "Manage bidders"}
+          </p>
         </div>
         <Button onClick={() => router.push("/dashboard/users/new")}>
           <Plus className="w-5 h-5" />
@@ -147,22 +190,24 @@ export default function UsersPage() {
         </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {TYPE_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => setActiveTab(tab.value)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              activeTab === tab.value
-                ? "border-primary-600 text-primary-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs — only visible to super_admin */}
+      {isSuperAdmin && (
+        <div className="flex gap-1 mb-6 border-b border-gray-200">
+          {SUPER_ADMIN_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === tab.value
+                  ? "border-primary-600 text-primary-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <DataTable
@@ -180,7 +225,8 @@ export default function UsersPage() {
         onConfirm={() => deleteId && handleDelete(deleteId)}
         title="Delete User"
         message="Are you sure you want to delete this user? This action cannot be undone."
-        confirmText="Delete"
+        confirmText="Yes, Delete"
+        cancelText="No, Cancel"
         variant="danger"
       />
 
@@ -190,8 +236,20 @@ export default function UsersPage() {
         onConfirm={() => deactivateId && handleDeactivate(deactivateId)}
         title="Deactivate User"
         message="Are you sure you want to deactivate this user?"
-        confirmText="Deactivate"
+        confirmText="Yes, Deactivate"
+        cancelText="No, Cancel"
         variant="warning"
+      />
+
+      <ConfirmDialog
+        isOpen={approveId !== null}
+        onClose={() => setApproveId(null)}
+        onConfirm={() => approveId && handleApprove(approveId)}
+        title="Approve Admin"
+        message="Are you sure you want to approve this admin? They will be able to log in and access the dashboard."
+        confirmText="Yes, Approve"
+        cancelText="No, Cancel"
+        variant="info"
       />
     </>
   );

@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { userService, type UserType } from "@/services/userService";
 import { profileService } from "@/services/profileService";
+import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
@@ -17,8 +18,9 @@ import { ArrowLeft } from "lucide-react";
 const userSchema = z.object({
   full_name: z.string().min(1, "Full name is required"),
   email: z.string().email("Invalid email address"),
-  type: z.enum(["bidder", "admin", "super_admin"] as const),
+  type: z.enum(["bidder", "admin"] as const),
   profile_ids: z.array(z.string()).optional(),
+  assigned_bidder_ids: z.array(z.string()).optional(),
   is_active: z.boolean(),
 });
 
@@ -28,6 +30,8 @@ export default function EditUserPage() {
   const params = useParams();
   const router = useRouter();
   const showToast = useUIStore((state) => state.showToast);
+  const currentAdmin = useAuthStore((state) => state.admin);
+  const isSuperAdmin = currentAdmin?.type === "super_admin";
   const id = params.id as string;
 
   const { data: user, isLoading: userLoading } = useQuery({
@@ -40,6 +44,13 @@ export default function EditUserPage() {
     queryFn: profileService.getAll,
   });
 
+  // Fetch all bidders — used by super_admin to assign bidders to admins
+  const { data: allBidders = [] } = useQuery({
+    queryKey: ["users", "bidder"],
+    queryFn: () => userService.getAll("bidder"),
+    enabled: isSuperAdmin,
+  });
+
   const {
     register,
     handleSubmit,
@@ -49,7 +60,7 @@ export default function EditUserPage() {
     formState: { errors },
   } = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: { type: "bidder", is_active: true, profile_ids: [] },
+    defaultValues: { type: "bidder", is_active: true, profile_ids: [], assigned_bidder_ids: [] },
   });
 
   const selectedType = watch("type");
@@ -59,8 +70,9 @@ export default function EditUserPage() {
       reset({
         full_name: user.full_name,
         email: user.email,
-        type: user.type,
+        type: user.type === "super_admin" ? "admin" : user.type,
         profile_ids: user.profile_ids ?? [],
+        assigned_bidder_ids: user.assigned_bidder_ids ?? [],
         is_active: user.is_active,
       });
     }
@@ -73,6 +85,7 @@ export default function EditUserPage() {
         email: data.email,
         type: data.type as UserType,
         profile_ids: data.profile_ids ?? [],
+        assigned_bidder_ids: data.type === "admin" ? (data.assigned_bidder_ids ?? []) : undefined,
         is_active: data.is_active,
       }),
     onSuccess: () => {
@@ -116,11 +129,10 @@ export default function EditUserPage() {
         onSubmit={handleSubmit(onSubmit)}
         className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6 max-w-2xl"
       >
-        {/* Role selector */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
           <div className="flex gap-4">
-            {(["bidder", "admin", "super_admin"] as const).map((t) => (
+            {(["bidder", "admin"] as const).map((t) => (
               <label key={t} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -129,7 +141,7 @@ export default function EditUserPage() {
                   {...register("type")}
                 />
                 <span className="text-sm font-medium text-gray-800 capitalize">
-                  {t.replace("_", " ")}
+                  {t}
                 </span>
               </label>
             ))}
@@ -152,42 +164,88 @@ export default function EditUserPage() {
           />
         </div>
 
-        {/* Profiles — only relevant for bidders */}
-        {selectedType === "bidder" && (
+        {/* Assign Profiles — for both bidders and admins */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Assign Profiles{" "}
+            <span className="text-gray-400 font-normal">(select one or more)</span>
+          </label>
+          <Controller
+            name="profile_ids"
+            control={control}
+            render={({ field }) => (
+              <div className="space-y-2 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+                {profiles.length === 0 && (
+                  <p className="text-sm text-gray-400">No profiles available</p>
+                )}
+                {profiles.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-primary-600 rounded border-gray-300"
+                      checked={(field.value ?? []).includes(p.id)}
+                      onChange={(e) => {
+                        const current = field.value ?? [];
+                        field.onChange(
+                          e.target.checked
+                            ? [...current, p.id]
+                            : current.filter((pid) => pid !== p.id)
+                        );
+                      }}
+                    />
+                    <span className="text-sm text-gray-800">{p.full_name}</span>
+                    {p.email && (
+                      <span className="text-xs text-gray-400">{p.email}</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+          />
+        </div>
+
+        {/* Assign Bidders — only shown for admin users, only by super_admin */}
+        {isSuperAdmin && selectedType === "admin" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Assign Profiles{" "}
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Assign Bidders{" "}
               <span className="text-gray-400 font-normal">(select one or more)</span>
             </label>
+            <p className="text-xs text-gray-400 mb-2">
+              Selected bidders will be visible to this admin in their Users page.
+            </p>
             <Controller
-              name="profile_ids"
+              name="assigned_bidder_ids"
               control={control}
               render={({ field }) => (
                 <div className="space-y-2 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
-                  {profiles.length === 0 && (
-                    <p className="text-sm text-gray-400">No profiles available</p>
+                  {allBidders.length === 0 && (
+                    <p className="text-sm text-gray-400">No bidders available</p>
                   )}
-                  {profiles.map((p) => (
+                  {allBidders.map((b) => (
                     <label
-                      key={p.id}
+                      key={b.id}
                       className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded"
                     >
                       <input
                         type="checkbox"
                         className="w-4 h-4 text-primary-600 rounded border-gray-300"
-                        checked={(field.value ?? []).includes(p.id)}
+                        checked={(field.value ?? []).includes(b.id)}
                         onChange={(e) => {
                           const current = field.value ?? [];
                           field.onChange(
                             e.target.checked
-                              ? [...current, p.id]
-                              : current.filter((id) => id !== p.id)
+                              ? [...current, b.id]
+                              : current.filter((bid) => bid !== b.id)
                           );
                         }}
                       />
-                      <span className="text-sm text-gray-800">{p.full_name}</span>
-                      {p.email && (
-                        <span className="text-xs text-gray-400">{p.email}</span>
+                      <span className="text-sm text-gray-800">{b.full_name}</span>
+                      {b.email && (
+                        <span className="text-xs text-gray-400">{b.email}</span>
                       )}
                     </label>
                   ))}
@@ -225,3 +283,4 @@ export default function EditUserPage() {
     </>
   );
 }
+

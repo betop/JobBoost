@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { authService } from "@/services/authService";
 import Sidebar from "@/components/Sidebar";
@@ -10,14 +10,18 @@ import Toast from "@/components/Toast";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/utils/cn";
 
+// Routes only accessible by super_admin
+const SUPER_ADMIN_ROUTES = ["/dashboard/tokens", "/dashboard/rules", "/dashboard/versions"];
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [authStatus, setAuthStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
-  const { isAuthenticated, logout, setAdmin } = useAuthStore();
+  const { isAuthenticated, admin, logout, setAdmin } = useAuthStore();
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
 
   // Check authentication on mount
@@ -33,6 +37,12 @@ export default function DashboardLayout({
 
       // Token exists - check if zustand already has auth state
       if (isAuthenticated) {
+        // If type is missing from existing session, refresh it from the backend
+        if (admin && !admin.type) {
+          authService.getMe().then((me) => {
+            setAdmin({ ...admin, type: me.type });
+          }).catch(() => {});
+        }
         setAuthStatus("authenticated");
         return;
       }
@@ -44,8 +54,17 @@ export default function DashboardLayout({
         if (persistedState) {
           const parsed = JSON.parse(persistedState);
           if (parsed.state?.isAuthenticated && parsed.state?.admin) {
-            // Restore the state manually if needed
-            setAdmin(parsed.state.admin);
+            const restoredAdmin = parsed.state.admin;
+            // If type is missing (old session), fetch it from backend
+            if (!restoredAdmin.type) {
+              authService.getMe().then((me) => {
+                setAdmin({ ...restoredAdmin, type: me.type });
+              }).catch(() => {
+                setAdmin(restoredAdmin);
+              });
+            } else {
+              setAdmin(restoredAdmin);
+            }
             setAuthStatus("authenticated");
             return;
           }
@@ -70,6 +89,16 @@ export default function DashboardLayout({
       router.push("/login");
     }
   }, [authStatus, logout, router]);
+
+  // Redirect non-super_admin users away from restricted routes
+  useEffect(() => {
+    if (authStatus === "authenticated" && admin && admin.type !== "super_admin") {
+      const isRestricted = SUPER_ADMIN_ROUTES.some((route) => pathname.startsWith(route));
+      if (isRestricted) {
+        router.replace("/dashboard");
+      }
+    }
+  }, [authStatus, admin, pathname, router]);
 
   // Show loading while checking auth
   if (authStatus === "loading") {

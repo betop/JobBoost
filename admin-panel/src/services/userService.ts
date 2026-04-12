@@ -9,7 +9,9 @@ export interface User {
   type: UserType;
   profile_ids?: string[];
   profile_names?: string[];
+  assigned_bidder_ids?: string[];
   is_active: boolean;
+  is_approved: boolean;
   created_at: string;
 }
 
@@ -19,6 +21,7 @@ export interface CreateUserInput {
   type: UserType;
   password?: string;
   profile_ids?: string[];
+  assigned_bidder_ids?: string[];
   is_active: boolean;
 }
 
@@ -50,5 +53,9 @@ export const userService = {
 
   deactivate: async (id: string): Promise<void> => {
     await api.put(`/users/${id}`, { is_active: false });
+  },
+
+  approve: async (id: string): Promise<void> => {
+    await api.put(`/users/${id}`, { is_approved: true });
   },
 };

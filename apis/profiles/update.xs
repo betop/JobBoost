@@ -1,4 +1,5 @@
 // Update profile (optional nested replace)
+// Admins can only update profiles they created or are assigned to
 query "profiles/{id}" verb=PUT {
   api_group = "profiles"
   auth = "users"
@@ -26,6 +27,49 @@ query "profiles/{id}" verb=PUT {
     precondition ($p != null) {
       error_type = "notfound"
       error = "Profile not found"
+    }
+  
+    // Access control: admins can only update their own created/assigned profiles
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $auth_user
+  
+    conditional {
+      if ($auth_user.type != "super_admin") {
+        var $has_access {
+          value = false
+        }
+      
+        conditional {
+          if ($p.created_by == $auth.id) {
+            var.update $has_access {
+              value = true
+            }
+          }
+        }
+      
+        conditional {
+          if ($auth_user.profile_ids != null) {
+            foreach ($auth_user.profile_ids) {
+              each as $pid {
+                conditional {
+                  if ($pid == $p.id) {
+                    var.update $has_access {
+                      value = true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      
+        precondition ($has_access) {
+          error_type = "accessdenied"
+          error = "You do not have access to this profile"
+        }
+      }
     }
   
     var $payload {

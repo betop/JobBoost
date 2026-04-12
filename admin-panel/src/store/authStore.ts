@@ -5,6 +5,7 @@ interface Admin {
   id: string;
   email: string;
   name: string;
+  type: "admin" | "super_admin";
 }
 
 interface AuthState {

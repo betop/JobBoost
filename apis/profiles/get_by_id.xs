@@ -1,4 +1,5 @@
 // Get profile by id (includes education + work)
+// Admins can only access profiles they created or are assigned to
 query "profiles/{id}" verb=GET {
   api_group = "profiles"
   auth = "users"
@@ -16,6 +17,51 @@ query "profiles/{id}" verb=GET {
     precondition ($p != null) {
       error_type = "notfound"
       error = "Profile not found"
+    }
+  
+    // Access control: admins can only see their own created/assigned profiles
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $auth_user
+  
+    conditional {
+      if ($auth_user.type != "super_admin") {
+        var $has_access {
+          value = false
+        }
+      
+        // Check if created by this admin
+        conditional {
+          if ($p.created_by == $auth.id) {
+            var.update $has_access {
+              value = true
+            }
+          }
+        }
+      
+        // Check if assigned to this admin
+        conditional {
+          if ($auth_user.profile_ids != null) {
+            foreach ($auth_user.profile_ids) {
+              each as $pid {
+                conditional {
+                  if ($pid == $p.id) {
+                    var.update $has_access {
+                      value = true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      
+        precondition ($has_access) {
+          error_type = "accessdenied"
+          error = "You do not have access to this profile"
+        }
+      }
     }
   
     db.query education {

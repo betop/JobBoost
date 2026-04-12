@@ -7,7 +7,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { authService } from "@/services/authService";
 import { useAuthStore } from "@/store/authStore";
-import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
 import Link from "next/link";
@@ -22,8 +21,8 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const setAdmin = useAuthStore((state) => state.setAdmin);
-  const showToast = useUIStore((state) => state.showToast);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const {
     register,
@@ -35,11 +34,11 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const response = await authService.login(data);
       authService.setToken(response.token);
       setAdmin(response.admin);
-      showToast("Login successful", "success");
       router.push("/dashboard");
     } catch (error: any) {
       const message =
@@ -47,7 +46,7 @@ export default function LoginPage() {
         error?.response?.data?.error ||
         error?.message ||
         "Login failed";
-      showToast(message, "error");
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
@@ -65,6 +64,15 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {errorMessage && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                </svg>
+                <p className="text-sm text-red-700">{errorMessage}</p>
+              </div>
+            )}
+
             <Input
               label="Email"
               type="email"

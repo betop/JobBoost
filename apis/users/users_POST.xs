@@ -56,6 +56,7 @@ query users verb=POST {
         profile_ids: $ids
         is_active  : $input.is_active
         updated_at : now
+        created_by : $auth.id
       }
     } as $b
   

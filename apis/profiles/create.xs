@@ -27,6 +27,7 @@ query profiles verb=POST {
         github_url  : $input.github
         job_category: $input.job_category
         updated_at  : now
+        created_by  : $auth.id
       }
     } as $p
   
