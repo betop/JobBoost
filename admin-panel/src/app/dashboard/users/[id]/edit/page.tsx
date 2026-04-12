@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -37,6 +37,8 @@ export default function EditUserPage() {
   const { data: user, isLoading: userLoading } = useQuery({
     queryKey: ["user", id],
     queryFn: () => userService.getById(id),
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const { data: profiles = [] } = useQuery({
@@ -78,6 +80,8 @@ export default function EditUserPage() {
     }
   }, [user, reset]);
 
+  const queryClient = useQueryClient();
+
   const updateMutation = useMutation({
     mutationFn: (data: UserFormData) =>
       userService.update(id, {
@@ -89,6 +93,8 @@ export default function EditUserPage() {
         is_active: data.is_active,
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user", id] });
+      queryClient.invalidateQueries({ queryKey: ["users"] });
       showToast("User updated successfully", "success");
       router.push("/dashboard/users");
     },
@@ -256,11 +262,18 @@ export default function EditUserPage() {
         )}
 
         <div className="flex items-center gap-3">
-          <input
-            id="is_active"
-            type="checkbox"
-            className="w-4 h-4 text-primary-600 rounded border-gray-300"
-            {...register("is_active")}
+          <Controller
+            name="is_active"
+            control={control}
+            render={({ field }) => (
+              <input
+                id="is_active"
+                type="checkbox"
+                className="w-4 h-4 text-primary-600 rounded border-gray-300"
+                checked={field.value}
+                onChange={(e) => field.onChange(e.target.checked)}
+              />
+            )}
           />
           <label htmlFor="is_active" className="text-sm font-medium text-gray-700">
             Active Account

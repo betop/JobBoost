@@ -70,12 +70,8 @@ query "users/{id}" verb=PUT {
       }
     }
   
-    conditional {
-      if ($input.is_active != null) {
-        var.update $payload.is_active {
-          value = $input.is_active
-        }
-      }
+    var.update $payload.is_active {
+      value = $input.is_active
     }
   
     conditional {

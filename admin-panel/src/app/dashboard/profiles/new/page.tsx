@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { profileService } from "@/services/profileService";
 import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
@@ -49,6 +49,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 
 export default function NewProfilePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
 
   const {
@@ -103,6 +104,7 @@ export default function NewProfilePage() {
   const createMutation = useMutation({
     mutationFn: profileService.create,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
       showToast("Profile created successfully", "success");
       router.push("/dashboard/profiles");
     },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -54,6 +54,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 
 function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
 
   // Xano returns dates as "YYYY-MM-DD"; <input type="month"> needs "YYYY-MM"
@@ -108,6 +109,8 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   const updateMutation = useMutation({
     mutationFn: (data: ProfileFormData) => profileService.update(id, data),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profile", id] });
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
       showToast("Profile updated successfully", "success");
       router.push(`/dashboard/profiles/${id}`);
     },
