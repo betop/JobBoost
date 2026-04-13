@@ -13,6 +13,10 @@ table access_token {
       table = "users"
     }
   
+    uuid[] assigned_admin_ids? {
+      table = "users"
+    }
+  
     timestamp issued_at?=now
     timestamp expires_at?
     bool is_used?

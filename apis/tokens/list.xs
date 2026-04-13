@@ -1,5 +1,6 @@
 // List all tokens with user names
-// Super admins see all tokens, admins see only tokens where created_by_admin_id == their id
+// Super admins see all tokens
+// Admins see tokens they created OR tokens assigned to them (view-only)
 query tokens verb=GET {
   api_group = "tokens"
   auth = "users"
@@ -25,8 +26,12 @@ query tokens verb=GET {
   
     foreach ($tokens) {
       each as $t {
-        // For admins, only show tokens they created
+        // Determine if this token should be included
         var $should_include {
+          value = false
+        }
+      
+        var $is_assigned {
           value = false
         }
       
@@ -42,6 +47,27 @@ query tokens verb=GET {
           if ($auth_user.type == "admin" && $t.created_by_admin_id == $auth.id) {
             var.update $should_include {
               value = true
+            }
+          }
+        }
+      
+        // Check if token is assigned to this admin
+        conditional {
+          if ($auth_user.type == "admin" && $t.assigned_admin_ids != null) {
+            foreach ($t.assigned_admin_ids) {
+              each as $assigned_id {
+                conditional {
+                  if ($assigned_id == $auth.id) {
+                    var.update $should_include {
+                      value = true
+                    }
+                  
+                    var.update $is_assigned {
+                      value = true
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -79,15 +105,17 @@ query tokens verb=GET {
           
             array.push $out {
               value = {
-                id             : $t.id
-                token          : $t.token
-                user_id        : $t.user_id
-                user_name      : $user_name_val
-                user_type      : $user_type
-                issued_date    : $t.issued_at
-                expiration_date: $t.expires_at
-                is_used        : $t.is_used
-                is_active      : $t.is_active
+                id                : $t.id
+                token             : $t.token
+                user_id           : $t.user_id
+                user_name         : $user_name_val
+                user_type         : $user_type
+                issued_date       : $t.issued_at
+                expiration_date   : $t.expires_at
+                is_used           : $t.is_used
+                is_active         : $t.is_active
+                assigned_admin_ids: $t.assigned_admin_ids
+                is_assigned       : $is_assigned
               }
             }
           }

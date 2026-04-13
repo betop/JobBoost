@@ -5,10 +5,13 @@ export interface Token {
   token: string;
   user_id: string;
   user_name: string;
+  user_type?: string;
   issued_date: string;
   expiration_date?: string;
   is_used: boolean;
   is_active: boolean;
+  assigned_admin_ids?: string[];
+  is_assigned?: boolean;
 }
 
 export interface GenerateTokenInput {
@@ -83,5 +86,10 @@ export const tokenService = {
 
   declineRequest: async (id: string, review_notes?: string): Promise<void> => {
     await api.patch(`/tokens/requests/${id}/decline`, { review_notes });
+  },
+
+  // Assign admins to a token (super_admin only)
+  assignAdmins: async (tokenId: string, adminIds: string[]): Promise<void> => {
+    await api.patch(`/tokens/${tokenId}/assign-admins`, { admin_ids: adminIds });
   },
 };

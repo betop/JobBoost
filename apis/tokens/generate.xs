@@ -59,6 +59,7 @@ query "tokens/generate" verb=POST {
         token_hash         : $token_hash
         user_id            : $input.user_id
         created_by_admin_id: $auth.id
+        assigned_admin_ids : []
         issued_at          : now
         expires_at         : $input.expiration_date
         is_used            : false

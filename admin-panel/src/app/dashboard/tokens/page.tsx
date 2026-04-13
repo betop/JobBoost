@@ -23,6 +23,7 @@ import {
   X,
   Send,
   MessageSquare,
+  UserPlus,
 } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useUIStore } from "@/store/uiStore";
@@ -165,6 +166,8 @@ export default function TokensPage() {
   const [reviewNotes, setReviewNotes] = useState("");
   const [requestTab, setRequestTab] = useState<"pending" | "all">("pending");
   const [activeTab, setActiveTab] = useState<"keys" | "requests">("keys");
+  const [assignModalToken, setAssignModalToken] = useState<Token | null>(null);
+  const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isPasswordVerified) {
@@ -231,6 +234,13 @@ export default function TokensPage() {
     queryKey: ["token-requests"],
     queryFn: () => tokenService.getRequests(),
     enabled: isPasswordVerified || !isSuperAdmin,
+  });
+
+  // Get all admin users for assignment (super_admin only)
+  const { data: allAdmins = [] } = useQuery({
+    queryKey: ["users", "admins"],
+    queryFn: () => userService.getAll("admin"),
+    enabled: isSuperAdmin && isPasswordVerified,
   });
 
   const pendingRequests = useMemo(
@@ -326,6 +336,18 @@ export default function TokensPage() {
     onError: () => showToast("Failed to decline request", "error"),
   });
 
+  const assignAdminsMutation = useMutation({
+    mutationFn: ({ tokenId, adminIds }: { tokenId: string; adminIds: string[] }) =>
+      tokenService.assignAdmins(tokenId, adminIds),
+    onSuccess: () => {
+      showToast("Admin assignments updated successfully", "success");
+      setAssignModalToken(null);
+      setSelectedAdminIds([]);
+      refetch();
+    },
+    onError: () => showToast("Failed to update admin assignments", "error"),
+  });
+
   // ── Handlers ──────────────────────────────────────────────────────
   const onSubmitGenerate = (data: any) => {
     const payload: any = { user_id: data.user_id };
@@ -406,6 +428,11 @@ export default function TokensPage() {
             <code className="text-sm bg-gray-100 px-2 py-1 rounded">
               {isHidden ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : value.substring(0, 20) + "..."}
             </code>
+            {row.is_assigned && (
+              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                Assigned
+              </span>
+            )}
             <button
               onClick={() => {
                 const newHidden = new Set(hiddenTokens);
@@ -470,6 +497,16 @@ export default function TokensPage() {
             label: "Actions",
             render: (_: any, row: Token) => (
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setAssignModalToken(row);
+                    setSelectedAdminIds(row.assigned_admin_ids || []);
+                  }}
+                  className="p-1.5 text-purple-600 hover:bg-purple-50 rounded"
+                  title="Assign to Admins"
+                >
+                  <UserPlus className="w-4 h-4" />
+                </button>
                 <button
                   onClick={() => {
                     setExtendToken(row);
@@ -929,6 +966,88 @@ export default function TokensPage() {
                     >
                       <X className="w-4 h-4" />
                       Decline
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Modal>
+          )}
+
+          {/* Assign Admins modal (super_admin) */}
+          {isSuperAdmin && (
+            <Modal
+              isOpen={assignModalToken !== null}
+              onClose={() => { setAssignModalToken(null); setSelectedAdminIds([]); }}
+              title="Assign Token to Admins"
+              size="md"
+            >
+              {assignModalToken && (
+                <div className="p-6 space-y-5">
+                  <div className="text-sm text-gray-600">
+                    <p className="mb-2">
+                      Token for: <span className="font-medium text-gray-900">{assignModalToken.user_name}</span>
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Assigned admins will be able to view this token (read-only) in their token list.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Admins
+                    </label>
+                    <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
+                      {allAdmins.length === 0 ? (
+                        <div className="p-4 text-sm text-gray-500 text-center">
+                          No admins available
+                        </div>
+                      ) : (
+                        allAdmins.map((admin) => (
+                          <label
+                            key={admin.id}
+                            className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedAdminIds.includes(admin.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedAdminIds([...selectedAdminIds, admin.id]);
+                                } else {
+                                  setSelectedAdminIds(selectedAdminIds.filter((id) => id !== admin.id));
+                                }
+                              }}
+                              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                            />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900">{admin.full_name}</div>
+                              <div className="text-xs text-gray-500">{admin.email}</div>
+                            </div>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={() => {
+                        assignAdminsMutation.mutate({
+                          tokenId: assignModalToken.id,
+                          adminIds: selectedAdminIds,
+                        });
+                      }}
+                      loading={assignAdminsMutation.isPending}
+                      className="flex-1"
+                    >
+                      Save Assignments
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => { setAssignModalToken(null); setSelectedAdminIds([]); }}
+                      className="flex-1"
+                    >
+                      Cancel
                     </Button>
                   </div>
                 </div>
