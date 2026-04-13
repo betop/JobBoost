@@ -1,5 +1,7 @@
 // Generation stats summary — used by admin dashboard and logs page
 // Returns per-day counts and top bidders/profiles for a date range
+// super_admins: see all logs
+// admins: see only logs for bidders they created or are assigned
 query "logs/stats" verb=GET {
   api_group = "logs"
   auth = "users"
@@ -13,6 +15,65 @@ query "logs/stats" verb=GET {
   }
 
   stack {
+    // Get auth user to determine access scope
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $auth_user
+  
+    // Build list of allowed bidder IDs for admins
+    var $allowed_bidder_ids {
+      value = []
+    }
+  
+    conditional {
+      if ($auth_user.type != "super_admin") {
+        // Admin: build list of bidders they can see
+        db.query users {
+          where = $db.users.type == "bidder"
+          return = {type: "list"}
+        } as $all_bidders
+      
+        var $assigned {
+          value = $auth_user.assigned_bidder_ids
+        }
+      
+        conditional {
+          if ($assigned == null) {
+            var.update $assigned {
+              value = []
+            }
+          }
+        }
+      
+        foreach ($all_bidders) {
+          each as $u {
+            conditional {
+              if ($u.created_by == $auth.id) {
+                array.push $allowed_bidder_ids {
+                  value = $u.id
+                }
+              }
+            
+              else {
+                foreach ($assigned) {
+                  each as $bid {
+                    conditional {
+                      if ($bid == $u.id) {
+                        array.push $allowed_bidder_ids {
+                          value = $u.id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  
     var $resolved_from {
       value = $input.date_from
     }
@@ -65,7 +126,7 @@ query "logs/stats" verb=GET {
       return = {type: "list"}
     } as $period_logs_raw
   
-    // Post-filter by profile_id / user_id if provided
+    // Post-filter by profile_id / user_id if provided, and by allowed_bidder_ids for admins
     var $period_logs {
       value = []
     }
@@ -76,6 +137,7 @@ query "logs/stats" verb=GET {
           value = true
         }
       
+        // Filter by profile_id if provided
         conditional {
           if ($input.profile_id != null && $log.profile_id != $input.profile_id) {
             var.update $include {
@@ -84,10 +146,40 @@ query "logs/stats" verb=GET {
           }
         }
       
+        // Filter by user_id if provided
         conditional {
           if ($input.user_id != null && $log.user_id != $input.user_id) {
             var.update $include {
               value = false
+            }
+          }
+        }
+      
+        // For admins: filter by allowed bidders
+        conditional {
+          if ($auth_user.type != "super_admin" && $include) {
+            var $bidder_allowed {
+              value = false
+            }
+          
+            foreach ($allowed_bidder_ids) {
+              each as $allowed_id {
+                conditional {
+                  if ($log.user_id == $allowed_id) {
+                    var.update $bidder_allowed {
+                      value = true
+                    }
+                  }
+                }
+              }
+            }
+          
+            conditional {
+              if ($bidder_allowed == false) {
+                var.update $include {
+                  value = false
+                }
+              }
             }
           }
         }
@@ -258,7 +350,56 @@ query "logs/stats" verb=GET {
     // All-time totals
     db.query generation_log {
       return = {type: "list"}
-    } as $all_logs
+    } as $all_logs_raw
+  
+    // Filter all-time logs by allowed bidders for admins
+    var $all_logs {
+      value = []
+    }
+  
+    foreach ($all_logs_raw) {
+      each as $log {
+        var $include_all {
+          value = true
+        }
+      
+        conditional {
+          if ($auth_user.type != "super_admin") {
+            var $bidder_allowed {
+              value = false
+            }
+          
+            foreach ($allowed_bidder_ids) {
+              each as $allowed_id {
+                conditional {
+                  if ($log.user_id == $allowed_id) {
+                    var.update $bidder_allowed {
+                      value = true
+                    }
+                  }
+                }
+              }
+            }
+          
+            conditional {
+              if ($bidder_allowed == false) {
+                var.update $include_all {
+                  value = false
+                }
+              }
+            }
+          }
+        }
+      
+        conditional {
+          if ($include_all) {
+            array.push $all_logs {
+              value = $log
+            }
+          }
+        }
+      }
+    }
   
     var $all_time_total {
       value = $all_logs|count
