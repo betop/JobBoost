@@ -72,14 +72,18 @@ function showError(msg, canRetry = false) {
   banner.style.display = "block";
 }
 
-function showSkipped() {
+function showSkipped(reason) {
   document.getElementById("spinner").style.display = "none";
-  document.getElementById("statusText").textContent = "Generation skipped.";
+  document.getElementById("statusText").textContent = "Job not qualified.";
   // Hide all steps
   for (const s of STEPS) {
     const el = document.getElementById("step-" + s);
     if (el) el.style.display = "none";
   }
+  const titleEl = document.getElementById("skippedTitle");
+  const bodyEl = document.getElementById("skippedBody");
+  if (titleEl) titleEl.textContent = "⚠️ Job Not Qualified";
+  if (bodyEl) bodyEl.textContent = reason || "This job does not meet the requirements. Resume and cover letter generation was skipped.";
   document.getElementById("skippedBanner").style.display = "block";
   document.getElementById("skippedClose").addEventListener("click", () => window.close());
 }
@@ -215,13 +219,15 @@ function showReady() {
 }
 
 // Admin override: show warning with "Generate Anyway" option
-// statusType is one of: "error", "not_jd", "skipped"
+// statusType is one of: "error", "not_jd", "skipped", "reposted", "duplicate"
 function showAdminOverride(reason, statusType) {
   document.getElementById("spinner").style.display = "none";
   const titles = {
-    error:   "❌ AI Processing Error",
-    not_jd:  "⚠️ Not a Job Description",
-    skipped: "⚠️ Not 100% Remote — Skipped",
+    error:     "❌ AI Processing Error",
+    not_jd:    "⚠️ Not a Job Description",
+    skipped:   "⚠️ Job Not Qualified — Unfit",
+    reposted:  "🔄 Possible Repost Detected",
+    duplicate: "🚫 Duplicate URL Detected",
   };
   document.getElementById("statusText").textContent = titles[statusType] || "Status Warning";
   for (const s of STEPS) {
@@ -282,7 +288,7 @@ chrome.runtime.onMessage.addListener((message) => {
     } else if (step === "error") {
       showError(error);
     } else if (step === "skipped") {
-      showSkipped();
+      showSkipped(reason);
     } else if (step === "not_job_description") {
       showNotJobDescription(reason);
     } else if (step === "duplicate") {

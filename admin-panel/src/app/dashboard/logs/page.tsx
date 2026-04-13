@@ -244,6 +244,22 @@ function RegenerateModal({
           allowGoAnyway: true,
           allowRetry: false,
         };
+      case 4:
+        return {
+          title: "Duplicate URL",
+          description: "This job URL has already been applied to. As an admin, you can still force regeneration.",
+          tone: "red" as const,
+          allowGoAnyway: true,
+          allowRetry: false,
+        };
+      case 5:
+        return {
+          title: "Reposted Job",
+          description: "This job appears to be a repost of a previous application. As an admin, you can still force regeneration.",
+          tone: "amber" as const,
+          allowGoAnyway: true,
+          allowRetry: false,
+        };
       case 6:
         return {
           title: "AI Processing Error",
@@ -276,7 +292,7 @@ function RegenerateModal({
         return;
       }
 
-      if (result.is_matched === 0 || result.is_matched === 2 || result.is_matched === 3 || result.is_matched === 6) {
+      if (result.is_matched === 0 || result.is_matched === 2 || result.is_matched === 3 || result.is_matched === 4 || result.is_matched === 5 || result.is_matched === 6) {
         setStatusResult({
           is_matched: result.is_matched,
           match_reason: result.match_reason || "No reason provided.",
@@ -443,43 +459,80 @@ function ReasonModal({
   log: GenerationLog;
   onClose: () => void;
 }) {
-  const isSkipped = log.is_matched === 2;
-  const isMismatched = log.is_matched === 0;
+  const statusConfig: Record<number, { icon: React.ReactNode; title: string; bgClass: string; textClass: string; btnClass: string }> = {
+    0: {
+      icon: <AlertTriangle className="w-5 h-5 text-amber-600" />,
+      title: "Job Mismatched",
+      bgClass: "bg-amber-50 border border-amber-200",
+      textClass: "text-amber-800",
+      btnClass: "bg-amber-600 hover:bg-amber-700",
+    },
+    2: {
+      icon: <Ban className="w-5 h-5 text-gray-500" />,
+      title: "Job Unfit",
+      bgClass: "bg-gray-50 border border-gray-200",
+      textClass: "text-gray-700",
+      btnClass: "bg-gray-600 hover:bg-gray-700",
+    },
+    3: {
+      icon: <Ban className="w-5 h-5 text-slate-500" />,
+      title: "Not a Job Description",
+      bgClass: "bg-slate-50 border border-slate-200",
+      textClass: "text-slate-700",
+      btnClass: "bg-slate-600 hover:bg-slate-700",
+    },
+    4: {
+      icon: <XCircle className="w-5 h-5 text-red-500" />,
+      title: "Duplicate URL",
+      bgClass: "bg-red-50 border border-red-200",
+      textClass: "text-red-700",
+      btnClass: "bg-red-600 hover:bg-red-700",
+    },
+    5: {
+      icon: <AlertTriangle className="w-5 h-5 text-indigo-500" />,
+      title: "Reposted Job",
+      bgClass: "bg-indigo-50 border border-indigo-200",
+      textClass: "text-indigo-700",
+      btnClass: "bg-indigo-600 hover:bg-indigo-700",
+    },
+    6: {
+      icon: <XCircle className="w-5 h-5 text-red-600" />,
+      title: "AI Error",
+      bgClass: "bg-red-50 border border-red-200",
+      textClass: "text-red-700",
+      btnClass: "bg-red-600 hover:bg-red-700",
+    },
+  };
+
+  const config = statusConfig[log.is_matched as number] ?? {
+    icon: <AlertTriangle className="w-5 h-5 text-gray-500" />,
+    title: "Status Details",
+    bgClass: "bg-gray-50 border border-gray-200",
+    textClass: "text-gray-700",
+    btnClass: "bg-gray-600 hover:bg-gray-700",
+  };
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {isSkipped ? (
-              <>
-                <Ban className="w-5 h-5 text-gray-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Job Unfit</h2>
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <h2 className="text-lg font-semibold text-gray-900">Job Mismatched</h2>
-              </>
-            )}
+            {config.icon}
+            <h2 className="text-lg font-semibold text-gray-900">{config.title}</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="px-6 py-5">
-          <div className={`rounded-lg p-4 mb-4 ${isSkipped ? 'bg-gray-50 border border-gray-200' : 'bg-amber-50 border border-amber-200'}`}>
-            <p className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-700' : 'text-amber-800'}`}>
+          <div className={`rounded-lg p-4 mb-4 ${config.bgClass}`}>
+            <p className={`text-sm leading-relaxed ${config.textClass}`}>
               {log.match_reason || "No reason provided."}
             </p>
           </div>
           <button
             onClick={onClose}
-            className={`w-full px-4 py-2 text-white text-sm font-semibold rounded-lg transition-colors ${
-              isSkipped
-                ? 'bg-gray-600 hover:bg-gray-700'
-                : 'bg-amber-600 hover:bg-amber-700'
-            }`}
+            className={`w-full px-4 py-2 text-white text-sm font-semibold rounded-lg transition-colors ${config.btnClass}`}
           >
             Close
           </button>
@@ -1548,24 +1601,68 @@ export default function LogsPage() {
                             </div>
                           )}
                           {log.is_matched === 3 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                              Not JD
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                Not JD
+                              </span>
+                              {log.match_reason && (
+                                <button
+                                  onClick={() => setReasonLog(log)}
+                                  className="p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                                  title="View reason"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                           {log.is_matched === 4 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
-                              Duplicate
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                                Duplicate
+                              </span>
+                              {log.match_reason && (
+                                <button
+                                  onClick={() => setReasonLog(log)}
+                                  className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="View reason"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                           {log.is_matched === 5 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              Reposted
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                Reposted
+                              </span>
+                              {log.match_reason && (
+                                <button
+                                  onClick={() => setReasonLog(log)}
+                                  className="p-0.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                  title="View reason"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                           {log.is_matched === 6 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-600 border border-red-200">
-                              AI Error
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-600 border border-red-200">
+                                AI Error
+                              </span>
+                              {log.match_reason && (
+                                <button
+                                  onClick={() => setReasonLog(log)}
+                                  className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="View reason"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                           {log.is_applied && (
                             <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">

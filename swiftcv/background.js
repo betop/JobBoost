@@ -512,24 +512,46 @@ async function generateResume(jobDescription, jobUrl = "") {
       await syncProfilesFromGenerateResponse(data);
       isAdmin = data.is_admin === true;
 
-      // If admin + duplicate was found (but API still generated), show warning
-      if (isAdmin && data.duplicate_info) {
+      // If duplicate was found, handle based on user role
+      if (data.duplicate_info) {
         const d = data.duplicate_info;
         const appliedDate = d.created_at
           ? new Date(d.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
           : "unknown date";
         const detail = (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + " — applied on " + appliedDate;
-        console.log("[BG] Admin: duplicate detected but proceeding:", detail);
-        sendProgress("admin_warning", "Duplicate URL detected", detail + "\n\n(Admin override: resume was still generated)");
+        console.log("[BG] Duplicate detected:", detail);
+
+        if (isAdmin) {
+          // Admin: show override prompt with "Generate Anyway"
+          // Note: the API already generated the resume for admins,
+          // so if confirmed we proceed with the existing data (no re-call needed)
+          sendProgress("admin_override", detail, "duplicate");
+          const confirmed = await waitForAdminDecision();
+          if (!confirmed) {
+            return;
+          }
+          console.log("[BG] Admin confirmed duplicate override, proceeding with existing data");
+          // Fall through to normal processing with already-generated data
+        } else {
+          // Bidder: block with duplicate banner (close only)
+          sendProgress("duplicate", undefined, detail);
+          return;
+        }
       }
 
-      // If AI processing failed (is_matched === 6), ask user to try again
+      // If AI processing failed (is_matched === 6)
       if (data.is_matched === 6) {
         console.log("[BG] AI processing error:", data.match_reason);
-        sendProgress("ai_error", data.match_reason || "AI processing error. Please try again.");
-        const retry = await waitForRetryDecision();
-        if (retry) {
-          continue;
+        if (isAdmin) {
+          // Admins can retry
+          sendProgress("ai_error", data.match_reason || "AI processing error. Please try again.");
+          const retry = await waitForRetryDecision();
+          if (retry) {
+            continue;
+          }
+        } else {
+          // Bidders: show error with close only (no retry)
+          sendProgress("error", data.match_reason || "AI processing error. Please try again later.");
         }
         return;
       }
@@ -552,18 +574,18 @@ async function generateResume(jobDescription, jobUrl = "") {
       return;
     }
 
-    // If job is not 100% remote (is_matched === 2), inform the user via the progress window
+    // If job is unfit (is_matched === 2) — not remote, security clearance, AI annotation, etc.
     if (data.skipped === true || data.is_matched === 2) {
-      console.log("[BG] Job skipped: not a 100% remote position.");
+      console.log("[BG] Job unfit:", data.match_reason);
       if (isAdmin) {
-        sendProgress("admin_override", data.match_reason || "Not 100% remote — skipped", "skipped");
+        sendProgress("admin_override", data.match_reason || "Job does not meet requirements", "skipped");
         const confirmed = await waitForAdminDecision();
         if (confirmed) {
           await retryWithForce(jobDescription, jobUrl);
           return;
         }
       }
-      sendProgress("skipped");
+      sendProgress("skipped", undefined, data.match_reason || "");
       return;
     }
 
