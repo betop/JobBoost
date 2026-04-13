@@ -11,7 +11,7 @@ table token_request {
       table = "users"
     }
   
-    uuid bidder_id? {
+    uuid user_id? {
       table = "users"
     }
   

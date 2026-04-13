@@ -2,8 +2,8 @@ import api from "./api";
 
 export interface AccessControl {
   id: string;
-  bidder_id: string;
-  bidder_name: string;
+  user_id: string;
+  user_name: string;
   profile_id: string;
   profile_name: string;
   granted_by: string;

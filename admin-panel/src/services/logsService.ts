@@ -71,8 +71,8 @@ export interface GenerationLog {
   created_at: string;
   profile_id: string;
   profile_name: string;
-  bidder_id: string;
-  bidder_name: string;
+  user_id: string;
+  user_name: string;
   job_url: string;
   job_description_snippet: string;
   job_description: string;
@@ -116,7 +116,7 @@ export interface LogsStatsResponse {
 
 export interface LogsFilters {
   profile_id?: string[];
-  bidder_id?: string[];
+  user_id?: string[];
   date_from?: string;
   date_to?: string;
   period?: LogsPeriod;
@@ -177,7 +177,7 @@ export const logsService = {
   stats: async (
     period: LogsPeriod = "month",
     profile_id?: string,
-    bidder_id?: string,
+    user_id?: string,
     date_from?: string,
     date_to?: string,
   ): Promise<LogsStatsResponse> => {
@@ -187,7 +187,7 @@ export const logsService = {
     const effectiveDateTo = date_to ?? periodRange.dateTo;
 
     if (profile_id) params.set("profile_id", profile_id);
-    if (bidder_id) params.set("bidder_id", bidder_id);
+    if (user_id) params.set("user_id", user_id);
     if (effectiveDateFrom) params.set("date_from", toStartOfDayEST(effectiveDateFrom));
     if (effectiveDateTo) params.set("date_to", toEndOfDayEST(effectiveDateTo));
     const response = await api.get(`/logs/stats?${params.toString()}`);
@@ -199,6 +199,12 @@ export const logsService = {
       log_id: logId,
       force_generate: forceGenerate || undefined,
     });
+    return response.data;
+  },
+
+  /** One-time recovery: populate null user_id fields by mapping profile_id → user */
+  recoverUserIds: async (): Promise<{ success: boolean; total_logs: number; updated_count: number; skipped_count: number }> => {
+    const response = await api.post("/logs/recover-user-ids");
     return response.data;
   },
 };

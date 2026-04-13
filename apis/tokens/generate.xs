@@ -1,22 +1,22 @@
-// Generate a new token for a bidder
+// Generate a new token for a user
 query "tokens/generate" verb=POST {
   api_group = "tokens"
   auth = "users"
 
   input {
-    uuid bidder_id?
+    uuid user_id?
     timestamp expiration_date?
   }
 
   stack {
-    precondition ($input.bidder_id != null) {
+    precondition ($input.user_id != null) {
       error_type = "badrequest"
-      error = "bidder_id is required"
+      error = "user_id is required"
     }
   
     db.get users {
       field_name = "id"
-      field_value = $input.bidder_id
+      field_value = $input.user_id
     } as $bid
   
     precondition ($bid != null) {
@@ -26,7 +26,22 @@ query "tokens/generate" verb=POST {
   
     precondition ($bid.is_active) {
       error_type = "accessdenied"
-      error = "Bidder is inactive"
+      error = "User is inactive"
+    }
+  
+    // Check if user already has an active key
+    db.query access_token {
+      where = ($db.access_token.user_id == $input.user_id && $db.access_token.is_active == true) == true
+      return = {type: "list"}
+    } as $existing_keys
+  
+    var $existing_count {
+      value = $existing_keys|count
+    }
+  
+    precondition ($existing_count == 0) {
+      error_type = "badrequest"
+      error = "This user already has an active key. Revoke or delete the existing key first."
     }
   
     // Generate a random token string
@@ -42,7 +57,7 @@ query "tokens/generate" verb=POST {
         created_at         : now
         token              : $raw_token
         token_hash         : $token_hash
-        bidder_id          : $input.bidder_id
+        user_id            : $input.user_id
         created_by_admin_id: $auth.id
         issued_at          : now
         expires_at         : $input.expiration_date
@@ -55,7 +70,7 @@ query "tokens/generate" verb=POST {
   response = {
     id             : $t.id
     token          : $t.token
-    bidder_id      : $t.bidder_id
+    user_id        : $t.user_id
     user_name      : $bid.full_name
     user_type      : $bid.type
     issued_date    : $t.issued_at

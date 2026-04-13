@@ -5,7 +5,7 @@ table access_token {
     uuid id
     timestamp created_at?=now
     text token?
-    uuid bidder_id? {
+    uuid user_id? {
       table = "users"
     }
   
@@ -24,6 +24,6 @@ table access_token {
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
     {type: "btree", field: [{name: "token_hash"}]}
-    {type: "btree", field: [{name: "bidder_id"}]}
+    {type: "btree", field: [{name: "user_id"}]}
   ]
 }

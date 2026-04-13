@@ -3,7 +3,7 @@ import api from "./api";
 export interface Token {
   id: string;
   token: string;
-  bidder_id: string;
+  user_id: string;
   user_name: string;
   issued_date: string;
   expiration_date?: string;
@@ -12,7 +12,7 @@ export interface Token {
 }
 
 export interface GenerateTokenInput {
-  bidder_id: string;
+  user_id: string;
   expiration_date?: string;
 }
 
@@ -20,7 +20,7 @@ export interface TokenRequest {
   id: string;
   requested_by: string;
   requester_name: string;
-  bidder_id: string;
+  user_id: string;
   user_name: string;
   expiration_date?: string;
   status: "pending" | "approved" | "declined";
@@ -34,7 +34,7 @@ export interface TokenRequest {
 }
 
 export interface CreateTokenRequestInput {
-  bidder_id: string;
+  user_id: string;
   expiration_date?: string;
   notes?: string;
 }
@@ -46,7 +46,7 @@ export const tokenService = {
   },
 
   generate: async (input: GenerateTokenInput): Promise<Token> => {
-    const payload: Partial<GenerateTokenInput> = { bidder_id: input.bidder_id };
+    const payload: Partial<GenerateTokenInput> = { user_id: input.user_id };
     if (input.expiration_date) payload.expiration_date = input.expiration_date;
     const response = await api.post("/tokens/generate", payload);
     return response.data;

@@ -18,7 +18,7 @@
 import type { GenerationLog } from "./logsService";
 
 const DB_NAME    = "jobboost_logs";
-const DB_VERSION = 1;
+const DB_VERSION = 2;          // v2: bidder_id → user_id rename — force cache rebuild
 const STORE_LOGS = "logs";
 const STORE_META = "meta";
 
@@ -35,15 +35,20 @@ function openDB(): Promise<IDBDatabase> {
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
 
-      if (!db.objectStoreNames.contains(STORE_LOGS)) {
-        const logsStore = db.createObjectStore(STORE_LOGS, { keyPath: "id" });
-        logsStore.createIndex("created_at", "created_at", { unique: false });
-        logsStore.createIndex("updated_at", "updated_at", { unique: false });
+      // On upgrade (e.g. v1→v2: bidder_id→user_id), drop and recreate stores
+      // so stale cached records with old field names are flushed.
+      if (db.objectStoreNames.contains(STORE_LOGS)) {
+        db.deleteObjectStore(STORE_LOGS);
+      }
+      if (db.objectStoreNames.contains(STORE_META)) {
+        db.deleteObjectStore(STORE_META);
       }
 
-      if (!db.objectStoreNames.contains(STORE_META)) {
-        db.createObjectStore(STORE_META, { keyPath: "key" });
-      }
+      const logsStore = db.createObjectStore(STORE_LOGS, { keyPath: "id" });
+      logsStore.createIndex("created_at", "created_at", { unique: false });
+      logsStore.createIndex("updated_at", "updated_at", { unique: false });
+
+      db.createObjectStore(STORE_META, { keyPath: "key" });
     };
 
     req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);

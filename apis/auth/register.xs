@@ -35,16 +35,23 @@ query "auth/register" verb=POST {
       error = "An account with this email already exists"
     }
   
+    // Generate UUID for the new user first
+    security.create_uuid as $new_user_id
+  
     db.add users {
       data = {
-        created_at   : now
-        full_name    : $input.name
-        email        : $input.email
-        password_hash: $input.password
-        type         : "admin"
-        is_active    : true
-        is_approved  : false
-        updated_at   : now
+        id                 : $new_user_id
+        created_at         : now
+        full_name          : $input.name
+        email              : $input.email
+        password_hash      : $input.password
+        type               : "admin"
+        profile_ids        : []
+        is_active          : true
+        is_approved        : false
+        updated_at         : now
+        created_by         : $new_user_id
+        assigned_bidder_ids: []
       }
     } as $admin
   }

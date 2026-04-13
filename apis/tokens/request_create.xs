@@ -5,7 +5,7 @@ query "tokens/request" verb=POST {
   auth = "users"
 
   input {
-    uuid bidder_id?
+    uuid user_id?
     timestamp expiration_date?
     text notes?
   }
@@ -23,15 +23,15 @@ query "tokens/request" verb=POST {
       error = "Only admins can submit key requests"
     }
   
-    precondition ($input.bidder_id != null) {
+    precondition ($input.user_id != null) {
       error_type = "badrequest"
-      error = "bidder_id is required"
+      error = "user_id is required"
     }
   
     // Verify the bidder exists and is active
     db.get users {
       field_name = "id"
-      field_value = $input.bidder_id
+      field_value = $input.user_id
     } as $bidder
   
     precondition ($bidder != null) {
@@ -77,14 +77,14 @@ query "tokens/request" verb=POST {
       data = {
         created_at        : now
         requested_by      : $auth_user.id
-        bidder_id         : $input.bidder_id
+        user_id           : $input.user_id
         expiration_date   : $exp_date
         status            : "pending"
         admin_notes       : $admin_notes
         reviewed_by       : $auth_user.id
         reviewed_at       : now
         review_notes      : ""
-        generated_token_id: $input.bidder_id
+        generated_token_id: $input.user_id
       }
     } as $req
   }
@@ -92,7 +92,7 @@ query "tokens/request" verb=POST {
   response = {
     id             : $req.id
     requested_by   : $req.requested_by
-    bidder_id      : $req.bidder_id
+    user_id        : $req.user_id
     user_name      : $bidder.full_name
     expiration_date: $req.expiration_date
     status         : $req.status

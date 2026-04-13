@@ -41,8 +41,8 @@ query "resume/regenerate" verb=POST {
       error = "No job description stored for this log"
     }
   
-    // Regeneration is admin-only; use a reserved bidder id for admin-triggered logs
-    var $admin_bidder_id {
+    // Regeneration is admin-only; use a reserved user id for admin-triggered logs
+    var $admin_user_id {
       value = "00000000-0000-0000-0000-000000000000"
     }
   
@@ -392,7 +392,7 @@ query "resume/regenerate" verb=POST {
         db.add generation_log {
           data = {
             profile_id             : $original_log.profile_id
-            bidder_id              : $admin_bidder_id
+            user_id                : $admin_user_id
             job_url                : $original_log.job_url
             job_description_snippet: $job_description_snippet
             job_description        : $original_log.job_description
@@ -579,7 +579,7 @@ query "resume/regenerate" verb=POST {
         db.add generation_log {
           data = {
             profile_id             : $original_log.profile_id
-            bidder_id              : $admin_bidder_id
+            user_id                : $admin_user_id
             job_url                : $original_log.job_url
             job_description_snippet: $job_description_snippet
             job_description        : $original_log.job_description

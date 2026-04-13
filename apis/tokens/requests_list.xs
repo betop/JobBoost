@@ -82,20 +82,20 @@ query "tokens/requests" verb=GET {
             }
           
             // Get bidder name
-            var $bidder_name {
+            var $user_name_val {
               value = null
             }
           
             conditional {
-              if ($r.bidder_id != null) {
+              if ($r.user_id != null) {
                 db.get users {
                   field_name = "id"
-                  field_value = $r.bidder_id
+                  field_value = $r.user_id
                 } as $bid
               
                 conditional {
                   if ($bid != null) {
-                    var.update $bidder_name {
+                    var.update $user_name_val {
                       value = $bid.full_name
                     }
                   }
@@ -130,8 +130,8 @@ query "tokens/requests" verb=GET {
                 id                : $r.id
                 requested_by      : $r.requested_by
                 requester_name    : $requester_name
-                bidder_id         : $r.bidder_id
-                user_name         : $bidder_name
+                user_id           : $r.user_id
+                user_name         : $user_name_val
                 expiration_date   : $r.expiration_date
                 status            : $r.status
                 admin_notes       : $r.admin_notes

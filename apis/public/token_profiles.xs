@@ -29,17 +29,17 @@ query "public/token-profiles" verb=POST {
   
     db.get users {
       field_name = "id"
-      field_value = $access.bidder_id
+      field_value = $access.user_id
     } as $bid
   
     precondition ($bid != null) {
       error_type = "notfound"
-      error = "Bidder not found"
+      error = "User not found"
     }
   
     precondition ($bid.is_active) {
       error_type = "accessdenied"
-      error = "Bidder account is inactive"
+      error = "User account is inactive"
     }
   
     // Check if user is super_admin (has access to all profiles)

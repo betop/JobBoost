@@ -20,7 +20,7 @@ query "users/{id}" verb=DELETE {
   
     // Delete associated tokens
     db.query access_token {
-      where = $db.access_token.bidder_id == $input.id
+      where = $db.access_token.user_id == $input.id
       return = {type: "list"}
     } as $tokens
   

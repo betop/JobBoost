@@ -40,7 +40,7 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
     // Verify bidder is still valid
     db.get users {
       field_name = "id"
-      field_value = $req.bidder_id
+      field_value = $req.user_id
     } as $bidder
   
     precondition ($bidder != null) {
@@ -65,7 +65,7 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
         created_at         : now
         token              : $raw_token
         token_hash         : $token_hash
-        bidder_id          : $req.bidder_id
+        user_id            : $req.user_id
         created_by_admin_id: $req.requested_by
         issued_at          : now
         expires_at         : $req.expiration_date

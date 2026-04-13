@@ -1,3 +1,4 @@
+// generation_log table - indexes updated
 table generation_log {
   auth = false
 
@@ -9,7 +10,7 @@ table generation_log {
       table = "profile"
     }
   
-    uuid bidder_id? {
+    uuid user_id? {
       table = "users"
     }
   
@@ -38,7 +39,7 @@ table generation_log {
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
     {type: "btree", field: [{name: "updated_at", op: "desc"}]}
     {type: "btree", field: [{name: "profile_id", op: "asc"}]}
-    {type: "btree", field: [{name: "bidder_id", op: "asc"}]}
+    {type: "btree", field: [{name: "user_id", op: "asc"}]}
     {type: "btree", field: [{name: "job_url", op: "asc"}]}
   ]
 }

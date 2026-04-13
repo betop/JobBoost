@@ -7,7 +7,7 @@ query "logs/stats" verb=GET {
   input {
     text period?=month
     uuid profile_id?
-    uuid bidder_id?
+    uuid user_id?
     timestamp date_from?
     timestamp date_to?
   }
@@ -65,7 +65,7 @@ query "logs/stats" verb=GET {
       return = {type: "list"}
     } as $period_logs_raw
   
-    // Post-filter by profile_id / bidder_id if provided
+    // Post-filter by profile_id / user_id if provided
     var $period_logs {
       value = []
     }
@@ -85,7 +85,7 @@ query "logs/stats" verb=GET {
         }
       
         conditional {
-          if ($input.bidder_id != null && $log.bidder_id != $input.bidder_id) {
+          if ($input.user_id != null && $log.user_id != $input.user_id) {
             var.update $include {
               value = false
             }

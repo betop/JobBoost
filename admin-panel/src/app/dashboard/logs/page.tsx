@@ -38,7 +38,7 @@ import {
   ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 
-type SortField = "created_at" | "bidder_name" | "profile_name" | "position_title" | "company_name";
+type SortField = "created_at" | "user_name" | "profile_name" | "position_title" | "company_name";
 type SortDir = "asc" | "desc";
 type LogsPeriod = "today" | "week" | "month" | "all" | "custom";
 
@@ -122,7 +122,7 @@ const PRICING = {
   openai: { input: 0.15, output: 0.6 },
 };
 
-const ADMIN_BIDDER_ID = "00000000-0000-0000-0000-000000000000";
+const ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
   const rates = provider === "claude" ? PRICING.claude : PRICING.openai;
@@ -604,6 +604,9 @@ export default function LogsPage() {
   const [regenerateLog, setRegenerateLog]     = useState<GenerationLog | null>(null);
   const [reasonLog, setReasonLog]             = useState<GenerationLog | null>(null);
   const [isRefreshing, setIsRefreshing]       = useState(false);
+  // const [isRecovering, setIsRecovering]       = useState(false);
+
+  const isSuperAdmin = admin?.type === "super_admin";
 
   // Load state from URL on mount
   useEffect(() => {
@@ -633,8 +636,8 @@ export default function LogsPage() {
     
     // Load client-side filters
     const filterObj: LogsFilters = {};
-    const bidderParam = params.get("bidder_id");
-    if (bidderParam) filterObj.bidder_id = bidderParam.split(",");
+    const userParam = params.get("user_id");
+    if (userParam) filterObj.user_id = userParam.split(",");
     const profileParam = params.get("profile_id");
     if (profileParam) filterObj.profile_id = profileParam.split(",");
     const matchedParam = params.get("is_matched");
@@ -752,12 +755,58 @@ export default function LogsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo]);
 
-  const { data: bidders } = useQuery({
+  // All active users — used for building the user_name lookup map
+  const { data: allUsers } = useQuery({
+    queryKey: ["users", "all"],
+    queryFn: () => userService.getAll(),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+  // Bidder-only list — used for the filter dropdown
+  const { data: users } = useQuery({
     queryKey: ["users", "bidder"],
     queryFn: () => userService.getAll("bidder"),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
+  // Extra name map for user IDs that appear in logs but are missing from allUsers
+  // (i.e. deleted users). Populated lazily once cachedRows + allUsers are both ready.
+  const [extraUserNames, setExtraUserNames] = useState<Map<string, string | null>>(new Map());
+
+  useEffect(() => {
+    if (!cachedRows.length || !allUsers) return;
+
+    // Build set of known IDs
+    const knownIds = new Set(allUsers.map((u) => u.id));
+    knownIds.add(ADMIN_USER_ID);
+
+    // Collect IDs present in logs but not in allUsers (and not already fetched)
+    const missing = new Set<string>();
+    for (const log of cachedRows) {
+      const uid = (log.user_id ?? (log as any).bidder_id ?? "").trim();
+      if (uid && !knownIds.has(uid) && !extraUserNames.has(uid)) {
+        missing.add(uid);
+      }
+    }
+    if (missing.size === 0) return;
+
+    // Fetch each missing user individually; mark null on 404 (deleted)
+    Promise.all(
+      Array.from(missing).map((uid) =>
+        userService.getById(uid)
+          .then((u): [string, string | null] => [uid, u.full_name])
+          .catch((): [string, string | null] => [uid, null]),
+      ),
+    ).then((results) => {
+      setExtraUserNames((prev) => {
+        const next = new Map(prev);
+        for (const [uid, name] of results) next.set(uid, name);
+        return next;
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cachedRows, allUsers]);
+
   const { data: profiles } = useQuery({
     queryKey: ["profiles"],
     queryFn: profileService.getAll,
@@ -782,6 +831,21 @@ export default function LogsPage() {
       setIsRefreshing(false);
     }
   }
+
+  // async function recoverUserIds() {
+  //   if (!confirm("This will update user_id on ALL generation logs by matching profile_id to user assignments. Continue?")) return;
+  //   setIsRecovering(true);
+  //   try {
+  //     const result = await logsService.recoverUserIds();
+  //     alert(`Recovery complete:\n• Total logs: ${result.total_logs}\n• Updated: ${result.updated_count}\n• Skipped: ${result.skipped_count} (no matching user for profile)`);
+  //     // Refresh data to pull updated records
+  //     await refreshData();
+  //   } catch (err: any) {
+  //     alert(`Recovery failed: ${err?.response?.data?.message || err.message}`);
+  //   } finally {
+  //     setIsRecovering(false);
+  //   }
+  // }
 
   function applyPeriod(period: LogsPeriod) {
     setStatsPeriod(period);
@@ -821,20 +885,37 @@ export default function LogsPage() {
   const allRows: GenerationLog[] = useMemo(() => {
     const items = cachedRows;
 
-    // Build name lookup maps from already-fetched bidders/profiles
+    // Build name lookup maps
     const profileMap = new Map<string, string>();
-    const bidderMap = new Map<string, string>();
+    const userMap = new Map<string, string>();
     if (profiles) for (const p of profiles) profileMap.set(p.id, p.full_name);
-    if (bidders) for (const b of bidders) bidderMap.set(b.id, b.full_name);
+    // allUsers covers all active users (bidders + admins)
+    if (allUsers) for (const u of allUsers) userMap.set(u.id, u.full_name);
 
     const result: GenerationLog[] = [];
     for (const log of items) {
-      const bidderId = (log.bidder_id ?? "").trim();
-      const isAdminBidder = bidderId === "" || bidderId === ADMIN_BIDDER_ID;
+      // Fall back to bidder_id for any stale cached records from before the rename
+      const userId = (log.user_id ?? (log as any).bidder_id ?? "").trim();
+      const isAdminUser = userId === "" || userId === ADMIN_USER_ID;
+
+      let resolvedName = log.user_name || "";
+      if (!resolvedName) {
+        if (isAdminUser) {
+          resolvedName = "Admin";
+        } else if (userMap.has(userId)) {
+          resolvedName = userMap.get(userId) || "";
+        } else if (extraUserNames.has(userId)) {
+          // null means the fetch returned 404 → user was deleted
+          resolvedName = extraUserNames.get(userId) ?? "";
+        }
+        // else: still loading the extra fetch — leave empty for now
+      }
+
       result.push({
         ...log,
+        user_id: userId || "",
         profile_name: log.profile_name || profileMap.get(log.profile_id) || "",
-        bidder_name: log.bidder_name || (isAdminBidder ? "Admin" : bidderMap.get(bidderId) || ""),
+        user_name: resolvedName,
       });
     }
 
@@ -849,38 +930,38 @@ export default function LogsPage() {
     }
 
     return result;
-  }, [cachedRows, profiles, bidders, admin]);
+  }, [cachedRows, profiles, allUsers, extraUserNames, admin]);
 
-  const bidderOptions = useMemo(() => {
-    const options = (bidders ?? []).map((b) => ({ value: b.id, label: b.full_name }));
+  const userOptions = useMemo(() => {
+    const options = (users ?? []).map((u) => ({ value: u.id, label: u.full_name }));
     const hasAdminRows = allRows.some((log) => {
-      const bidderId = (log.bidder_id ?? "").trim();
-      return bidderId === "" || bidderId === ADMIN_BIDDER_ID;
+      const userId = (log.user_id ?? "").trim();
+      return userId === "" || userId === ADMIN_USER_ID;
     });
     if (!hasAdminRows) return options;
-    return [{ value: ADMIN_BIDDER_ID, label: "Admin" }, ...options];
-  }, [bidders, allRows]);
+    return [{ value: ADMIN_USER_ID, label: "Admin" }, ...options];
+  }, [users, allRows]);
 
-  // ── Client-side filtering: bidder, profile, match status, type, search ──
+  // ── Client-side filtering: user, profile, match status, type, search ──
   const filtered = useMemo(() => {
     return allRows.filter((log) => {
-      if (filters.bidder_id && filters.bidder_id.length > 0) {
-        const bidderId = (log.bidder_id ?? "").trim();
-        const normalizedBidderId = bidderId === "" ? ADMIN_BIDDER_ID : bidderId;
-        if (!filters.bidder_id.includes(normalizedBidderId)) return false;
+      if (filters.user_id && filters.user_id.length > 0) {
+        const userId = (log.user_id ?? "").trim();
+        const normalizedUserId = userId === "" ? ADMIN_USER_ID : userId;
+        if (!filters.user_id.includes(normalizedUserId)) return false;
       }
       if (filters.profile_id && filters.profile_id.length > 0 && !filters.profile_id.includes(log.profile_id)) return false;
       if (filters.is_matched && filters.is_matched.length > 0 && !filters.is_matched.includes(String(log.is_matched) as any)) return false;
       if (filters.is_regenerated && filters.is_regenerated.length > 0 && !filters.is_regenerated.includes(String(log.is_regenerated) as any)) return false;
       return true;
     });
-  }, [allRows, filters.bidder_id, filters.profile_id, filters.is_matched, filters.is_regenerated]);
+  }, [allRows, filters.user_id, filters.profile_id, filters.is_matched, filters.is_regenerated]);
 
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return filtered;
     return filtered.filter((log) =>
-      [log.bidder_name, log.profile_name, log.position_title, log.company_name, log.job_url]
+      [log.user_name, log.profile_name, log.position_title, log.company_name, log.job_url]
         .some((v) => v?.toLowerCase().includes(q))
     );
   }, [filtered, search]);
@@ -890,7 +971,7 @@ export default function LogsPage() {
       let av: number | string, bv: number | string;
       switch (sortField) {
         case "created_at":    av = a.created_at;          bv = b.created_at;          break;
-        case "bidder_name":   av = a.bidder_name ?? "";   bv = b.bidder_name ?? "";   break;
+        case "user_name":     av = a.user_name ?? "";     bv = b.user_name ?? "";     break;
         case "profile_name":  av = a.profile_name ?? "";  bv = b.profile_name ?? "";  break;
         case "position_title":av = a.position_title ?? ""; bv = b.position_title ?? ""; break;
         case "company_name":  av = a.company_name ?? "";  bv = b.company_name ?? "";  break;
@@ -1002,14 +1083,27 @@ export default function LogsPage() {
             Track resume generations and job applications
           </p>
         </div>
-        <button
-          onClick={refreshData}
-          disabled={isRefreshing || logsFetching}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-        >
-          <RotateCcw className={`w-4 h-4 ${isRefreshing || logsFetching ? "animate-spin" : ""}`} />
-          {isRefreshing ? "Refreshing..." : logsFetching ? "Loading..." : "Refresh"}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Recovery button — uncomment if needed again
+          {isSuperAdmin && (
+            <button
+              onClick={recoverUserIds}
+              disabled={isRecovering || isRefreshing || logsFetching}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            >
+              {isRecovering ? "Recovering..." : "Recover User IDs"}
+            </button>
+          )}
+          */}
+          <button
+            onClick={refreshData}
+            disabled={isRefreshing || logsFetching}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          >
+            <RotateCcw className={`w-4 h-4 ${isRefreshing || logsFetching ? "animate-spin" : ""}`} />
+            {isRefreshing ? "Refreshing..." : logsFetching ? "Loading..." : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {/* Period tabs */}
@@ -1177,14 +1271,14 @@ export default function LogsPage() {
         <Filter className="w-4 h-4 text-gray-400 self-center mb-1" />
 
         <CheckboxDropdown
-          label="Bidder"
-          options={bidderOptions}
-          selected={filters.bidder_id ?? []}
+          label="User"
+          options={userOptions}
+          selected={filters.user_id ?? []}
           disabled={logsFetching}
           onChange={(next) => {
-            setFilters((f) => ({ ...f, bidder_id: next.length > 0 ? next : undefined } as LogsFilters));
+            setFilters((f) => ({ ...f, user_id: next.length > 0 ? next : undefined } as LogsFilters));
             setPage(1);
-            updateQueryParams({ bidder_id: next.length > 0 ? next.join(",") : undefined, page: 1 });
+            updateQueryParams({ user_id: next.length > 0 ? next.join(",") : undefined, page: 1 });
           }}
         />
 
@@ -1235,11 +1329,11 @@ export default function LogsPage() {
           }}
         />
 
-        {((filters.bidder_id?.length ?? 0) + (filters.profile_id?.length ?? 0) + (filters.is_matched?.length ?? 0) + (filters.is_regenerated?.length ?? 0) > 0) && (
+        {((filters.user_id?.length ?? 0) + (filters.profile_id?.length ?? 0) + (filters.is_matched?.length ?? 0) + (filters.is_regenerated?.length ?? 0) > 0) && (
           <button
             onClick={() => {
               setFilters({});
-              updateQueryParams({ bidder_id: undefined, profile_id: undefined, is_matched: undefined, is_regenerated: undefined, page: 1 });
+              updateQueryParams({ user_id: undefined, profile_id: undefined, is_matched: undefined, is_regenerated: undefined, page: 1 });
               setPage(1);
             }}
             className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-2.5 py-2 self-end transition-colors"
@@ -1259,7 +1353,7 @@ export default function LogsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search bidder, profile, position, company…"
+              placeholder="Search user, profile, position, company…"
               value={search}
               onChange={(e) => { 
                 setSearch(e.target.value);
@@ -1321,7 +1415,7 @@ export default function LogsPage() {
                     {(
                       [
                         { field: "created_at",    label: "Date",        align: "left",  hidden: false },
-                        { field: "bidder_name",   label: "Bidder",      align: "left",  hidden: !!filters.bidder_id },
+                        { field: "user_name",     label: "User",        align: "left",  hidden: !!filters.user_id },
                         { field: "profile_name",  label: "Profile",     align: "left",  hidden: !!filters.profile_id },
                         { field: null,            label: "Job URL",     align: "left",  hidden: false },
                         { field: "position_title",label: "Position",    align: "left",  hidden: false },
@@ -1366,10 +1460,16 @@ export default function LogsPage() {
                         </div>
                       </td>
 
-                      {/* Bidder */}
-                      {!filters.bidder_id && (
+                      {/* User */}
+                      {!filters.user_id && (
                         <td className="px-4 py-3 font-medium text-gray-900">
-                          {log.bidder_name || <span className="text-gray-400 italic">Unknown</span>}
+                          {(() => {
+                            const uid = (log.user_id ?? "").trim();
+                            if (log.user_name) return log.user_name;
+                            if (uid && extraUserNames.get(uid) === null)
+                              return <span className="text-red-400 italic text-xs">Deleted user</span>;
+                            return <span className="text-gray-400 italic">—</span>;
+                          })()}
                         </td>
                       )}
 

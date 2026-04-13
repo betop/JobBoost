@@ -18,7 +18,7 @@ query "access-control" verb=GET {
   
     foreach ($tokens) {
       each as $t {
-        var $bidder_name {
+        var $user_name_val {
           value = null
         }
       
@@ -35,15 +35,15 @@ query "access-control" verb=GET {
         }
       
         conditional {
-          if ($t.bidder_id != null) {
+          if ($t.user_id != null) {
             db.get users {
               field_name = "id"
-              field_value = $t.bidder_id
+              field_value = $t.user_id
             } as $bid
           
             conditional {
               if ($bid != null) {
-                var.update $bidder_name {
+                var.update $user_name_val {
                   value = $bid.full_name
                 }
               
@@ -92,8 +92,8 @@ query "access-control" verb=GET {
         array.push $out {
           value = {
             id             : $t.id
-            bidder_id      : $t.bidder_id
-            bidder_name    : $bidder_name
+            user_id        : $t.user_id
+            user_name      : $user_name_val
             profile_id     : $profile_id
             profile_name   : $profile_name
             granted_by     : $granted_by

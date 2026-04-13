@@ -44,8 +44,8 @@ query "resume/confirm_log" verb=POST {
       error = "Log not found"
     }
   
-    // Verify the log belongs to the same bidder
-    precondition ($log.bidder_id == $access.bidder_id) {
+    // Verify the log belongs to the same user
+    precondition ($log.user_id == $access.user_id) {
       error_type = "accessdenied"
       error = "Access denied"
     }

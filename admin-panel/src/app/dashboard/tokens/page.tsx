@@ -34,6 +34,23 @@ interface UserOption {
   value: string;
   label: string;
   type: string;
+  disabled?: boolean;
+  disabledReason?: string;
+}
+
+const ROLE_TAG: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  admin:       { bg: "bg-violet-100", text: "text-violet-700", border: "border-violet-200", label: "Admin" },
+  super_admin: { bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-200",  label: "Super Admin" },
+};
+
+function RoleTag({ type }: { type: string }) {
+  const tag = ROLE_TAG[type];
+  if (!tag) return null;
+  return (
+    <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${tag.bg} ${tag.text} border ${tag.border}`}>
+      {tag.label}
+    </span>
+  );
 }
 
 const UserSelect = forwardRef<HTMLInputElement, {
@@ -75,14 +92,10 @@ const UserSelect = forwardRef<HTMLInputElement, {
         {selected ? (
           <span className="flex items-center justify-between w-full">
             <span className="text-gray-900">{selected.label}</span>
-            {selected.type === "admin" && (
-              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-violet-100 text-violet-700 border border-violet-200">
-                Admin
-              </span>
-            )}
+            <RoleTag type={selected.type} />
           </span>
         ) : (
-          <span className="text-gray-400">Select an option</span>
+          <span className="text-gray-400">Select a user</span>
         )}
         <svg className={`w-4 h-4 text-gray-400 ml-2 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -94,6 +107,7 @@ const UserSelect = forwardRef<HTMLInputElement, {
             <li
               key={opt.value}
               onClick={() => {
+                if (opt.disabled) return;
                 setSelected(opt);
                 setOpen(false);
                 if (onChange) {
@@ -101,16 +115,22 @@ const UserSelect = forwardRef<HTMLInputElement, {
                   onChange(syntheticEvent);
                 }
               }}
-              className={`flex items-center justify-between px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 transition-colors ${
-                selected?.value === opt.value ? "bg-primary-50 text-primary-700" : "text-gray-900"
+              title={opt.disabled ? opt.disabledReason : undefined}
+              className={`flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                opt.disabled
+                  ? "text-gray-400 cursor-not-allowed bg-gray-50"
+                  : selected?.value === opt.value
+                    ? "bg-primary-50 text-primary-700 cursor-pointer"
+                    : "text-gray-900 cursor-pointer hover:bg-gray-50"
               }`}
             >
-              <span>{opt.label}</span>
-              {opt.type === "admin" && (
-                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-violet-100 text-violet-700 border border-violet-200">
-                  Admin
-                </span>
-              )}
+              <span className="flex items-center gap-2">
+                <span>{opt.label}</span>
+                {opt.disabled && (
+                  <span className="text-[10px] text-gray-400 italic">{opt.disabledReason}</span>
+                )}
+              </span>
+              <RoleTag type={opt.type} />
             </li>
           ))}
         </ul>
@@ -168,13 +188,12 @@ export default function TokensPage() {
     enabled: isPasswordVerified,
   });
 
-  // Super admin: all users except super_admin; Admin: all bidders + self
+  // Super admin: all users; Admin: all bidders + self
   const { data: allEligibleUsers = [] } = useQuery({
     queryKey: ["users", "token-eligible", isSuperAdmin ? "all" : "bidder"],
     queryFn: async () => {
       if (isSuperAdmin) {
-        const all = await userService.getAll();
-        return all.filter((u) => u.type !== "super_admin");
+        return await userService.getAll();
       }
       const bidders = await userService.getAll("bidder");
       // Add self (admin) if not already in the list
@@ -185,14 +204,28 @@ export default function TokensPage() {
     },
   });
 
-  // Build select options with type info for styled rendering
+  // Track which users already have an active key
+  const usersWithActiveKey = useMemo(() => {
+    const set = new Set<string>();
+    tokens.forEach((t) => {
+      if (t.is_active) set.add(t.user_id);
+    });
+    return set;
+  }, [tokens]);
+
+  // Build select options with type info, disabled state for users with active keys
   const userSelectOptions = useMemo(() => {
-    return allEligibleUsers.map((u) => ({
-      value: u.id,
-      label: u.full_name,
-      type: u.type,
-    }));
-  }, [allEligibleUsers]);
+    return allEligibleUsers.map((u) => {
+      const hasKey = usersWithActiveKey.has(u.id);
+      return {
+        value: u.id,
+        label: u.full_name,
+        type: u.type,
+        disabled: hasKey,
+        disabledReason: hasKey ? "already has a key" : undefined,
+      };
+    });
+  }, [allEligibleUsers, usersWithActiveKey]);
 
   const { data: requests = [], refetch: refetchRequests } = useQuery({
     queryKey: ["token-requests"],
@@ -295,7 +328,7 @@ export default function TokensPage() {
 
   // ── Handlers ──────────────────────────────────────────────────────
   const onSubmitGenerate = (data: any) => {
-    const payload: any = { bidder_id: data.bidder_id };
+    const payload: any = { user_id: data.user_id };
     if (data.expiration_date) payload.expiration_date = data.expiration_date;
     if (isSuperAdmin) {
       setPendingAction({ type: "generate", data: payload });
@@ -306,12 +339,12 @@ export default function TokensPage() {
   };
 
   const onSubmitRequest = (data: any) => {
-    if (!data.bidder_id) {
+    if (!data.user_id) {
       showToast("Please select a user", "error");
       return;
     }
     const payload: any = {
-      bidder_id: data.bidder_id,
+      user_id: data.user_id,
     };
     if (data.expiration_date) payload.expiration_date = data.expiration_date;
     if (data.notes) payload.notes = data.notes;
@@ -744,7 +777,7 @@ export default function TokensPage() {
                     label="Select User"
                     options={userSelectOptions}
                     required
-                    {...register("bidder_id")}
+                    {...register("user_id")}
                   />
                   <Input label="Expiration Date (Optional)" type="date" {...register("expiration_date")} />
                   <Button type="submit" loading={generateMutation.isPending} className="w-full">
@@ -758,7 +791,7 @@ export default function TokensPage() {
                   label="Select User"
                   options={userSelectOptions}
                   required
-                  {...registerRequest("bidder_id")}
+                  {...registerRequest("user_id")}
                 />
                 <Input label="Expiration Date (Optional)" type="date" {...registerRequest("expiration_date")} />
                 <div>

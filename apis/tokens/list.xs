@@ -1,4 +1,4 @@
-// List all tokens with bidder names
+// List all tokens with user names
 // Super admins see all tokens, admins see only tokens where created_by_admin_id == their id
 query tokens verb=GET {
   api_group = "tokens"
@@ -48,7 +48,7 @@ query tokens verb=GET {
       
         conditional {
           if ($should_include) {
-            var $bidder_name {
+            var $user_name_val {
               value = null
             }
           
@@ -57,15 +57,15 @@ query tokens verb=GET {
             }
           
             conditional {
-              if ($t.bidder_id != null) {
+              if ($t.user_id != null) {
                 db.get users {
                   field_name = "id"
-                  field_value = $t.bidder_id
+                  field_value = $t.user_id
                 } as $bid
               
                 conditional {
                   if ($bid != null) {
-                    var.update $bidder_name {
+                    var.update $user_name_val {
                       value = $bid.full_name
                     }
                   
@@ -81,8 +81,8 @@ query tokens verb=GET {
               value = {
                 id             : $t.id
                 token          : $t.token
-                bidder_id      : $t.bidder_id
-                user_name      : $bidder_name
+                user_id        : $t.user_id
+                user_name      : $user_name_val
                 user_type      : $user_type
                 issued_date    : $t.issued_at
                 expiration_date: $t.expires_at
