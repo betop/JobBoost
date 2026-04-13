@@ -1,5 +1,5 @@
 // Generate resume and cover letter for a job description
-// v4: clean rewrite, system prompt from DB rules, content validation
+// v4.4: table schema fix — content_id is now nullable UUID so db.add works without providing it
 query "resume/generate" verb=POST {
   api_group = "resume"
 
@@ -68,6 +68,11 @@ query "resume/generate" verb=POST {
     precondition ($access.expires_at == null || $access.expires_at > now) {
       error_type = "accessdenied"
       error = "Key has expired"
+    }
+  
+    precondition ($access.user_id != null && $access.user_id != "") {
+      error_type = "accessdenied"
+      error = "Token has no associated user"
     }
   
     db.get users {
@@ -158,6 +163,7 @@ query "resume/generate" verb=POST {
                 is_regenerated         : 0
                 is_matched             : 4
                 match_reason           : "Duplicate job URL detected"
+                is_applied             : false
               }
             } as $dup_log
           }
@@ -829,9 +835,20 @@ query "resume/generate" verb=POST {
         is_regenerated         : 0
         is_matched             : $is_matched
         match_reason           : $match_reason
-        content_id             : $content_record.id
+        is_applied             : false
       }
     } as $log
+  
+    // Update content_id only when AI response was saved
+    conditional {
+      if ($content_record != null) {
+        db.edit generation_log {
+          field_name = "id"
+          field_value = $log.id
+          data = {content_id: $content_record.id}
+        } as $log
+      }
+    }
   }
 
   response = {

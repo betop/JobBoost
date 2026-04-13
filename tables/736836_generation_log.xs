@@ -1,4 +1,5 @@
 // generation_log table - indexes updated
+// v4: use ?field? syntax for truly nullable PostgreSQL columns (content_id, is_applied)
 table generation_log {
   auth = false
 
@@ -29,7 +30,7 @@ table generation_log {
     int is_matched?
     text match_reason?
     bool is_applied?
-    uuid content_id? {
+    uuid? content_id? {
       table = "resume_content"
     }
   }

@@ -1,5 +1,5 @@
 // Regenerate resume and cover letter using the stored job description from an existing log
-// Mirrors the main generate flow, but remains admin-only.
+// v2: omit content_id from db.add to avoid empty-string UUID error
 query "resume/regenerate" verb=POST {
   api_group = "resume"
   auth = "users"
@@ -407,9 +407,20 @@ query "resume/regenerate" verb=POST {
             original_log_id        : $original_log_id
             is_matched             : 6
             match_reason           : "AI response received, pending processing"
-            content_id             : $content_record.id
+            is_applied             : false
           }
         } as $pre_decode_log
+      
+        // Update content_id separately to avoid empty-string UUID issue
+        conditional {
+          if ($content_record != null) {
+            db.edit generation_log {
+              field_name = "id"
+              field_value = $pre_decode_log.id
+              data = {content_id: $content_record.id}
+            } as $pre_decode_log_updated
+          }
+        }
       
         var.update $log {
           value = $pre_decode_log
@@ -594,9 +605,20 @@ query "resume/regenerate" verb=POST {
             original_log_id        : $original_log_id
             is_matched             : $is_matched
             match_reason           : $match_reason
-            content_id             : $content_record.id
+            is_applied             : false
           }
         } as $final_log
+      
+        // Update content_id separately to avoid empty-string UUID issue
+        conditional {
+          if ($content_record != null) {
+            db.edit generation_log {
+              field_name = "id"
+              field_value = $final_log.id
+              data = {content_id: $content_record.id}
+            } as $final_log_updated
+          }
+        }
       
         var.update $log {
           value = $final_log
