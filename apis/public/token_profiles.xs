@@ -47,12 +47,18 @@ query "public/token-profiles" verb=POST {
       value = ($bid.type == "super_admin")
     }
   
-    // For non-super_admin users, check if they have assigned profiles
+    // For non-super_admin users, check if they have assigned or created profiles
     var $profile_count {
       value = $bid.profile_ids|count
     }
   
-    precondition ($is_super_admin || $profile_count > 0) {
+    // Also count profiles created by this user
+    db.query profile {
+      where = $db.profile.created_by == $bid.id
+      return = {type: "count"}
+    } as $created_count
+  
+    precondition ($is_super_admin || $profile_count > 0 || $created_count > 0) {
       error_type = "notfound"
       error = "No profiles assigned to this bidder"
     }
@@ -95,11 +101,51 @@ query "public/token-profiles" verb=POST {
       }
     
       else {
-        var.update $final_profile_ids {
+        // Start with explicitly assigned profile_ids
+        var $assigned_ids {
           value = $bid.profile_ids
         }
       
-        foreach ($bid.profile_ids) {
+        // Also find profiles created by this user
+        db.query profile {
+          where = $db.profile.created_by == $bid.id
+          return = {type: "list"}
+        } as $created_profiles
+      
+        // Merge created profile IDs into the assigned list (avoid duplicates)
+        foreach ($created_profiles) {
+          each as $cp {
+            var $already_included {
+              value = false
+            }
+          
+            foreach ($assigned_ids) {
+              each as $aid {
+                conditional {
+                  if ($aid == $cp.id) {
+                    var.update $already_included {
+                      value = true
+                    }
+                  }
+                }
+              }
+            }
+          
+            conditional {
+              if (!$already_included) {
+                var.update $assigned_ids {
+                  value = $assigned_ids|push:$cp.id
+                }
+              }
+            }
+          }
+        }
+      
+        var.update $final_profile_ids {
+          value = $assigned_ids
+        }
+      
+        foreach ($assigned_ids) {
           each as $pid {
             db.get profile {
               field_name = "id"
