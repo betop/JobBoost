@@ -523,14 +523,31 @@ class PDFGenerator {
        str.endsWith("*")   && !str.endsWith("**"));
     const inner = isItalic ? str.slice(1, -1) : str;
 
-    // Split on **bold** markers (even indices = plain, odd = bold)
-    const parts = inner.split(/\*\*(.+?)\*\*/gs).filter((p) => p.length > 0);
+    // Use regex exec loop to correctly identify bold vs plain segments
+    // regardless of whether text starts with a bold marker or not.
+    const re = /\*\*(.+?)\*\*/gs;
+    const segments = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = re.exec(inner)) !== null) {
+      // Plain text before this bold marker
+      if (match.index > lastIndex) {
+        segments.push({ text: inner.slice(lastIndex, match.index), bold: false, italic: isItalic });
+      }
+      // Bold text (captured group)
+      segments.push({ text: match[1], bold: true, italic: isItalic });
+      lastIndex = re.lastIndex;
+    }
+    // Remaining plain text after last bold marker
+    if (lastIndex < inner.length) {
+      segments.push({ text: inner.slice(lastIndex), bold: false, italic: isItalic });
+    }
 
-    return parts.map((part, i) => ({
-      text:   part,
-      bold:   i % 2 === 1,
-      italic: isItalic,
-    }));
+    const result = segments.filter(s => s.text.length > 0);
+    console.log("[PDFGen] _parseMarkers →", result.map(s =>
+      `${s.bold ? "BOLD" : "plain"}${s.italic ? "+italic" : ""}: "${s.text.slice(0, 60)}${s.text.length > 60 ? "…" : ""}"`
+    ));
+    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

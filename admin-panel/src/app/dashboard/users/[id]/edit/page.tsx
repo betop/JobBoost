@@ -87,7 +87,7 @@ export default function EditUserPage() {
       userService.update(id, {
         full_name: data.full_name,
         email: data.email,
-        type: data.type as UserType,
+        type: isSuperAdmin ? (data.type as UserType) : (user!.type as UserType),
         profile_ids: data.profile_ids ?? [],
         assigned_bidder_ids: data.type === "admin" ? (data.assigned_bidder_ids ?? []) : undefined,
         is_active: data.is_active,
@@ -137,21 +137,27 @@ export default function EditUserPage() {
       >
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-          <div className="flex gap-4">
-            {(["bidder", "admin"] as const).map((t) => (
-              <label key={t} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  value={t}
-                  className="w-4 h-4 text-primary-600"
-                  {...register("type")}
-                />
-                <span className="text-sm font-medium text-gray-800 capitalize">
-                  {t}
-                </span>
-              </label>
-            ))}
-          </div>
+          {isSuperAdmin ? (
+            <div className="flex gap-4">
+              {(["bidder", "admin"] as const).map((t) => (
+                <label key={t} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value={t}
+                    className="w-4 h-4 text-primary-600"
+                    {...register("type")}
+                  />
+                  <span className="text-sm font-medium text-gray-800 capitalize">
+                    {t}
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-gray-100 text-gray-700 capitalize">
+              {user.type}
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
