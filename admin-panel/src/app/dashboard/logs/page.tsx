@@ -27,6 +27,7 @@ import {
   X,
   FileText,
   RefreshCw,
+  Download,
   Building2,
   Briefcase,
   CheckCircle,
@@ -655,6 +656,7 @@ export default function LogsPage() {
   // Modal state
   const [jobDetailsLog, setJobDetailsLog]     = useState<GenerationLog | null>(null);
   const [regenerateLog, setRegenerateLog]     = useState<GenerationLog | null>(null);
+  const [downloadingLogId, setDownloadingLogId] = useState<string | null>(null);
   const [reasonLog, setReasonLog]             = useState<GenerationLog | null>(null);
   const [isRefreshing, setIsRefreshing]       = useState(false);
   // const [isRecovering, setIsRecovering]       = useState(false);
@@ -1714,6 +1716,35 @@ export default function LogsPage() {
                             }`}
                           >
                             <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!log.content_id) return;
+                              setDownloadingLogId(log.id);
+                              try {
+                                const data = await logsService.getContent(log.content_id);
+                                const filename = [log.position_title, log.company_name].filter(Boolean).join(" - ") || "Resume";
+                                await downloadResumePDF(data.raw_response, filename);
+                              } catch (err) {
+                                console.error("Failed to download resume:", err);
+                                alert("Failed to download resume PDF.");
+                              } finally {
+                                setDownloadingLogId(null);
+                              }
+                            }}
+                            disabled={!log.content_id || downloadingLogId === log.id}
+                            title={log.content_id ? "Download resume PDF" : "No saved resume content"}
+                            className={`p-1.5 rounded-md border transition-colors ${
+                              log.content_id
+                                ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 cursor-pointer"
+                                : "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed"
+                            }`}
+                          >
+                            {downloadingLogId === log.id ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <Download className="w-3.5 h-3.5" />
+                            )}
                           </button>
                         </div>
                       </td>

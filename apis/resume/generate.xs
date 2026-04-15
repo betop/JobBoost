@@ -106,9 +106,9 @@ query "resume/generate" verb=POST {
   
     conditional {
       if ($input.job_url != null && $input.job_url != "" && !($is_admin == true && $input.force_generate == true)) {
-        // Query for potential duplicate, excluding regenerated logs
+        // Query for potential duplicate, excluding regenerated, duplicate, repost, ai_error, and not_jd logs
         db.query generation_log {
-          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_regenerated != 1
+          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_matched != 6 && $db.generation_log.is_matched != 3 && $db.generation_log.is_regenerated != 1
           sort = {generation_log.created_at: "desc"}
           return = {type: "list"}
         } as $potential_duplicates
@@ -386,7 +386,7 @@ query "resume/generate" verb=POST {
   
     // Build user prompt with candidate profile and job description
     var $user_prompt {
-      value = "STEP 0 - CONTENT VALIDATION:\n\nFirst, check if the provided text is actually a job description/job posting. If the text is NOT a real job description/job posting (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps. But it's fine if it includes almost main job description/job posting even it gets cut off.\n\nSTEP 1 - COMPANY/PLATFORM TYPE CHECK:\n\nIf the job is posted by or on behalf of an AI data labeling / AI training / AI annotation platform (e.g. Outlier, Scale AI, Appen, Lionbridge AI, Remotasks, DataAnnotation, Surge AI, Invisible Technologies, or any similar crowdsourced AI training service), return status=unfit with reason explaining it is an AI annotation/training role, not a software engineering position. Do NOT proceed to further steps.\n\nIf the job is posted on a freelance marketplace or contractor platform (e.g. Toptal, Upwork, Fiverr, Freelancer, Guru, PeoplePerHour, Contra, or any similar platform), return status=unfit with reason explaining it is a freelance/contract marketplace listing, not a direct employer role. Do NOT proceed to further steps.\n\nSTEP 2 - REMOTE CHECK:\n\nIf job description doesn't provide 100% remote position and must requires either relocation, hybrid, onsite, in-office, or at least 1 day office visit, return status=unfit. And if job requires Security Clearance or Public trust, return status=unfit. Do NOT generate resume or cover letter.\n\nSTEP 3 - DOMAIN MATCH:\n\nIf fully remote:\nIf domain aligns with candidate target category: return status=match and generate full tailored resume and cover letter.\nOtherwise: return status=mismatch with reason explaining why domain does not align in 1-2 sentences. Do NOT generate resume or cover letter for mismatch.\n\nSTEP 4 - SENIORITY CHECK:\n\nFIT (return match): Mid-level, Senior, Lead, Staff Engineer, Engineering Manager roles.\nFIT (return match): Positions which requires leadership or management of less than 30 people for Principal Engineer or Senior Engineering Manager titles.\nUNFIT (return mismatch): Positions which requires leadership or management of 30+ people for Principal Engineer Senior Engineering Manager titles, Distinguished Engineer, Fellow, Director, VP, C-level, or any roles higher than Principal Engineer and Senior Engineering Manager.\n\nIMPORTANT: Only generate full resume and cover letter for status=match. For all other statuses (unfit, mismatch, not_job_description), return status and reason only.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION, UNFIT, MISMATCH (no resume/cover letter): " ~ ($unmatch_schema|json_encode) ~ "\n\nMATCH (with full resume and cover letter): " ~ ($match_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+      value = "STEP 0 - CONTENT VALIDATION:/n/nFirst, check if the provided text is actually a job description/job posting. If the text is NOT a real job description/job posting (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps. Don't check if job description is cut off. Just return status=match whether it is full job description/job postion or piece of it./n/nSTEP 1 - COMPANY/PLATFORM TYPE CHECK:/n/nIf the job is posted by or on behalf of an AI data labeling / AI training / AI annotation platform (e.g. Outlier, Scale AI, Appen, Lionbridge AI, Remotasks, DataAnnotation, Surge AI, Invisible Technologies, or any similar crowdsourced AI training service), return status=unfit with a reason stating it is an AI annotation/training role, not a software engineering position. Do NOT proceed to further steps./n/nIf the job is posted on a freelance marketplace or contractor platform (e.g. Toptal, Upwork, Fiverr, Freelancer, Guru, PeoplePerHour, Contra, or any similar platform), return status=unfit with a reason stating it is a freelance/contract marketplace listing, not a direct employer role. Do NOT proceed to further steps./n/nSTEP 2 - REMOTE CHECK:/n/nIf the position is not 100% remote (meaning it must requires relocation, hybrid work, on-site presence, in-office attendance, or even a single office visit), return status=unfit. Also return status=unfit if the role requires a Security Clearance or Public Trust clearance. Do NOT generate a resume or cover letter. Stop here./n/nSTEP 3 - DOMAIN MATCH:/n/nIf fully remote, check the possibility if the candidate profile can get hired to this job. If absolutely yes (possibility is higher than 50%), return status=match and generate a full tailored resume and cover letter. If no, return status=mismatch with a 1-2 sentence explanation of why it's not possible to get hired in the job. Do NOT generate a resume or cover letter for a mismatch./n/nSTEP 4 - SENIORITY CHECK:/n/nIf the job is either Mid-level, Senior, Lead, Staff Engineer, or Engineering Manager level roles, return status=match. Also if the job is Principal Engineer or Senior Engineering Manager roles that involve leading or managing fewer than 30 people, return status=match/n/nBut if the job is Principal Engineer or Senior Engineering Manager roles that require managing 30 or more people, return status=mimatch. Also if the job is either Distinguished Engineer, Fellow, Director, VP, C-level, or any role higher than Principal Engineer or Senior Engineering Manager level roles, return status=mismatch. If the number of people managed cannot be determined, do NOT treat it as a disqualifier and return status=match./n/nCRITICAL JSON RESPONSE RULES:/n- For status=match: include resume, cover_letter, position_title, and company_name fields./n- For status=unfit, mismatch, or not_job_description: return ONLY status, reason, position_title, and company_name. Do NOT include resume or cover_letter fields in the JSON under any circumstances.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION, UNFIT, MISMATCH (no resume/cover letter): " ~ ($unmatch_schema|json_encode) ~ "\n\nMATCH (with full resume and cover letter): " ~ ($match_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
     }
   
     // Admin + force_generate: override the prompt to always generate a resume (treat as match)
@@ -444,6 +444,11 @@ query "resume/generate" verb=POST {
       value = null
     }
   
+    // Track whether admin override was used (AI returned non-match but admin forced generation)
+    var $admin_overridden {
+      value = false
+    }
+  
     // Debug: Log force_generate status
     debug.log {
       value = "force_generate=" ~ $input.force_generate ~ " | is_admin=" ~ $is_admin
@@ -487,6 +492,44 @@ query "resume/generate" verb=POST {
         var.update $output_tokens {
           value = `($ai_resp.response.result.usage|get:"output_tokens") + 0`
         }
+      
+        // ==================== TOKEN ACCUMULATION FOR ADMIN FORCE GENERATE ====================
+        // When admin retries with force_generate, the first call already consumed tokens
+        // and logged them. Add those tokens to the current call so the total is accurate.
+        conditional {
+          if ($is_admin && $input.force_generate) {
+            db.query generation_log {
+              where = $db.generation_log.profile_id == $input.profile_id && $db.generation_log.user_id == $access.user_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_regenerated != 1
+              sort = {generation_log.created_at: "desc"}
+              return = {type: "single"}
+            } as $prev_log
+          
+            conditional {
+              if ($prev_log != null && $prev_log.input_tokens > 0) {
+                var.update $input_tokens {
+                  value = $input_tokens + $prev_log.input_tokens
+                }
+              
+                var.update $output_tokens {
+                  value = $output_tokens + $prev_log.output_tokens
+                }
+              
+                // Mark the previous log as regenerated so it's excluded from stats
+                db.edit generation_log {
+                  field_name = "id"
+                  field_value = $prev_log.id
+                  data = {is_regenerated: 1}
+                } as $prev_log_updated
+              
+                debug.log {
+                  value = `"Token accumulation: prev=" ~ $prev_log.input_tokens ~ "+" ~ $prev_log.output_tokens ~ " | current=" ~ ($ai_resp.response.result.usage|get:"input_tokens") ~ "+" ~ ($ai_resp.response.result.usage|get:"output_tokens") ~ " | total=" ~ $input_tokens ~ "+" ~ $output_tokens`
+                }
+              }
+            }
+          }
+        }
+      
+        // ==================== END TOKEN ACCUMULATION ====================
       
         // Parse JSON response (robust cleanup for code-fences / wrappers)
         var $clean_response {
@@ -534,9 +577,27 @@ query "resume/generate" verb=POST {
           }
         }
       
-        // If JSON parsing failed completely, mark as error
+        // ==================== PARSE AI RESPONSE ====================
+        // Status codes: 1=match, 0=mismatch, 2=unfit, 3=not_job_description, 6=ai_error
+        // Only status=match gets resume/cover_letter content.
+        // AI sometimes returns resume content even for non-match - we discard it server-side.
+      
+        // Extract AI status (empty string if parsing failed)
+        var $ai_status {
+          value = ""
+        }
+      
+        conditional {
+          if ($parsed_response != null) {
+            var.update $ai_status {
+              value = $parsed_response.status
+            }
+          }
+        }
+      
         conditional {
           if ($parsed_response == null) {
+            // JSON parsing failed completely
             var.update $is_matched {
               value = 6
             }
@@ -545,36 +606,87 @@ query "resume/generate" verb=POST {
               value = "AI processing error: invalid JSON response. Please try again."
             }
           }
-        }
-      
-        // Debug: Log the parsed status for troubleshooting
-        debug.log {
-          value = `"Parsed AI status: " ~ ($parsed_response|get:"status") ~ " | Has resume: " ~ (($parsed_response|get:"resume") != null)`
-        }
-      
-        conditional {
-          if ($parsed_response != null && $parsed_response.status == "not_job_description") {
-            var.update $is_matched {
-              value = 3
-            }
-          
-            var.update $match_reason {
-              value = $parsed_response.reason
+        
+          else {
+            conditional {
+              if ($ai_status == "not_job_description") {
+                var.update $is_matched {
+                  value = 3
+                }
+              
+                var.update $match_reason {
+                  value = $parsed_response.reason
+                }
+              }
+            
+              else {
+                conditional {
+                  if ($ai_status == "unfit") {
+                    var.update $is_matched {
+                      value = 2
+                    }
+                  
+                    var.update $match_reason {
+                      value = $parsed_response.reason
+                    }
+                  }
+                
+                  else {
+                    conditional {
+                      if ($ai_status == "mismatch") {
+                        var.update $is_matched {
+                          value = 0
+                        }
+                      
+                        var.update $match_reason {
+                          value = $parsed_response.reason
+                        }
+                      }
+                    
+                      else {
+                        conditional {
+                          if ($ai_status == "match") {
+                            var.update $is_matched {
+                              value = 1
+                            }
+                          
+                            var.update $match_reason {
+                              value = $parsed_response.reason
+                            }
+                          
+                            // Only extract resume/cover_letter for match status
+                            var.update $resume_text {
+                              value = $parsed_response.resume
+                            }
+                          
+                            var.update $cover_letter_text {
+                              value = $parsed_response.cover_letter
+                            }
+                          }
+                        
+                          else {
+                            // Unknown status from AI - treat as error
+                            var.update $is_matched {
+                              value = 6
+                            }
+                          
+                            var.update $match_reason {
+                              value = "AI processing error: unexpected status. Please try again."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
       
+        // Extract position_title and company_name (common to all valid statuses)
         conditional {
-          if ($parsed_response != null && $parsed_response.status == "unfit") {
-            var.update $is_matched {
-              value = 2
-            }
-          
-            var.update $match_reason {
-              value = $parsed_response.reason
-            }
-          
-            // Capture position_title and company_name if provided
+          if ($parsed_response != null) {
             conditional {
               if ($parsed_response.position_title != null && $parsed_response.position_title != "") {
                 var.update $position_title {
@@ -593,59 +705,17 @@ query "resume/generate" verb=POST {
           }
         }
       
-        conditional {
-          if ($parsed_response != null && $parsed_response.status == "mismatch") {
-            var.update $is_matched {
-              value = 0
-            }
-          
-            var.update $match_reason {
-              value = $parsed_response.reason
-            }
-          
-            var.update $position_title {
-              value = $parsed_response.position_title
-            }
-          
-            var.update $company_name {
-              value = $parsed_response.company_name
-            }
-          }
+        // Debug: Log the parsed status for troubleshooting
+        debug.log {
+          value = "Parsed AI status: " ~ $is_matched ~ " | position: " ~ $position_title ~ " | company: " ~ $company_name
         }
       
-        conditional {
-          if ($parsed_response != null && $parsed_response.status == "match") {
-            var.update $is_matched {
-              value = 1
-            }
-          
-            var.update $match_reason {
-              value = $parsed_response.reason
-            }
-          
-            var.update $resume_text {
-              value = $parsed_response.resume
-            }
-          
-            var.update $cover_letter_text {
-              value = $parsed_response.cover_letter
-            }
-          
-            var.update $position_title {
-              value = $parsed_response.position_title
-            }
-          
-            var.update $company_name {
-              value = $parsed_response.company_name
-            }
-          }
-        }
-      
-        // Admin + force_generate: Override any non-error status to match
-        // This ensures resume is always generated for admin override regardless of AI response
+        // ==================== ADMIN FORCE GENERATE OVERRIDE ====================
+        // Admin + force_generate: Override any non-match/non-error status to match
+        // If AI happened to return resume content despite wrong status, use it
         conditional {
           if ($is_admin && $input.force_generate && $is_matched != 6 && $is_matched != 1) {
-            // If AI returned content despite returning wrong status, use it
+            // Salvage resume/cover_letter if AI returned them despite non-match status
             conditional {
               if ($parsed_response != null && $parsed_response.resume != null) {
                 var.update $resume_text {
@@ -662,30 +732,16 @@ query "resume/generate" verb=POST {
               }
             }
           
-            // Capture position/company if available
-            conditional {
-              if ($parsed_response != null && $parsed_response.position_title != null) {
-                var.update $position_title {
-                  value = $parsed_response.position_title
-                }
-              }
-            }
-          
-            conditional {
-              if ($parsed_response != null && $parsed_response.company_name != null) {
-                var.update $company_name {
-                  value = $parsed_response.company_name
-                }
-              }
-            }
-          
-            // Force status to match
             var.update $is_matched {
               value = 1
             }
           
             var.update $match_reason {
               value = "Admin override: forced generation"
+            }
+          
+            var.update $admin_overridden {
+              value = true
             }
           }
         }
@@ -749,9 +805,9 @@ query "resume/generate" verb=POST {
   
     conditional {
       if ($position_title != "" && $company_name != "" && ($is_matched == 1 || $is_matched == 0) && $skip_repost_check == false) {
-        // Query for potential reposts, excluding regenerated logs
+        // Query for potential reposts, excluding regenerated, duplicate, repost, ai_error, and not_jd logs
         db.query generation_log {
-          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_regenerated != 1
+          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_matched != 6 && $db.generation_log.is_matched != 3 && $db.generation_log.is_regenerated != 1
           sort = {generation_log.created_at: "desc"}
           return = {type: "list"}
         } as $potential_reposts
@@ -818,6 +874,12 @@ query "resume/generate" verb=POST {
   
     // ==================== END REPOST DETECTION ====================
   
+    // Mark as applied only when admin overrode a non-match status (clicked "Generate Anyway")
+    // Normal matched jobs (even via force_generate) should NOT show as applied
+    var $mark_applied {
+      value = $admin_overridden
+    }
+  
     db.add generation_log {
       data = {
         profile_id             : $input.profile_id
@@ -835,7 +897,7 @@ query "resume/generate" verb=POST {
         is_regenerated         : 0
         is_matched             : $is_matched
         match_reason           : $match_reason
-        is_applied             : false
+        is_applied             : $mark_applied
       }
     } as $log
   

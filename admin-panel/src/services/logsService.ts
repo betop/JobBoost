@@ -88,6 +88,7 @@ export interface GenerationLog {
   is_matched: number | null;  // 1=matched, 0=mismatched, 2=skipped(not-remote), 3=not_job_description, 4=duplicate_url, 5=reposted, 6=error, null=unknown
   match_reason: string;
   is_applied: boolean;
+  content_id: string | null;
 }
 
 export interface LogsListResponse {
@@ -199,6 +200,12 @@ export const logsService = {
       log_id: logId,
       force_generate: forceGenerate || undefined,
     });
+    return response.data;
+  },
+
+  /** Fetch the saved AI raw_response for a given content_id */
+  getContent: async (contentId: string): Promise<{ id: string; raw_response: string }> => {
+    const response = await api.get(`/resume/get_content?content_id=${contentId}`);
     return response.data;
   },
 
