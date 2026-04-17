@@ -14,6 +14,7 @@ import {
   Plus,
   Copy,
   XCircle,
+  CheckCircle2,
   Trash2,
   CalendarClock,
   Eye,
@@ -153,7 +154,7 @@ export default function TokensPage() {
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [showActionConfirm, setShowActionConfirm] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
-    type: "generate" | "revoke" | "delete" | "extend" | "approve" | "decline";
+    type: "generate" | "revoke" | "delete" | "extend" | "approve" | "decline" | "activate";
     id?: string;
     data?: any;
   } | null>(null);
@@ -277,6 +278,15 @@ export default function TokensPage() {
     onError: () => showToast("Failed to revoke token", "error"),
   });
 
+  const activateMutation = useMutation({
+    mutationFn: tokenService.activate,
+    onSuccess: () => {
+      showToast("Token activated successfully", "success");
+      refetch();
+    },
+    onError: () => showToast("Failed to activate token", "error"),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: tokenService.delete,
     onSuccess: () => {
@@ -381,6 +391,9 @@ export default function TokensPage() {
         break;
       case "revoke":
         revokeMutation.mutate(pendingAction.id!);
+        break;
+      case "activate":
+        activateMutation.mutate(pendingAction.id!);
         break;
       case "delete":
         deleteMutation.mutate(pendingAction.id!);
@@ -517,7 +530,7 @@ export default function TokensPage() {
                 >
                   <CalendarClock className="w-4 h-4" />
                 </button>
-                {row.is_active && (
+                {row.is_active ? (
                   <button
                     onClick={() => {
                       setPendingAction({ type: "revoke", id: row.id });
@@ -527,6 +540,17 @@ export default function TokensPage() {
                     title="Revoke"
                   >
                     <XCircle className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setPendingAction({ type: "activate", id: row.id });
+                      setShowActionConfirm(true);
+                    }}
+                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"
+                    title="Activate"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
                   </button>
                 )}
                 <button
@@ -636,6 +660,8 @@ export default function TokensPage() {
         return "Please confirm your password to delete this key";
       case "revoke":
         return "Please confirm your password to revoke this key";
+      case "activate":
+        return "Please confirm your password to activate this key";
       case "extend":
         return "Please confirm your password to extend this key";
       case "approve":

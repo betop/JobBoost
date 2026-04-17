@@ -9,7 +9,7 @@ import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
-import { Edit, Trash2, UserX, Plus, Shield, User as UserIcon, CheckCircle } from "lucide-react";
+import { Edit, Trash2, UserX, UserCheck, Plus, Shield, User as UserIcon, CheckCircle } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 
 // Tabs only shown to super_admin
@@ -34,6 +34,7 @@ export default function UsersPage() {
   const [activeTab, setActiveTab] = useState<UserType | "all">("all");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
+  const [activateId, setActivateId] = useState<string | null>(null);
   const [approveId, setApproveId] = useState<string | null>(null);
 
   // Admins always see only bidders; super_admins use the tab filter
@@ -64,6 +65,16 @@ export default function UsersPage() {
       refetch();
     } catch {
       showToast("Failed to deactivate user", "error");
+    }
+  };
+
+  const handleActivate = async (id: string) => {
+    try {
+      await userService.activate(id);
+      showToast("User activated successfully", "success");
+      refetch();
+    } catch {
+      showToast("Failed to activate user", "error");
     }
   };
 
@@ -161,13 +172,23 @@ export default function UsersPage() {
           >
             <Edit className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => setDeactivateId(row.id)}
-            className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
-            title="Deactivate"
-          >
-            <UserX className="w-4 h-4" />
-          </button>
+          {row.is_active ? (
+            <button
+              onClick={() => setDeactivateId(row.id)}
+              className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
+              title="Deactivate"
+            >
+              <UserX className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={() => setActivateId(row.id)}
+              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"
+              title="Activate"
+            >
+              <UserCheck className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => setDeleteId(row.id)}
             className="p-1.5 text-red-600 hover:bg-red-50 rounded"
@@ -244,6 +265,17 @@ export default function UsersPage() {
         confirmText="Yes, Deactivate"
         cancelText="No, Cancel"
         variant="warning"
+      />
+
+      <ConfirmDialog
+        isOpen={activateId !== null}
+        onClose={() => setActivateId(null)}
+        onConfirm={() => activateId && handleActivate(activateId)}
+        title="Activate User"
+        message="Are you sure you want to activate this user?"
+        confirmText="Yes, Activate"
+        cancelText="No, Cancel"
+        variant="info"
       />
 
       <ConfirmDialog

@@ -59,6 +59,10 @@ export const tokenService = {
     await api.patch(`/tokens/${id}/revoke`);
   },
 
+  activate: async (id: string): Promise<void> => {
+    await api.patch(`/tokens/${id}/extend`);
+  },
+
   extend: async (id: string, expiration_date?: string): Promise<void> => {
     await api.patch(`/tokens/${id}/extend`, { expiration_date: expiration_date || null });
   },

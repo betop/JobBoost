@@ -55,6 +55,10 @@ export const userService = {
     await api.put(`/users/${id}`, { is_active: false });
   },
 
+  activate: async (id: string): Promise<void> => {
+    await api.put(`/users/${id}`, { is_active: true });
+  },
+
   approve: async (id: string): Promise<void> => {
     await api.put(`/users/${id}`, { is_approved: true });
   },
