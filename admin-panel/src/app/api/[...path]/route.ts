@@ -1,18 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Map first path segment to the correct Xano base URL
-const XANO_BASES: Record<string, string> = {
-  auth:             "https://x8ki-letl-twmt.n7.xano.io/api:Vbfe5lun:v1",
-  profiles:         "https://x8ki-letl-twmt.n7.xano.io/api:YZl-BhQi:v1",
-  users:            "https://x8ki-letl-twmt.n7.xano.io/api:I8ZiQ9Me:v1",
-  rules:            "https://x8ki-letl-twmt.n7.xano.io/api:99AB050c:v1",
-  tokens:           "https://x8ki-letl-twmt.n7.xano.io/api:KWCAt72v:v1",
-  "access-control": "https://x8ki-letl-twmt.n7.xano.io/api:Ucs3etMr:v1",
-  dashboard:        "https://x8ki-letl-twmt.n7.xano.io/api:5kArnPy5:v1",
-  logs:             "https://x8ki-letl-twmt.n7.xano.io/api:fMYNj_1_:v1",
-  resume:           "https://x8ki-letl-twmt.n7.xano.io/api:caf8Eo15:v1",
-  public:           "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1",
+const XANO_HOST = process.env.XANO_HOST || "https://api.shsws-solutions.com";
+
+const XANO_CANONICALS: Record<string, string> = {
+  auth: "Vbfe5lun",
+  profiles: "YZl-BhQi",
+  users: "I8ZiQ9Me",
+  rules: "99AB050c",
+  tokens: "KWCAt72v",
+  "access-control": "Ucs3etMr",
+  dashboard: "5kArnPy5",
+  logs: "fMYNj_1_",
+  resume: "caf8Eo15",
+  public: "W5ffWHW-",
+  "extension-versions": "eqIK8vAt",
 };
+
+const XANO_BASES: Record<string, string> = Object.fromEntries(
+  Object.entries(XANO_CANONICALS).map(([group, canonical]) => [group, `${XANO_HOST}/api:${canonical}`])
+) as Record<string, string>;
+
+if (process.env.XANO_ALLOW_SELF_SIGNED === "true") {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
+export const runtime = "nodejs";
 
 async function proxyRequest(req: NextRequest, segments: string[]) {
   const group = segments[0];
@@ -57,7 +69,7 @@ async function proxyRequest(req: NextRequest, segments: string[]) {
       },
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 502 });
+    return NextResponse.json({ error: err.message, targetUrl }, { status: 502 });
   }
 }
 

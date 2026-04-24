@@ -10,10 +10,16 @@ query "resume/generate" verb=POST {
     text job_url?
     text extension_version?
     bool force_generate?
+    uuid log_id?
   }
 
   stack {
     precondition ($input.profile_id != null) {
+      error_type = "badrequest"
+      error = "profile_id is required"
+    }
+  
+    precondition ($input.job_url != null) {
       error_type = "badrequest"
       error = "profile_id is required"
     }
@@ -29,45 +35,30 @@ query "resume/generate" verb=POST {
       error = "The job description is too short. Please paste the full job description text, not just a job title or link."
     }
   
-    precondition ($input.token != null && $input.token != "") {
+    precondition ($input.token != null) {
       error_type = "accessdenied"
       error = "Missing authorization key"
     }
   
     // Check extension version (skipped when extension_version is not sent, e.g. staging env)
     db.query extension_version {
-      where = $db.extension_version.extension_name == "swiftcv" && $db.extension_version.is_current == true
+      where = $db.extension_version.extension_name == "swiftcv" && $db.extension_version.is_current == true && $db.extension_version.version == $input.extension_version
       return = {type: "single"}
     } as $current_version
   
     precondition ($current_version != null) {
       error_type = "badrequest"
-      error = "No current version found for swiftcv extension"
-    }
-  
-    precondition ($input.extension_version == null || $input.extension_version == $current_version.version) {
-      error_type = "badrequest"
       error = "Extension version mismatch. Please update your extension to the latest version."
     }
   
     db.query access_token {
-      where = $db.access_token.token == $input.token
+      where = $db.access_token.token == $input.token && $db.access_token.is_active == true && $db.access_token.expires_at < now && $db.access_token.user_id != null
       return = {type: "single"}
     } as $access
   
     precondition ($access != null) {
       error_type = "accessdenied"
       error = "Invalid key"
-    }
-  
-    precondition ($access.is_active) {
-      error_type = "accessdenied"
-      error = "Key has been revoked"
-    }
-  
-    precondition ($access.expires_at == null || $access.expires_at > now) {
-      error_type = "accessdenied"
-      error = "Key has expired"
     }
   
     precondition ($access.user_id != null && $access.user_id != "") {
@@ -78,63 +69,292 @@ query "resume/generate" verb=POST {
     db.get users {
       field_name = "id"
       field_value = $access.user_id
-    } as $bid
+    } as $user
   
-    precondition ($bid != null) {
+    precondition ($user != null) {
       error_type = "accessdenied"
       error = "User not found"
     }
   
-    precondition ($bid.is_active) {
+    precondition ($user.is_active) {
       error_type = "accessdenied"
       error = "User account is inactive"
     }
   
-    // Check if this is an admin user (can override all warnings)
-    // Admin status is derived from the user's type, not from the token
-    var $is_admin {
-      value = ($bid.type == "admin" || $bid.type == "super_admin")
+    var $match_status {
+      value = 1
     }
   
-    // ==================== DUPLICATE URL DETECTION ====================
-    // Check if this exact job_url + profile combo was already applied to by this bidder
-    // Same URL with a different profile is allowed (different resume for same job)
-    // Admin keys with force_generate skip duplicate detection entirely
-    var $duplicate_log {
-      value = null
+    var $error_msg {
+      value = ""
+    }
+  
+    var $should_generate {
+      value = false
+    }
+  
+    var $extraction_json {
+      value = {}
+    }
+  
+    var $work_exp_array {
+      value = []
     }
   
     conditional {
-      if ($input.job_url != null && $input.job_url != "" && !($is_admin == true && $input.force_generate == true)) {
-        // Query for potential duplicate, excluding regenerated, duplicate, repost, ai_error, and not_jd logs
+      if ($input.force_generate == false) {
         db.query generation_log {
-          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_matched != 6 && $db.generation_log.is_matched != 3 && $db.generation_log.is_regenerated != 1
-          sort = {generation_log.created_at: "desc"}
-          return = {type: "list"}
-        } as $potential_duplicates
+          where = $db.generation_log.job_url == $input.job_url && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched == 1
+          return = {type: "single"}
+        } as $potential_duplicate
       
-        // Filter out admin-generated logs by checking bidder type
-        foreach ($potential_duplicates) {
-          each as $pot_dup {
-            // Skip if we already found a valid duplicate
-            conditional {
-              if ($duplicate_log == null) {
-                // Check if the bidder who generated this log is an admin
-                db.get users {
-                  field_name = "id"
-                  field_value = $pot_dup.user_id
-                } as $dup_bidder
+        conditional {
+          if ($potential_duplicate != null) {
+            var.update $match_status {
+              value = 4
+            }
+          
+            var.update $error_msg {
+              value = "This job has been applied before. Try with another job."
+            }
+          }
+        
+          else {
+            var $openai_auth {
+              value = "Bearer " ~ $env.OPENAI_API_KEY
+            }
+          
+            var $extraction_text {
+              value = ""
+            }
+          
+            try_catch {
+              try {
+                api.request {
+                  url = "https://api.openai.com/v1/chat/completions"
+                  method = "POST"
+                  params = {}
+                    |set:"model":"gpt-4o-mini"
+                    |set:"max_tokens":200
+                    |set:"messages":([]
+                      |push:({}
+                        |set:"role":"user"
+                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true | false\",\n\"company\": \"full company name\",\n\"position\": \"full position title\",\n\"is_remote\": \"true | false\",\n\"travels_or_relocation_required\": \"true | false\",\n\"similar_to_outlier\": \"true | false\",\n\"similar_to_toptal\": \"true | false\",\n\"clearance_required\": \"true | false\",\n\"seniority\": \"intern | entry | junior | mid | senior | lead | staff | principal | manager | director | vice_president | c_level | founder\",\n\"tech_scope\": \"ai | machine_learning | data_science | data_analytics | data_engineering | data_research | computer_vision | mlops | software_engineering | full_stack | backend | frontend | devops\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+                      )
+                    )
+                  headers = []
+                    |push:"Content-Type: application/json"
+                    |push:"Authorization: " ~ $openai_auth
+                  timeout = 60
+                } as $extraction_resp
               
-                // Only consider as duplicate if generated by a non-admin bidder
+                var.update $extraction_text {
+                  value = $extraction_resp.response.result.choices
+                    |first
+                    |get:"message"
+                    |get:"content"
+                    |trim
+                }
+              }
+            
+              catch {
+                debug.log {
+                  value = "OpenAI extraction failed: " ~ $error
+                }
+              }
+            }
+          
+            // Replace ```json ... ``` if present (some models wrap JSON in code blocks)
+            var $extraction_text_filtered {
+              value = $extraction_text
+                |replace:"```json\n":""
+                |replace:"```JSON\n":""
+                |replace:"```\n":""
+                |replace:"```":""
+                |trim
+            }
+          
+            try_catch {
+              try {
+                var.update $extraction_json {
+                  value = $extraction_text_filtered|json_decode
+                }
+              }
+            
+              catch {
+                debug.log {
+                  value = "OpenAI extraction JSON decode failed: " ~ $error
+                }
+              }
+            }
+          
+            conditional {
+              if ($extraction_json != null) {
                 conditional {
-                  if ($dup_bidder == null || ($dup_bidder.type != "admin" && $dup_bidder.type != "super_admin")) {
-                    // If previous attempt was Not JD (3) or AI error (6), allow retry (not duplicate)
+                  if ($extraction_json.is_job_posting == "true") {
                     conditional {
-                      if ($pot_dup.is_matched != 3 && $pot_dup.is_matched != 6) {
-                        var.update $duplicate_log {
-                          value = $pot_dup
+                      if ($extraction_json.is_remote == "true") {
+                        conditional {
+                          if ($extraction_json.travels_or_relocation_required == "false") {
+                            conditional {
+                              if ($extraction_json.similar_to_outlier == "false" && $extraction_json.similar_to_toptal == "false") {
+                                conditional {
+                                  if ($extraction_json.clearance_required == "false") {
+                                    var $possible_seniorities {
+                                      value = ["mid", "senior", "lead", "staff"]
+                                    }
+                                  
+                                    conditional {
+                                      if (`$possible_seniorities|some:"x == " ~ $extraction_json.seniority:10`) {
+                                        db.get profile {
+                                          field_name = "id"
+                                          field_value = $input.profile_id
+                                        } as $prof
+                                      
+                                        precondition ($prof != null) {
+                                          error_type = "notfound"
+                                          error = "Profile not found"
+                                        }
+                                      
+                                        db.query work_experience {
+                                          where = $db.work_experience.profile_id == $prof.id
+                                          sort = {work_experience.start_date: "desc"}
+                                          return = {type: "list"}
+                                        } as $work
+                                      
+                                        var.update $work_exp_array {
+                                          value = $work
+                                        }
+                                      
+                                        var $has_previous_company {
+                                          value = $work_exp_array
+                                            |some:"x.company_name|to_lower|trim == " ~ $extraction_json.company|to_lower|trim:10
+                                        }∂
+                                      
+                                        conditional {
+                                          if ($has_previous_company) {
+                                            var.update $match_status {
+                                              value = 2
+                                            }
+                                          
+                                            var.update $error_msg {
+                                              value = "The candidate has worked at the same company before/currently. Try with another job."
+                                            }
+                                          }
+                                        
+                                          else {
+                                            var $profile_category {
+                                              value = $prof.job_category|split:","
+                                            }
+                                          
+                                            conditional {
+                                              if (`$profile_category|some:"x == " ~ $extraction_json.tech_scope:10`) {
+                                                db.query generation_log {
+                                                  where = $db.generation_log.position_title == $extraction_json.position && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched == 1 && ($db.generation_log.created_at >= now - (((15 * 24) * 60) * 60)) == true
+                                                  sort = {generation_log.created_at: "desc"}
+                                                  return = {type: "single"}
+                                                } as $last_generation_log
+                                              
+                                                conditional {
+                                                  if ($last_generation_log == null) {
+                                                    var.update $should_generate {
+                                                      value = true
+                                                    }
+                                                  }
+                                                
+                                                  else {
+                                                    var.update $match_status {
+                                                      value = 5
+                                                    }
+                                                  
+                                                    var.update $error_msg {
+                                                      value = "This job is possibly reposted. Try with another job."
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            
+                                              else {
+                                                var.update $match_status {
+                                                  value = 0
+                                                }
+                                              
+                                                var.update $error_msg {
+                                                  value = "This job is not aligned to the candidate profile. Required tech scope: " ~ $extraction_json.tech_scope
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    
+                                      else {
+                                        var.update $match_status {
+                                          value = 0
+                                        }
+                                      
+                                        var.update $error_msg {
+                                          value = "This job requires too low/high seniority and not aligned to the candidate profile. Tray with anogher job."
+                                        }
+                                      }
+                                    }
+                                  }
+                                
+                                  else {
+                                    var.update $match_status {
+                                      value = 2
+                                    }
+                                  
+                                    var.update $error_msg {
+                                      value = "This job requires security clearance. Try with another job."
+                                    }
+                                  }
+                                }
+                              }
+                            
+                              else {
+                                var.update $match_status {
+                                  value = 0
+                                }
+                              
+                                var.update $error_msg {
+                                  value = "This job is not aligned to the candidate profile. It is a freelancer marketplace or a AI traning job. Try with another job."
+                                }
+                              }
+                            }
+                          }
+                        
+                          else {
+                            var.update $match_status {
+                              value = 2
+                            }
+                          
+                            var.update $error_msg {
+                              value = "This job requires to travel or relocate. Try with another job."
+                            }
+                          }
                         }
                       }
+                    
+                      else {
+                        var.update $match_status {
+                          value = 2
+                        }
+                      
+                        var.update $error_msg {
+                          value = "This is not a remote job. Try with another job."
+                        }
+                      }
+                    }
+                  }
+                
+                  else {
+                    var.update $match_status {
+                      value = 3
+                    }
+                  
+                    var.update $error_msg {
+                      value = "This is not a job posting. Please review your selection and try again."
                     }
                   }
                 }
@@ -142,272 +362,26 @@ query "resume/generate" verb=POST {
             }
           }
         }
-      
-        // Log duplicate entry for non-admin users
-        conditional {
-          if ($duplicate_log != null && $is_admin == false) {
-            db.add generation_log {
-              data = {
-                profile_id             : $input.profile_id
-                user_id                : $access.user_id
-                job_url                : $input.job_url
-                job_description_snippet: $input.job_description|substr:0:300
-                job_description        : $input.job_description
-                ai_provider            : ""
-                input_tokens           : 0
-                output_tokens          : 0
-                resume_filename        : ""
-                cover_letter_filename  : ""
-                position_title         : $duplicate_log.position_title
-                company_name           : $duplicate_log.company_name
-                is_regenerated         : 0
-                is_matched             : 4
-                match_reason           : "Duplicate job URL detected"
-                is_applied             : false
-              }
-            } as $dup_log
-          }
-        }
       }
     }
   
-    // If duplicate was found, fail with structured error containing duplicate info
-    // Admin keys can override — they get the warning but can still generate
-    precondition ($duplicate_log == null || $is_admin) {
-      error_type = "badrequest"
-      error = "DUPLICATE_URL"
-      payload = {
-        log_id        : $duplicate_log.id
-        is_matched    : 4
-        match_reason  : "Duplicate job URL detected"
-        applied_date  : $duplicate_log.created_at
-        position_title: $duplicate_log.position_title
-        company_name  : $duplicate_log.company_name
-      }
+    var $input_tokens {
+      value = 0
     }
   
-    // ==================== END DUPLICATE URL DETECTION ====================
-  
-    db.get profile {
-      field_name = "id"
-      field_value = $input.profile_id
-    } as $prof
-  
-    precondition ($prof != null) {
-      error_type = "notfound"
-      error = "Profile not found"
+    var $output_tokens {
+      value = 0
     }
   
-    db.query education {
-      where = $db.education.profile_id == $prof.id
-      sort = {education.start_date: "asc"}
-      return = {type: "list"}
-    } as $education
+    var $resume_content_id {
+      value = null
+    }
   
-    db.query work_experience {
-      where = $db.work_experience.profile_id == $prof.id
-      sort = {work_experience.start_date: "desc"}
-      return = {type: "list"}
-    } as $work
-  
-    db.query rule {
-      where = $db.rule.is_active == true
-      sort = {rule.created_at: "asc"}
-      return = {type: "list"}
-    } as $rules
-  
-    // Build work experience text
-    var $work_text {
+    var $resume_filename {
       value = ""
     }
   
-    foreach ($work) {
-      each as $w {
-        var $end_label {
-          value = $w.end_date
-        }
-      
-        conditional {
-          if ($w.is_current) {
-            var.update $end_label {
-              value = "Present"
-            }
-          }
-        }
-      
-        var $location_display {
-          value = $w.location
-        }
-      
-        // Extract promotion note from job title (text within parentheses)
-        var $promotion_note_display {
-          value = ""
-        }
-      
-        var $title_display {
-          value = $w.job_title
-        }
-      
-        var $paren_parts {
-          value = $w.job_title|split:"("
-        }
-      
-        conditional {
-          if (`$paren_parts.length` > 1) {
-            var $closing_parts {
-              value = ($paren_parts|last)|split:")"
-            }
-          
-            var.update $promotion_note_display {
-              value = $closing_parts|first
-            }
-          
-            var.update $title_display {
-              value = ($paren_parts|first)|trim
-            }
-          }
-        }
-      
-        var.update $work_text {
-          value = $work_text ~ $title_display ~ " | " ~ $w.company_name ~ " | " ~ $location_display ~ " | " ~ $w.start_date ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
-        }
-      }
-    }
-  
-    // Build education text
-    var $edu_text {
-      value = ""
-    }
-  
-    foreach ($education) {
-      each as $e {
-        var.update $edu_text {
-          value = $edu_text ~ $e.degree_title ~ " in " ~ $e.field_of_study ~ " from " ~ $e.university_name ~ " (" ~ $e.end_date ~ ") "
-        }
-      }
-    }
-  
-    // Build system prompt from active rules in DB
-    var $system_prompt {
-      value = ""
-    }
-  
-    foreach ($rules) {
-      each as $r {
-        var.update $system_prompt {
-          value = $system_prompt ~ $r.sentence ~ " "
-        }
-      }
-    }
-  
-    // Build resume schema object for JSON examples
-    var $resume_schema {
-      value = {}
-        |set:"header":({}
-          |set:"name":"FULL NAME CAPS"
-          |set:"title":"Most recent or target title"
-          |set:"location":"City, State"
-          |set:"email":"..."
-          |set:"phone":"..."
-          |set:"linkedin":({}
-            |set:"display":"linkedin.com/in/slug"
-            |set:"url":"https://full-url/"
-          )
-        )
-        |set:"summary":"Results-driven [job title] with X+ years..."
-        |set:"skills":([]
-          |push:({}
-            |set:"category":"Label"
-            |set:"values":"Skill1, Skill2"
-          )
-        )
-        |set:"career_breakdowns":([]
-          |push:({}
-            |set:"company":"Name"
-            |set:"title":"Most Recent Title"
-            |set:"date_range":"Mon YYYY - Mon YYYY"
-            |set:"location":"Work location, leave blank if not exist"
-            |set:"promotion_note":"Promotion note for special cases, otherwise leave blank"
-            |set:"company_summary":"italic company description with bold tools inline."
-            |set:"highlights":([]
-              |push:"bullet tool action result."
-            )
-            |set:"tech_stack":"Tool1, Tool2"
-          )
-        )
-        |set:"education":([]
-          |push:({}
-            |set:"degree":"Full Degree"
-            |set:"institution":"University"
-            |set:"year":"YYYY"
-          )
-        )
-        |set:"certifications":([]
-          |push:({}
-            |set:"name":"Cert Name"
-            |set:"issuer":"Body"
-            |set:"value_proposition":"Why relevant to this JD."
-          )
-        )
-        |set:"key_projects":([]
-          |push:({}
-            |set:"name":"Name: Subtitle"
-            |set:"context":"Company | Year"
-            |set:"description":"Narrative bold terms."
-            |set:"tech":"Tool1, Tool2"
-          )
-        )
-        |set:"awards_recognition":([]
-          |push:({}
-            |set:"name":"Award: Subtitle"
-            |set:"context":"Company | Year"
-            |set:"description":"One sentence bold impact."
-          )
-        )
-    }
-  
-    var $match_schema {
-      value = {}
-        |set:"status":"match"
-        |set:"reason":"Just keep empty"
-        |set:"resume":$resume_schema
-        |set:"cover_letter":"<full tailored cover letter as HTML>"
-        |set:"position_title":"<title>"
-        |set:"company_name":"<company>"
-    }
-  
-    var $unmatch_schema {
-      value = {}
-        |set:"status":"unfit | not_job_description | mismatch"
-        |set:"reason":"<reason>"
-        |set:"position_title":"<title if available>"
-        |set:"company_name":"<company if available>"
-    }
-  
-    // Build user prompt with candidate profile and job description
-    var $user_prompt {
-      value = "STEP 0 - CONTENT VALIDATION:/n/nFirst, if the provided text is not actually either a job description, a job posting, about the opportunity or a company instruction (e.g. it is a homepage, article, blog post, news, random website content, navigation menu, error page, login page, search results listing, or any other non-job-posting content), return status=not_job_description immediately. Do NOT proceed to other steps. Don't check if job description is cut off. Just return status=match whether it is full job description/job postion or piece of it./n/nSTEP 1 - COMPANY/PLATFORM TYPE CHECK:/n/nIf the job is posted by or on behalf of an AI data labeling / AI training / AI annotation platform (e.g. Outlier, Scale AI, Appen, Lionbridge AI, Remotasks, DataAnnotation, Surge AI, Invisible Technologies, or any similar crowdsourced AI training service), return status=unfit with a reason stating it is an AI annotation/training role, not a software engineering position. Do NOT proceed to further steps./n/nIf the job is posted on a freelance marketplace or contractor platform (e.g. Toptal, Upwork, Fiverr, Freelancer, Guru, PeoplePerHour, Contra, or any similar platform), return status=unfit with a reason stating it is a freelance/contract marketplace listing, not a direct employer role. Do NOT proceed to further steps./n/nSTEP 2 - REMOTE CHECK:/n/nIf the position is not 100% remote (meaning it must requires relocation, hybrid work, on-site presence, in-office attendance, or even a single office visit), return status=unfit. Also return status=unfit if the role requires a Security Clearance or Public Trust clearance. Do NOT generate a resume or cover letter. Stop here./n/nSTEP 3 - DOMAIN MATCH:/n/nIf fully remote, check the possibility if the candidate profile can get hired to this job. If absolutely yes (possibility is higher than 50%), return status=match and generate a full tailored resume and cover letter. If no, return status=mismatch with a 1-2 sentence explanation of why it's not possible to get hired in the job. Do NOT generate a resume or cover letter for a mismatch./n/nSTEP 4 - SENIORITY CHECK:/n/nIf the job is either Mid-level, Senior, Lead, Staff Engineer, or Engineering Manager level roles, return status=match. Also if the job is Principal Engineer or Senior Engineering Manager roles that involve leading or managing fewer than 30 people, return status=match/n/nBut if the job is Principal Engineer or Senior Engineering Manager roles that require managing 30 or more people, return status=mimatch. Also if the job is either Distinguished Engineer, Fellow, Director, VP, C-level, or any role higher than Principal Engineer or Senior Engineering Manager level roles, return status=mismatch. If the number of people managed cannot be determined, do NOT treat it as a disqualifier and return status=match./n/nCRITICAL JSON RESPONSE RULES:/n- For status=match: include resume, cover_letter, position_title, and company_name fields./n- For status=unfit, mismatch, or not_job_description: return ONLY status, reason, position_title, and company_name. Do NOT include resume or cover_letter fields in the JSON under any circumstances.\n\n------------------------------------------------------------\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\n------------------------------------------------------------\n\nReturn EXACTLY one of these JSON structures:\n\nNOT_JOB_DESCRIPTION, UNFIT, MISMATCH (no resume/cover letter): " ~ ($unmatch_schema|json_encode) ~ "\n\nMATCH (with full resume and cover letter): " ~ ($match_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
-    }
-  
-    // Admin + force_generate: override the prompt to always generate a resume (treat as match)
-    conditional {
-      if ($is_admin && $input.force_generate) {
-        var.update $user_prompt {
-          value = "Generate a full tailored resume and cover letter with always status=match.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:2000) ~ "\n\nReturn EXACTLY this JSON structure :\n\nMATCH: " ~ ($match_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
-        }
-      }
-    }
-  
-    var $claude_auth {
-      value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
-    }
-  
-    // is_matched: 1=match, 0=mismatch, 2=unfit, 3=not_job_description
-    var $is_matched {
-      value = 1
-    }
-  
-    var $match_reason {
+    var $cover_letter_filename {
       value = ""
     }
   
@@ -419,495 +393,365 @@ query "resume/generate" verb=POST {
       value = ""
     }
   
-    var $position_title {
-      value = ""
-    }
-  
-    var $company_name {
-      value = ""
-    }
-  
-    var $input_tokens {
-      value = 0
-    }
-  
-    var $output_tokens {
-      value = 0
-    }
-  
-    var $response_text {
-      value = ""
-    }
-  
-    // Initialize content_record as null - will be set when AI call is made
-    var $content_record {
-      value = null
-    }
-  
-    // Track whether admin override was used (AI returned non-match but admin forced generation)
-    var $admin_overridden {
-      value = false
-    }
-  
-    // Debug: Log force_generate status
-    debug.log {
-      value = "force_generate=" ~ $input.force_generate ~ " | is_admin=" ~ $is_admin
-    }
-  
-    try_catch {
-      try {
-        api.request {
-          url = "https://api.anthropic.com/v1/messages"
-          method = "POST"
-          params = {}
-            |set:"model":"claude-haiku-4-5"
-            |set:"max_tokens":6000
-            |set:"system":$system_prompt
-            |set:"messages":([]
-              |push:({}
-                |set:"role":"user"
-                |set:"content":$user_prompt
-              )
-            )
-          headers = []
-            |push:"Content-Type: application/json"
-            |push:$claude_auth
-            |push:"anthropic-version: 2023-06-01"
-          timeout = 300
-        } as $ai_resp
+    conditional {
+      if ($should_generate || $input.force_generate) {
+        db.query education {
+          where = $db.education.profile_id == $prof.id
+          sort = {education.start_date: "asc"}
+          return = {type: "list"}
+        } as $education
       
-        var.update $response_text {
-          value = $ai_resp.response.result.content|first|get:"text"
+        db.query rule {
+          where = $db.rule.is_active == true
+          sort = {rule.created_at: "asc"}
+          return = {type: "list"}
+        } as $rules
+      
+        // Build work experience text
+        var $work_text {
+          value = ""
         }
       
-        // Save resume/cover letter content for reference
-        db.add resume_content {
-          data = {raw_response: $response_text}
-        } as $content_record
-      
-        var.update $input_tokens {
-          value = `($ai_resp.response.result.usage|get:"input_tokens") + 0`
-        }
-      
-        var.update $output_tokens {
-          value = `($ai_resp.response.result.usage|get:"output_tokens") + 0`
-        }
-      
-        // ==================== TOKEN ACCUMULATION FOR ADMIN FORCE GENERATE ====================
-        // When admin retries with force_generate, the first call already consumed tokens
-        // and logged them. Add those tokens to the current call so the total is accurate.
-        conditional {
-          if ($is_admin && $input.force_generate) {
-            db.query generation_log {
-              where = $db.generation_log.profile_id == $input.profile_id && $db.generation_log.user_id == $access.user_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_regenerated != 1
-              sort = {generation_log.created_at: "desc"}
-              return = {type: "single"}
-            } as $prev_log
+        foreach ($work_exp_array) {
+          each as $w {
+            var $end_label {
+              value = $w.end_date
+            }
           
             conditional {
-              if ($prev_log != null && $prev_log.input_tokens > 0) {
-                var.update $input_tokens {
-                  value = $input_tokens + $prev_log.input_tokens
-                }
-              
-                var.update $output_tokens {
-                  value = $output_tokens + $prev_log.output_tokens
-                }
-              
-                // Mark the previous log as regenerated so it's excluded from stats
-                db.edit generation_log {
-                  field_name = "id"
-                  field_value = $prev_log.id
-                  data = {is_regenerated: 1}
-                } as $prev_log_updated
-              
-                debug.log {
-                  value = `"Token accumulation: prev=" ~ $prev_log.input_tokens ~ "+" ~ $prev_log.output_tokens ~ " | current=" ~ ($ai_resp.response.result.usage|get:"input_tokens") ~ "+" ~ ($ai_resp.response.result.usage|get:"output_tokens") ~ " | total=" ~ $input_tokens ~ "+" ~ $output_tokens`
+              if ($w.is_current) {
+                var.update $end_label {
+                  value = "Present"
                 }
               }
+            }
+          
+            var $location_display {
+              value = $w.location
+            }
+          
+            // Extract promotion note from job title (text within parentheses)
+            var $promotion_note_display {
+              value = ""
+            }
+          
+            var $title_display {
+              value = $w.job_title
+            }
+          
+            var $paren_parts {
+              value = $w.job_title|split:"("
+            }
+          
+            conditional {
+              if (($paren_parts|count) > 1) {
+                var $closing_parts {
+                  value = ($paren_parts|last)|split:")"
+                }
+              
+                var.update $promotion_note_display {
+                  value = $closing_parts|first
+                }
+              
+                var.update $title_display {
+                  value = ($paren_parts|first)|trim
+                }
+              }
+            }
+          
+            var.update $work_text {
+              value = $work_text ~ $title_display ~ " | " ~ $w.company_name ~ " | " ~ $location_display ~ " | " ~ $w.start_date ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
             }
           }
         }
       
-        // ==================== END TOKEN ACCUMULATION ====================
-      
-        // Parse JSON response (robust cleanup for code-fences / wrappers)
-        var $clean_response {
-          value = $response_text
-            |replace:"```json\n":""
-            |replace:"```JSON\n":""
-            |replace:"```\n":""
-            |replace:"```":""
-            |trim
+        // Build education text
+        var $edu_text {
+          value = ""
         }
       
-        // Try parsing JSON; if it fails, remove last character and retry
-        var $parsed_response {
-          value = null
+        foreach ($education) {
+          each as $e {
+            var.update $edu_text {
+              value = $edu_text ~ $e.degree_title ~ " in " ~ $e.field_of_study ~ " from " ~ $e.university_name ~ " (" ~ $e.end_date ~ ") "
+            }
+          }
+        }
+      
+        // Build system prompt from active rules in DB
+        var $system_prompt {
+          value = ""
+        }
+      
+        foreach ($rules) {
+          each as $r {
+            var.update $system_prompt {
+              value = $system_prompt ~ $r.sentence ~ "\n"
+            }
+          }
+        }
+      
+        // Build resume schema object for JSON examples
+        var $resume_schema {
+          value = {}
+            |set:"header":({}
+              |set:"name":"FULL NAME CAPS"
+              |set:"title":"Most recent or target title"
+              |set:"location":"City, State"
+              |set:"email":"..."
+              |set:"phone":"..."
+              |set:"linkedin":({}
+                |set:"display":"linkedin.com/in/slug"
+                |set:"url":"https://full-url/"
+              )
+            )
+            |set:"summary":"Results-driven [job title] with X[today (search in google) - first company's start date]+ years..."
+            |set:"skills":([]
+              |push:({}
+                |set:"category":"Label"
+                |set:"values":"Skill1, Skill2"
+              )
+            )
+            |set:"career_breakdowns":([]
+              |push:({}
+                |set:"company":"Name"
+                |set:"title":"Most Recent Title"
+                |set:"date_range":"Mon YYYY - Mon YYYY"
+                |set:"location":"Work location, leave blank if not exist"
+                |set:"promotion_note":"Promotion note for special cases, otherwise leave blank"
+                |set:"company_summary":"italic company description with bold tools inline."
+                |set:"highlights":([]
+                  |push:"bullet tool action result."
+                )
+                |set:"tech_stack":"Tool1, Tool2"
+              )
+            )
+            |set:"education":([]
+              |push:({}
+                |set:"degree":"Full Degree"
+                |set:"institution":"University"
+                |set:"year":"YYYY"
+              )
+            )
+            |set:"certifications":([]
+              |push:({}
+                |set:"name":"Cert Name"
+                |set:"issuer":"Body"
+                |set:"value_proposition":"Why relevant to this JD."
+              )
+            )
+            |set:"key_projects":([]
+              |push:({}
+                |set:"name":"Name: Subtitle"
+                |set:"context":"Company | Year"
+                |set:"description":"Narrative bold terms."
+                |set:"tech":"Tool1, Tool2"
+              )
+            )
+            |set:"awards_recognition":([]
+              |push:({}
+                |set:"name":"Award: Subtitle"
+                |set:"context":"Company | Year"
+                |set:"description":"One sentence bold impact."
+              )
+            )
+        }
+      
+        var $result_schema {
+          value = {}
+            |set:"resume":$resume_schema
+            |set:"cover_letter":"<full tailored cover letter as HTML>"
+        }
+      
+        var $claude_auth {
+          value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
+        }
+      
+        var $response_text {
+          value = ""
         }
       
         try_catch {
           try {
-            // First attempt: parse cleaned response as-is
-            var.update $parsed_response {
-              value = $clean_response|json_decode
+            api.request {
+              url = "https://api.anthropic.com/v1/messages"
+              method = "POST"
+              params = {}
+                |set:"model":"claude-haiku-4-5"
+                |set:"max_tokens":6000
+                |set:"system":$system_prompt
+                |set:"messages":([]
+                  |push:({}
+                    |set:"role":"user"
+                    |set:"content":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description) ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ ($result_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+                  )
+                )
+              headers = []
+                |push:"Content-Type: application/json"
+                |push:$claude_auth
+                |push:"anthropic-version: 2023-06-01"
+              timeout = 300
+            } as $ai_resp
+          
+            var.update $response_text {
+              value = $ai_resp.response.result.content|first|get:"text"
             }
-          }
-        
-          catch {
-            // Second attempt: remove last character (common extra trailing brace issue)
-            var $trimmed_response {
-              value = $clean_response|regex_replace:".$":""|trim
+          
+            // Save resume/cover letter content for reference
+            db.add resume_content {
+              data = {raw_response: $response_text}
+            } as $content_record
+          
+            var.update $resume_content_id {
+              value = $content_record.id
+            }
+          
+            // ==================== END TOKEN ACCUMULATION ====================
+          
+            // Parse JSON response (robust cleanup for code-fences / wrappers)
+            var $clean_response {
+              value = $response_text
+                |replace:"```json\n":""
+                |replace:"```JSON\n":""
+                |replace:"```\n":""
+                |replace:"```":""
+                |trim
+            }
+          
+            // Try parsing JSON; if it fails, remove last character and retry
+            var $parsed_response {
+              value = null
             }
           
             try_catch {
               try {
+                // First attempt: parse cleaned response as-is
                 var.update $parsed_response {
-                  value = $trimmed_response|json_decode
+                  value = $clean_response|json_decode
                 }
               }
             
               catch {
-                // JSON is truly invalid — $parsed_response stays null, handled below
-                debug.log {
-                  value = "JSON parse failed after second attempt: " ~ $error
+                // Second attempt: remove last character (common extra trailing brace issue)
+                var $trimmed_response {
+                  value = $clean_response|regex_replace:".$":""|trim
+                }
+              
+                try_catch {
+                  try {
+                    var.update $parsed_response {
+                      value = $trimmed_response|json_decode
+                    }
+                  }
+                
+                  catch {
+                    // JSON is truly invalid — $parsed_response stays null, handled below
+                    debug.log {
+                      value = "JSON parse failed after second attempt: " ~ $error
+                    }
+                  }
                 }
               }
             }
-          }
-        }
-      
-        // ==================== PARSE AI RESPONSE ====================
-        // Status codes: 1=match, 0=mismatch, 2=unfit, 3=not_job_description, 6=ai_error
-        // Only status=match gets resume/cover_letter content.
-        // AI sometimes returns resume content even for non-match - we discard it server-side.
-      
-        // Extract AI status (empty string if parsing failed)
-        var $ai_status {
-          value = ""
-        }
-      
-        conditional {
-          if ($parsed_response != null) {
-            var.update $ai_status {
-              value = $parsed_response.status
-            }
-          }
-        }
-      
-        conditional {
-          if ($parsed_response == null) {
-            // JSON parsing failed completely
-            var.update $is_matched {
-              value = 6
-            }
           
-            var.update $match_reason {
-              value = "AI processing error: invalid JSON response. Please try again."
-            }
-          }
-        
-          else {
+            // ==================== PARSE AI RESPONSE ====================
+            // Status codes: 1=match, 0=mismatch, 2=unfit, 3=not_job_description, 6=ai_error
+            // Only status=match gets resume/cover_letter content.
+            // AI sometimes returns resume content even for non-match - we discard it server-side.
+          
             conditional {
-              if ($ai_status == "not_job_description") {
-                var.update $is_matched {
-                  value = 3
+              if ($parsed_response == null) {
+                // JSON parsing failed completely
+                var.update $match_status {
+                  value = 6
                 }
               
-                var.update $match_reason {
-                  value = $parsed_response.reason
+                var.update $error_msg {
+                  value = "AI processing error: invalid JSON response. Please try again."
                 }
               }
             
               else {
-                conditional {
-                  if ($ai_status == "unfit") {
-                    var.update $is_matched {
-                      value = 2
-                    }
-                  
-                    var.update $match_reason {
-                      value = $parsed_response.reason
-                    }
-                  }
-                
-                  else {
-                    conditional {
-                      if ($ai_status == "mismatch") {
-                        var.update $is_matched {
-                          value = 0
-                        }
-                      
-                        var.update $match_reason {
-                          value = $parsed_response.reason
-                        }
-                      }
-                    
-                      else {
-                        conditional {
-                          if ($ai_status == "match") {
-                            var.update $is_matched {
-                              value = 1
-                            }
-                          
-                            var.update $match_reason {
-                              value = $parsed_response.reason
-                            }
-                          
-                            // Only extract resume/cover_letter for match status
-                            var.update $resume_text {
-                              value = $parsed_response.resume
-                            }
-                          
-                            var.update $cover_letter_text {
-                              value = $parsed_response.cover_letter
-                            }
-                          }
-                        
-                          else {
-                            // Unknown status from AI - treat as error
-                            var.update $is_matched {
-                              value = 6
-                            }
-                          
-                            var.update $match_reason {
-                              value = "AI processing error: unexpected status. Please try again."
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+                var.update $match_status {
+                  value = 1
                 }
-              }
-            }
-          }
-        }
-      
-        // Extract position_title and company_name (common to all valid statuses)
-        conditional {
-          if ($parsed_response != null) {
-            conditional {
-              if ($parsed_response.position_title != null && $parsed_response.position_title != "") {
-                var.update $position_title {
-                  value = $parsed_response.position_title
-                }
-              }
-            }
-          
-            conditional {
-              if ($parsed_response.company_name != null && $parsed_response.company_name != "") {
-                var.update $company_name {
-                  value = $parsed_response.company_name
-                }
-              }
-            }
-          }
-        }
-      
-        // Debug: Log the parsed status for troubleshooting
-        debug.log {
-          value = "Parsed AI status: " ~ $is_matched ~ " | position: " ~ $position_title ~ " | company: " ~ $company_name
-        }
-      
-        // ==================== ADMIN FORCE GENERATE OVERRIDE ====================
-        // Admin + force_generate: Override any non-match/non-error status to match
-        // If AI happened to return resume content despite wrong status, use it
-        conditional {
-          if ($is_admin && $input.force_generate && $is_matched != 6 && $is_matched != 1) {
-            // Salvage resume/cover_letter if AI returned them despite non-match status
-            conditional {
-              if ($parsed_response != null && $parsed_response.resume != null) {
+              
                 var.update $resume_text {
-                  value = $parsed_response.resume
+                  value = $parsed_response.resume|json_encode
                 }
-              }
-            }
-          
-            conditional {
-              if ($parsed_response != null && $parsed_response.cover_letter != null) {
+              
                 var.update $cover_letter_text {
                   value = $parsed_response.cover_letter
                 }
               }
             }
-          
-            var.update $is_matched {
-              value = 1
-            }
-          
-            var.update $match_reason {
-              value = "Admin override: forced generation"
-            }
-          
-            var.update $admin_overridden {
-              value = true
-            }
           }
-        }
-      }
-    
-      catch {
-        debug.log {
-          value = "AI call failed: " ~ $error
-        }
-      
-        var.update $is_matched {
-          value = 6
-        }
-      
-        var.update $match_reason {
-          value = "AI processing error: " ~ $error ~ ". Please try again."
-        }
-      }
-    }
-  
-    var $resume_filename {
-      value = $prof.full_name ~ ".pdf"
-    }
-  
-    var $cover_letter_filename {
-      value = "Cover Letter.pdf"
-    }
-  
-    var $job_description_snippet {
-      value = $input.job_description|substr:0:300
-    }
-  
-    var $job_url_val {
-      value = ""
-    }
-  
-    conditional {
-      if ($input.job_url != null) {
-        var.update $job_url_val {
-          value = $input.job_url
-        }
-      }
-    }
-  
-    // ==================== REPOST DETECTION (company + title) ====================
-    // Find the most recent same company + title + profile record.
-    // If found within the last 15 days => reposted (blocked).
-    // If found older than 15 days => treat as matched.
-    // Admin with force_generate skips repost detection entirely.
-    var $repost_log {
-      value = null
-    }
-  
-    var $skip_repost_check {
-      value = ($is_admin && $input.force_generate)
-    }
-  
-    var $repost_applied_date {
-      value = ""
-    }
-  
-    conditional {
-      if ($position_title != "" && $company_name != "" && ($is_matched == 1 || $is_matched == 0) && $skip_repost_check == false) {
-        // Query for potential reposts, excluding regenerated, duplicate, repost, ai_error, and not_jd logs
-        db.query generation_log {
-          where = $db.generation_log.company_name == $company_name && $db.generation_log.position_title == $position_title && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched != 4 && $db.generation_log.is_matched != 5 && $db.generation_log.is_matched != 6 && $db.generation_log.is_matched != 3 && $db.generation_log.is_regenerated != 1
-          sort = {generation_log.created_at: "desc"}
-          return = {type: "list"}
-        } as $potential_reposts
-      
-        // Find the first non-admin-generated log
-        var $existing_title_log {
-          value = null
-        }
-      
-        foreach ($potential_reposts) {
-          each as $pot_repost {
-            conditional {
-              if ($existing_title_log == null) {
-                // Check if the bidder who generated this log is an admin
-                db.get users {
-                  field_name = "id"
-                  field_value = $pot_repost.user_id
-                } as $repost_bidder
-              
-                // Only consider if generated by a non-admin bidder
-                conditional {
-                  if ($repost_bidder == null || ($repost_bidder.type != "admin" && $repost_bidder.type != "super_admin")) {
-                    var.update $existing_title_log {
-                      value = $pot_repost
-                    }
-                  }
-                }
-              }
+        
+          catch {
+            debug.log {
+              value = "AI call failed: " ~ $error
+            }
+          
+            var.update $match_status {
+              value = 6
+            }
+          
+            var.update $error_msg {
+              value = "AI processing error: " ~ $error ~ ". Please try again."
             }
           }
         }
       
-        conditional {
-          if ($existing_title_log != null) {
-            var $repost_cutoff {
-              value = now|add_secs_to_timestamp:-1296000
-            }
-          
-            // Only block if repost is within 15 days
-            // If older than 15 days, don't override AI decision - just let it proceed
-            conditional {
-              if ($existing_title_log.created_at >= $repost_cutoff) {
-                var.update $repost_log {
-                  value = $existing_title_log
-                }
-              
-                var.update $repost_applied_date {
-                  value = $existing_title_log.created_at
-                }
-              
-                var.update $is_matched {
-                  value = 5
-                }
-              
-                var.update $match_reason {
-                  value = "Same company and position found in previous application (within 15 days)"
-                }
-              }
-            }
-          }
+        var.update $resume_filename {
+          value = $prof.full_name ~ ".pdf"
+        }
+      
+        var.update $cover_letter_filename {
+          value = $prof.full_name ~ " - Cover Letter.pdf"
+        }
+      
+        var.update $input_tokens {
+          value = $ai_resp.response.result.usage|get:"input_tokens"
+        }
+      
+        var.update $output_tokens {
+          value = $ai_resp.response.result.usage|get:"output_tokens"
         }
       }
     }
   
-    // ==================== END REPOST DETECTION ====================
-  
-    // Mark as applied only when admin overrode a non-match status (clicked "Generate Anyway")
-    // Normal matched jobs (even via force_generate) should NOT show as applied
-    var $mark_applied {
-      value = $admin_overridden
-    }
-  
-    db.add generation_log {
-      data = {
-        profile_id             : $input.profile_id
-        user_id                : $access.user_id
-        job_url                : $job_url_val
-        job_description_snippet: $job_description_snippet
-        job_description        : $input.job_description
-        ai_provider            : "claude"
-        input_tokens           : $input_tokens
-        output_tokens          : $output_tokens
-        resume_filename        : $resume_filename
-        cover_letter_filename  : $cover_letter_filename
-        position_title         : $position_title
-        company_name           : $company_name
-        is_regenerated         : 0
-        is_matched             : $is_matched
-        match_reason           : $match_reason
-        is_applied             : $mark_applied
-      }
-    } as $log
-  
-    // Update content_id only when AI response was saved
     conditional {
-      if ($content_record != null) {
+      if ($input.force_generate) {
         db.edit generation_log {
           field_name = "id"
-          field_value = $log.id
-          data = {content_id: $content_record.id}
+          field_value = $input.log_id
+          data = {
+            input_tokens : $input_tokens
+            output_tokens: $output_tokens
+            content_id   : $resume_content_id
+            is_applied   : true
+          }
+        } as $log
+      }
+    
+      else {
+        db.add generation_log {
+          data = {
+            profile_id           : $input.profile_id
+            user_id              : $access.user_id
+            job_url              : $input.job_url
+            job_description      : $input.job_description
+            input_tokens         : $input_tokens
+            output_tokens        : $output_tokens
+            resume_filename      : $resume_filename
+            cover_letter_filename: $cover_letter_filename
+            position_title       : $extraction_json.position
+            company_name         : $extraction_json.company
+            is_regenerated       : 0
+            is_matched           : $match_status
+            match_reason         : $error_msg
+            content_id           : $resume_content_id
+          }
         } as $log
       }
     }
@@ -915,15 +759,13 @@ query "resume/generate" verb=POST {
 
   response = {
     log_id               : $log.id
-    is_matched           : $is_matched
-    match_reason         : $match_reason
-    applied_date         : $repost_applied_date
-    is_admin             : $is_admin
-    duplicate_info       : $duplicate_log
+    is_matched           : $match_status
+    match_status         : $match_status
+    match_reason         : $error_msg
+    error_msg            : $error_msg
     resume_text          : $resume_text
     cover_letter_text    : $cover_letter_text
     resume_filename      : $resume_filename
     cover_letter_filename: $cover_letter_filename
-    user_prompt          : $user_prompt
   }
 }

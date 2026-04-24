@@ -6,8 +6,8 @@
 const EXTENSION_ENV = "staging";
 
 // Xano API base URLs per group
-const XANO_PUBLIC_URL = "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1";
-const XANO_RESUME_URL = "https://x8ki-letl-twmt.n7.xano.io/api:caf8Eo15:v1";
+const XANO_PUBLIC_URL = "https://api.shsws-solutions.com/api:W5ffWHW-";
+const XANO_RESUME_URL = "https://api.shsws-solutions.com/api:caf8Eo15";
 const PROFILE_REFRESH_MAX_AGE_MS = 10 * 60 * 1000;
 
 let extensionState = {
@@ -422,8 +422,45 @@ async function generateResume(jobDescription, jobUrl = "") {
     return response.json();
   }
 
+  function getGenerateStatus(data) {
+    if (!data || typeof data !== "object") return null;
+    return data.match_status ?? data.is_matched ?? null;
+  }
+
+  function getGenerateReason(data) {
+    if (!data || typeof data !== "object") return "";
+    return data.error_msg ?? data.match_reason ?? "";
+  }
+
+  function getResumePayload(data) {
+    if (!data || typeof data !== "object") {
+      return {
+        resumeText: "",
+        coverLetterText: "",
+        resumeFilename: "Resume.pdf",
+        coverLetterFilename: "Cover_Letter.pdf",
+      };
+    }
+
+    return {
+      resumeText: data.resume_text || "",
+      coverLetterText: data.cover_letter_text || "",
+      resumeFilename: data.resume_filename || "Resume.pdf",
+      coverLetterFilename: data.cover_letter_filename || "Cover_Letter.pdf",
+    };
+  }
+
+  function getExtensionVersion() {
+    try {
+      return chrome.runtime.getManifest()?.version || "";
+    } catch (_) {
+      return "";
+    }
+  }
+
   // Re-call generate API with force_generate=true (admin only)
   async function retryWithForce(jd, url) {
+    const extensionVersion = getExtensionVersion();
     sendProgress("ai");
     const forceBody = {
       profile_id: extensionState.profileId,
@@ -432,20 +469,20 @@ async function generateResume(jobDescription, jobUrl = "") {
       ai_provider: "claude",
       job_url: url,
       force_generate: true,
+      extension_version: extensionVersion || undefined,
     };
-    if (EXTENSION_ENV === "prod") {
-      forceBody.extension_version = chrome.runtime.getManifest().version;
-    }
 
     const forceData = await callGenerateApi(forceBody);
     if (!forceData) return;
     console.log("[BG] Force generate response:", JSON.stringify(forceData));
 
     await syncProfilesFromGenerateResponse(forceData);
+    const forceStatus = getGenerateStatus(forceData);
+    const forceReason = getGenerateReason(forceData);
 
     // Even with force, if AI still errored out, let user retry
-    if (forceData.is_matched === 6) {
-      sendProgress("ai_error", forceData.match_reason || "AI processing error. Please try again.");
+    if (forceStatus === 6) {
+      sendProgress("ai_error", forceReason || "AI processing error. Please try again.");
       const retry = await waitForRetryDecision();
       if (retry) {
         await retryWithForce(jd, url);
@@ -459,7 +496,8 @@ async function generateResume(jobDescription, jobUrl = "") {
 
   // Process a successful generate response into PDFs
   async function processResumeResponse(data) {
-    const rawData = data.resume_text || "";
+    const payload = getResumePayload(data);
+    const rawData = payload.resumeText;
     const rawDataStr = typeof rawData === "object" ? JSON.stringify(rawData) : String(rawData);
     if (!rawDataStr || rawDataStr === "{}" || rawDataStr === "") {
       throw new Error("No resume content returned from server.");
@@ -472,9 +510,9 @@ async function generateResume(jobDescription, jobUrl = "") {
     const pdfResult = await chrome.runtime.sendMessage({
       action: "generateAndDownloadPDFs",
       rawData: rawData,
-      coverLetterText: data.cover_letter_text || "",
-      resumeFilename: data.resume_filename || "Resume.pdf",
-      coverLetterFilename: data.cover_letter_filename || "Cover_Letter.pdf",
+      coverLetterText: payload.coverLetterText,
+      resumeFilename: payload.resumeFilename,
+      coverLetterFilename: payload.coverLetterFilename,
       templateId: extensionState.resumeTemplate || 1,
     });
 
@@ -487,17 +525,15 @@ async function generateResume(jobDescription, jobUrl = "") {
   }
 
   try {
+    const extensionVersion = getExtensionVersion();
     const generateBody = {
       profile_id: extensionState.profileId,
       job_description: jobDescription,
       token: extensionState.token,
       ai_provider: "claude",
       job_url: jobUrl,
+      extension_version: extensionVersion || undefined,
     };
-    // Only send extension_version in prod (backend enforces version check)
-    if (EXTENSION_ENV === "prod") {
-      generateBody.extension_version = chrome.runtime.getManifest().version;
-    }
     let data;
     let isAdmin = false;
     while (true) {
@@ -510,15 +546,19 @@ async function generateResume(jobDescription, jobUrl = "") {
       console.log("Xano response:", JSON.stringify(data));
 
       await syncProfilesFromGenerateResponse(data);
+      const status = getGenerateStatus(data);
+      const reason = getGenerateReason(data);
       isAdmin = data.is_admin === true;
 
-      // If duplicate was found, handle based on user role
-      if (data.duplicate_info) {
+      // Duplicate URL responses now use match_status=4 + error_msg.
+      if (data.duplicate_info || status === 4) {
         const d = data.duplicate_info;
-        const appliedDate = d.created_at
+        const appliedDate = d?.created_at
           ? new Date(d.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-          : "unknown date";
-        const detail = (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + " — applied on " + appliedDate;
+          : "";
+        const detail = d
+          ? (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + (appliedDate ? " — applied on " + appliedDate : "")
+          : (reason || "This job has been applied before. Try with another job.");
         console.log("[BG] Duplicate detected:", detail);
 
         if (isAdmin) {
@@ -539,19 +579,19 @@ async function generateResume(jobDescription, jobUrl = "") {
         }
       }
 
-      // If AI processing failed (is_matched === 6)
-      if (data.is_matched === 6) {
-        console.log("[BG] AI processing error:", data.match_reason);
+      // If AI processing failed (match_status/is_matched === 6)
+      if (status === 6) {
+        console.log("[BG] AI processing error:", reason);
         if (isAdmin) {
           // Admins can retry
-          sendProgress("ai_error", data.match_reason || "AI processing error. Please try again.");
+          sendProgress("ai_error", reason || "AI processing error. Please try again.");
           const retry = await waitForRetryDecision();
           if (retry) {
             continue;
           }
         } else {
           // Bidders: show error with close only (no retry)
-          sendProgress("error", data.match_reason || "AI processing error. Please try again later.");
+          sendProgress("error", reason || "AI processing error. Please try again later.");
         }
         return;
       }
@@ -559,44 +599,47 @@ async function generateResume(jobDescription, jobUrl = "") {
       break;
     }
 
-    // If the content is not a real job description (is_matched === 3), warn the user
-    if (data.is_matched === 3) {
-      console.log("[BG] Not a job description:", data.match_reason);
+    // If the content is not a real job description, warn the user
+    if (getGenerateStatus(data) === 3) {
+      const reason = getGenerateReason(data);
+      console.log("[BG] Not a job description:", reason);
       if (isAdmin) {
-        sendProgress("admin_override", data.match_reason || "Not a job description", "not_jd");
+        sendProgress("admin_override", reason || "Not a job description", "not_jd");
         const confirmed = await waitForAdminDecision();
         if (confirmed) {
           await retryWithForce(jobDescription, jobUrl);
           return;
         }
       }
-      sendProgress("not_job_description", undefined, data.match_reason || "");
+      sendProgress("not_job_description", undefined, reason || "");
       return;
     }
 
-    // If job is unfit (is_matched === 2) — not remote, security clearance, AI annotation, etc.
-    if (data.skipped === true || data.is_matched === 2) {
-      console.log("[BG] Job unfit:", data.match_reason);
+    // If job is unfit — not remote, security clearance, AI annotation, etc.
+    if (data.skipped === true || getGenerateStatus(data) === 2) {
+      const reason = getGenerateReason(data);
+      console.log("[BG] Job unfit:", reason);
       if (isAdmin) {
-        sendProgress("admin_override", data.match_reason || "Job does not meet requirements", "skipped");
+        sendProgress("admin_override", reason || "Job does not meet requirements", "skipped");
         const confirmed = await waitForAdminDecision();
         if (confirmed) {
           await retryWithForce(jobDescription, jobUrl);
           return;
         }
       }
-      sendProgress("skipped", undefined, data.match_reason || "");
+      sendProgress("skipped", undefined, reason || "");
       return;
     }
 
-    // If company+title match found in previous applications (is_matched === 5)
+    // If company+title match found in previous applications
     // - non-admin: block apply
     // - admin: allow explicit override confirmation
-    if (data.is_matched === 5) {
+    if (getGenerateStatus(data) === 5) {
+      const reason = getGenerateReason(data);
       const appliedDate = data.applied_date
         ? new Date(data.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
         : "";
-      const detail = (data.match_reason || "Same company and position found in previous application")
+      const detail = (reason || "Same company and position found in previous application")
         + (appliedDate ? " (applied on " + appliedDate + ")" : "");
       console.log("[BG] Repost detected:", detail);
       
@@ -616,14 +659,15 @@ async function generateResume(jobDescription, jobUrl = "") {
     // - non-admin: block apply immediately
     // - admin: allow explicit override confirmation
     let wasMismatched = false;
-    if (data.is_matched === false || data.is_matched === 0) {
-      console.log("[BG] Job mismatch detected:", data.match_reason);
+    if (getGenerateStatus(data) === 0 || data.is_matched === false) {
+      const reason = getGenerateReason(data);
+      console.log("[BG] Job mismatch detected:", reason);
       if (!isAdmin) {
-        sendProgress("mismatch_blocked", undefined, data.match_reason || "");
+        sendProgress("mismatch_blocked", undefined, reason || "");
         return;
       }
 
-      sendProgress("mismatch", undefined, data.match_reason || "");
+      sendProgress("mismatch", undefined, reason || "");
 
       // Wait for user decision (confirmed or cancelled)
       const confirmed = await new Promise((resolve) => {
@@ -653,7 +697,8 @@ async function generateResume(jobDescription, jobUrl = "") {
     }
 
     // resume_text is now a JSON object from the new schema (or a string for legacy)
-    const rawData = data.resume_text || "";
+    const payload = getResumePayload(data);
+    const rawData = payload.resumeText;
     const rawDataStr = typeof rawData === "object" ? JSON.stringify(rawData) : String(rawData);
     if (!rawDataStr || rawDataStr === "{}" || rawDataStr === "") {
       throw new Error("No resume content returned from server. Check Xano debug logs for AI errors.");
@@ -671,9 +716,9 @@ async function generateResume(jobDescription, jobUrl = "") {
     const pdfResult = await chrome.runtime.sendMessage({
       action: "generateAndDownloadPDFs",
       rawData: rawData,
-      coverLetterText: data.cover_letter_text || "",
-      resumeFilename: data.resume_filename || "Resume.pdf",
-      coverLetterFilename: data.cover_letter_filename || "Cover_Letter.pdf",
+      coverLetterText: payload.coverLetterText,
+      resumeFilename: payload.resumeFilename,
+      coverLetterFilename: payload.coverLetterFilename,
       templateId: extensionState.resumeTemplate || 1,
     });
 

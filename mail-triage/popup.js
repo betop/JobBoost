@@ -113,7 +113,7 @@ btnCheck.addEventListener("click", async () => {
     try {
       const localVersion = chrome.runtime.getManifest().version;
       const currentVersionResponse = await fetch(
-        "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1/public/current-version?extension_name=mail-triage"
+        "https://api.shsws-solutions.com/api:W5ffWHW-/public/current-version?extension_name=mail-triage"
       );
       
       if (currentVersionResponse.ok) {

@@ -9,7 +9,7 @@
 // The build script will replace "staging" with "prod" for production builds
 const EXTENSION_ENV = "staging";
 
-const XANO_API_BASE = "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1";
+const XANO_API_BASE = "https://api.shsws-solutions.com/api:W5ffWHW-";
 const VERSION_CHECK_INTERVAL = 3600000; // 1 hour in ms
 
 /**

@@ -189,7 +189,7 @@ Resume text:
 ${text.slice(0, 20000)}`;
 
     // Use Xano's Claude integration (which has working API key)
-    const xanoResponse = await fetch("https://x8ki-letl-twmt.n7.xano.io/api:caf8Eo15:v1/resume/parse-text", {
+    const xanoResponse = await fetch("https://api.shsws-solutions.com/api:caf8Eo15/resume/parse-text", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

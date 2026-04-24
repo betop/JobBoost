@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const XANO_BASE_URL = "https://x8ki-letl-twmt.n7.xano.io/api:eqIK8vAt:v1";
+const XANO_BASE_URL = "https://api.shsws-solutions.com/api:aN9XfAKd";
 
 export async function GET(request: NextRequest) {
   try {

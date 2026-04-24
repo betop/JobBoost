@@ -1,6 +1,6 @@
 // setup.js — Key entry page for first-time setup
 
-const XANO_PUBLIC_URL = "https://x8ki-letl-twmt.n7.xano.io/api:W5ffWHW-:v1";
+const XANO_PUBLIC_URL = "https://api.shsws-solutions.com/api:W5ffWHW-";
 
 const tokenInput = document.getElementById("tokenInput");
 const saveBtn    = document.getElementById("saveBtn");
