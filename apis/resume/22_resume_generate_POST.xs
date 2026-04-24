@@ -227,9 +227,20 @@ query "resume/generate" verb=POST {
                                         }
                                       
                                         var $has_previous_company {
-                                          value = $work_exp_array
-                                            |some:"x.company_name|to_lower|trim == " ~ $extraction_json.company|to_lower|trim:10
-                                        }∂
+                                          value = false
+                                        }
+                                      
+                                        foreach ($work_exp_array) {
+                                          each as $work_item {
+                                            conditional {
+                                              if (($work_item.company_name|to_lower|trim) == ($extraction_json.company|to_lower|trim)) {
+                                                var.update $has_previous_company {
+                                                  value = true
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
                                       
                                         conditional {
                                           if ($has_previous_company) {
