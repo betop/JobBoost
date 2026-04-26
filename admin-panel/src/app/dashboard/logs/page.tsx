@@ -286,7 +286,8 @@ function RegenerateModal({
     try {
       const result = await logsService.regenerate(log.id, forceGenerate);
       if (result.is_matched === 1) {
-        await downloadResumePDF(result.resume_text, result.resume_filename);
+        const regenFilename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || result.resume_filename;
+        await downloadResumePDF(result.resume_text, regenFilename);
         setDone(true);
         setStatusResult(null);
         onSuccess();
@@ -317,7 +318,8 @@ function RegenerateModal({
 
     if (statusResult.is_matched === 0 && statusResult.resume_text) {
       try {
-        await downloadResumePDF(statusResult.resume_text, statusResult.resume_filename);
+        const goAnywayFilename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || statusResult.resume_filename;
+        await downloadResumePDF(statusResult.resume_text, goAnywayFilename);
         setDone(true);
         setStatusResult(null);
         onSuccess();
@@ -1189,8 +1191,8 @@ export default function LogsPage() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateFrom}
               disabled={logsFetching}
-              onChange={(e) => {
-                setDateFrom(e.target.value);
+              onChange={(e) => setDateFrom(e.target.value)}
+              onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_from: e.target.value, page: 1 });
               }}
@@ -1203,8 +1205,8 @@ export default function LogsPage() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateTo}
               disabled={logsFetching}
-              onChange={(e) => {
-                setDateTo(e.target.value);
+              onChange={(e) => setDateTo(e.target.value)}
+              onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_to: e.target.value, page: 1 });
               }}
@@ -1723,7 +1725,7 @@ export default function LogsPage() {
                               setDownloadingLogId(log.id);
                               try {
                                 const data = await logsService.getContent(log.content_id);
-                                const filename = [log.position_title, log.company_name].filter(Boolean).join(" - ") || "Resume";
+                                const filename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || "Resume";
                                 await downloadResumePDF(data.raw_response, filename);
                               } catch (err) {
                                 console.error("Failed to download resume:", err);
