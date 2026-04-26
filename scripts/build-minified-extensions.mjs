@@ -140,24 +140,31 @@ async function zipTarget(targetName) {
     console.warn(`[warn] Could not read version from ${targetName}/manifest.json. Using 'unknown'.`);
   }
 
-  const zipPath = path.join(zipRoot, `${targetName}-v${version}.zip`);
-
   await fs.mkdir(zipRoot, { recursive: true });
 
-  await new Promise((resolve, reject) => {
-    const output = createWriteStream(zipPath);
-    const archive = archiver("zip", { zlib: { level: 9 } });
+  const createZip = (zipPath, folderPrefix) =>
+    new Promise((resolve, reject) => {
+      const output = createWriteStream(zipPath);
+      const archive = archiver("zip", { zlib: { level: 9 } });
 
-    output.on("close", resolve);
-    output.on("error", reject);
-    archive.on("error", reject);
+      output.on("close", resolve);
+      output.on("error", reject);
+      archive.on("error", reject);
 
-    archive.pipe(output);
-    archive.directory(sourceDir, false);
-    archive.finalize();
-  });
+      archive.pipe(output);
+      archive.directory(sourceDir, folderPrefix);
+      archive.finalize();
+    });
 
-  console.log(`[ok] Zipped ${targetName} v${version} -> ${path.relative(root, zipPath)}`);
+  // Mac: files at root of zip (no wrapping folder)
+  const macZipPath = path.join(zipRoot, `${targetName}-v${version}-mac.zip`);
+  await createZip(macZipPath, false);
+  console.log(`[ok] Zipped ${targetName} v${version} (mac) -> ${path.relative(root, macZipPath)}`);
+
+  // Windows: files wrapped inside a named folder
+  const winZipPath = path.join(zipRoot, `${targetName}-v${version}-winx64.zip`);
+  await createZip(winZipPath, `${targetName}-v${version}`);
+  console.log(`[ok] Zipped ${targetName} v${version} (win) -> ${path.relative(root, winZipPath)}`);
 }
 
 async function main() {
