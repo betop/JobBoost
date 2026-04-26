@@ -7,6 +7,7 @@ const EXTENSION_ENV = "staging";
 const $ = (id) => document.getElementById(id);
 
 const authStatus = $("authStatus");
+const authEmail = $("authEmail");
 const authError = $("authError");
 const btnAuth = $("btnAuth");
 
@@ -63,15 +64,15 @@ function renderSummary(s) {
 
   if (s.mode === "stages") {
     summaryEl.textContent =
-      `application: ${s.application || 0}  ` +
-      `failed: ${s.failed || 0}  ` +
-      `assessment: ${s.assessment || 0}  ` +
-      `interview: ${s.interview || 0}  ` +
-      `offer: ${s.offer || 0}`;
+      `application: ${s.application || 0}\n` +
+      `failed:      ${s.failed || 0}\n` +
+      `assessment:  ${s.assessment || 0}\n` +
+      `interview:   ${s.interview || 0}\n` +
+      `offer:       ${s.offer || 0}`;
     return;
   }
 
-  summaryEl.textContent = `Total: ${s.total || 0}  Errors: ${s.errors || 0}`;
+  summaryEl.textContent = `Total: ${s.total || 0}\nErrors: ${s.errors || 0}`;
 }
 
 async function sendMessage(msg) {
@@ -83,8 +84,10 @@ async function refreshAuthStatus() {
   const res = await sendMessage({ type: "AUTH_CHECK" });
   if (res.ok) {
     authStatus.textContent = "Ready";
+    authEmail.textContent = res.email || "";
   } else {
     authStatus.textContent = "Not configured";
+    authEmail.textContent = "";
     authError.textContent = res.error || "Auth check failed";
   }
 }

@@ -89,10 +89,17 @@ input[type="number"] {
   white-space: pre-wrap;
 }
 
+.auth-email {
+  font-size: 11px;
+  color: #444;
+  margin-top: 2px;
+}
+
 .summary {
   margin-top: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
+  white-space: pre;
 }
 
 .log {

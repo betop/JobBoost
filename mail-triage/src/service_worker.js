@@ -387,7 +387,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type === "AUTH_CHECK") {
       try {
         const token = await getGmailToken(false);
-        sendResponse({ ok: true, tokenPresent: Boolean(token) });
+        let email = null;
+        try {
+          const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (resp.ok) {
+            const info = await resp.json();
+            email = info.email || null;
+          }
+        } catch {
+          // Non-fatal; email stays null
+        }
+        sendResponse({ ok: true, tokenPresent: Boolean(token), email });
       } catch (e) {
         sendResponse({ ok: false, error: e?.message || String(e) });
       }
