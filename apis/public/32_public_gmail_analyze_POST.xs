@@ -64,7 +64,16 @@ query "public/gmail-analyze" verb=POST {
     precondition ($ai_response != null && $ai_response != "") {
       error = "Claude returned empty response"
     }
+  
+    var $clean_response {
+      value = $ai_response
+        |replace:"```json\n":""
+        |replace:"```JSON\n":""
+        |replace:"```\n":""
+        |replace:"```":""
+        |trim
+    }
   }
 
-  response = {ai_response: $ai_response}
+  response = {ai_response: $clean_response}
 }

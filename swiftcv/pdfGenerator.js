@@ -241,7 +241,7 @@ class PDFGenerator {
     return result;
   }
 
-  _registerFontsOnDocument(doc) {
+  _registerFontsOnDocument(doc, onlyFont = null) {
     const ctx = typeof window !== 'undefined' ? window : self;
     
     const fonts = [
@@ -268,8 +268,9 @@ class PDFGenerator {
     ];
 
     // Check that font data globals actually exist
-    const missing = fonts.filter(f => !f.data);
-    if (missing.length === fonts.length) {
+    const fontsToRegister = onlyFont ? fonts.filter(f => f.name === onlyFont) : fonts;
+    const missing = fontsToRegister.filter(f => !f.data);
+    if (missing.length === fontsToRegister.length) {
       console.warn('[PDFGen] No font data globals found — resume_fonts.js not loaded yet');
       return false;
     }
@@ -278,7 +279,7 @@ class PDFGenerator {
     }
 
     let registered = 0;
-    fonts.forEach(font => {
+    fontsToRegister.forEach(font => {
       if (!font.data) return;
       try {
         const vfsString = this._base64ToVfsString(font.data);
@@ -469,18 +470,19 @@ class PDFGenerator {
 
   _newDoc() {
     const doc = new this.jsPDF({ unit: "mm", format: [this.pageWidth, this.pageHeight] });
-    
-    // Register all custom fonts directly on the document instance
-    const fontsLoaded = this._registerFontsOnDocument(doc);
-    
+
+    // Pick the font first so we only embed the 2 weights we actually need
+    const availableFonts = [
+      "Lato", "Roboto", "Inter", "SourceSans3", "Poppins", "Montserrat",
+      "DMSans", "IBMPlexSans", "Outfit", "PlusJakartaSans",
+    ];
+    const chosen = availableFonts[Math.floor(Math.random() * availableFonts.length)];
+
+    // Register only the chosen font's 2 weights (regular + bold)
+    const fontsLoaded = this._registerFontsOnDocument(doc, chosen);
+
     if (fontsLoaded) {
-      // Pick ONE random font — used in "normal" for body and "bold" for headings/emphasis
-      const availableFonts = [
-        "Lato", "Roboto", "Inter", "SourceSans3", "Poppins", "Montserrat",
-        "DMSans", "IBMPlexSans", "Outfit", "PlusJakartaSans",
-      ];
-      const chosen = availableFonts[Math.floor(Math.random() * availableFonts.length)];
-      this._activeFont = chosen;  // single font, both regular and bold weights
+      this._activeFont = chosen;
 
       // Verify both weights of the chosen font actually work
       try {

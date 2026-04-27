@@ -1191,7 +1191,6 @@ export default function LogsPage() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateFrom}
               disabled={logsFetching}
-              onChange={(e) => setDateFrom(e.target.value)}
               onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_from: e.target.value, page: 1 });
@@ -1205,7 +1204,6 @@ export default function LogsPage() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateTo}
               disabled={logsFetching}
-              onChange={(e) => setDateTo(e.target.value)}
               onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_to: e.target.value, page: 1 });

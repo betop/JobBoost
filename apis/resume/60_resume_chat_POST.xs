@@ -134,7 +134,7 @@ query "resume/chat" verb=POST {
   
     var $openai_body {
       value = {}
-        |set:"model":"gpt-4o"
+        |set:"model":"gpt-4o-mini"
         |set:"max_tokens":1024
         |set:"temperature":0.5
         |set:"messages":$messages
