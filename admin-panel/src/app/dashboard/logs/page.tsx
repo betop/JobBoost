@@ -213,8 +213,8 @@ function RegenerateModal({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [statusResult, setStatusResult] = useState<{
-    match_status: number;
-    error_msg: string;
+    is_matched: number;
+    match_reason: string;
     resume_text: string;
     resume_filename: string;
   } | null>(null);
@@ -294,10 +294,10 @@ function RegenerateModal({
         return;
       }
 
-      if ([0, 2, 3, 4, 5, 6].includes(result.match_status)) {
+      if (result.match_status === 0 || result.match_status === 2 || result.match_status === 3 || result.match_status === 4 || result.match_status === 5 || result.match_status === 6) {
         setStatusResult({
-          match_status: result.match_status,
-          error_msg: result.error_msg || "No reason provided.",
+          is_matched: result.match_status,
+          match_reason: result.error_msg || "No reason provided.",
           resume_text: result.resume_text,
           resume_filename: result.resume_filename,
         });
@@ -316,7 +316,7 @@ function RegenerateModal({
   async function handleGoAnyway() {
     if (!statusResult) return;
 
-    if (statusResult.match_status === 0 && statusResult.resume_text) {
+    if (statusResult.is_matched === 0 && statusResult.resume_text) {
       try {
         const goAnywayFilename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || statusResult.resume_filename;
         await downloadResumePDF(statusResult.resume_text, goAnywayFilename);
@@ -343,7 +343,7 @@ function RegenerateModal({
     await handleRegenerate(false);
   }
 
-  const statusMeta = statusResult ? getStatusMeta(statusResult.match_status) : null;
+  const statusMeta = statusResult ? getStatusMeta(statusResult.is_matched) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -408,7 +408,7 @@ function RegenerateModal({
                     <div>
                       <p className={`font-semibold text-sm ${statusMeta.tone === "red" ? "text-red-900" : "text-amber-900"}`}>{statusMeta.title}</p>
                       <p className={`text-sm mt-1 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusMeta.description}</p>
-                      <p className={`text-sm mt-2 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusResult.error_msg || "No reason provided."}</p>
+                      <p className={`text-sm mt-2 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusResult.match_reason || "No reason provided."}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -1191,6 +1191,7 @@ export default function LogsPage() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateFrom}
               disabled={logsFetching}
+              onChange={(e) => setDateFrom(e.target.value)}
               onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_from: e.target.value, page: 1 });
@@ -1204,6 +1205,7 @@ export default function LogsPage() {
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateTo}
               disabled={logsFetching}
+              onChange={(e) => setDateTo(e.target.value)}
               onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_to: e.target.value, page: 1 });
