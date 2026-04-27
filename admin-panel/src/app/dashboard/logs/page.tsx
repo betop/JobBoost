@@ -213,8 +213,8 @@ function RegenerateModal({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [statusResult, setStatusResult] = useState<{
-    is_matched: number;
-    match_reason: string;
+    match_status: number;
+    error_msg: string;
     resume_text: string;
     resume_filename: string;
   } | null>(null);
@@ -285,7 +285,7 @@ function RegenerateModal({
     setError(null);
     try {
       const result = await logsService.regenerate(log.id, forceGenerate);
-      if (result.is_matched === 1) {
+      if (result.match_status === 1) {
         const regenFilename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || result.resume_filename;
         await downloadResumePDF(result.resume_text, regenFilename);
         setDone(true);
@@ -294,10 +294,10 @@ function RegenerateModal({
         return;
       }
 
-      if (result.is_matched === 0 || result.is_matched === 2 || result.is_matched === 3 || result.is_matched === 4 || result.is_matched === 5 || result.is_matched === 6) {
+      if ([0, 2, 3, 4, 5, 6].includes(result.match_status)) {
         setStatusResult({
-          is_matched: result.is_matched,
-          match_reason: result.match_reason || "No reason provided.",
+          match_status: result.match_status,
+          error_msg: result.error_msg || "No reason provided.",
           resume_text: result.resume_text,
           resume_filename: result.resume_filename,
         });
@@ -316,7 +316,7 @@ function RegenerateModal({
   async function handleGoAnyway() {
     if (!statusResult) return;
 
-    if (statusResult.is_matched === 0 && statusResult.resume_text) {
+    if (statusResult.match_status === 0 && statusResult.resume_text) {
       try {
         const goAnywayFilename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || statusResult.resume_filename;
         await downloadResumePDF(statusResult.resume_text, goAnywayFilename);
@@ -343,7 +343,7 @@ function RegenerateModal({
     await handleRegenerate(false);
   }
 
-  const statusMeta = statusResult ? getStatusMeta(statusResult.is_matched) : null;
+  const statusMeta = statusResult ? getStatusMeta(statusResult.match_status) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -408,7 +408,7 @@ function RegenerateModal({
                     <div>
                       <p className={`font-semibold text-sm ${statusMeta.tone === "red" ? "text-red-900" : "text-amber-900"}`}>{statusMeta.title}</p>
                       <p className={`text-sm mt-1 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusMeta.description}</p>
-                      <p className={`text-sm mt-2 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusResult.match_reason || "No reason provided."}</p>
+                      <p className={`text-sm mt-2 ${statusMeta.tone === "red" ? "text-red-700" : "text-amber-700"}`}>{statusResult.error_msg || "No reason provided."}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">

@@ -126,15 +126,10 @@ export interface LogsFilters {
 }
 
 export interface RegenerateResponse {
-  skipped: boolean;
-  log_id?: string;
-  is_matched: number;
-  match_reason: string;
+  match_status: number;
+  error_msg: string;
   resume_text: string;
-  cover_letter_text?: string;
   resume_filename: string;
-  cover_letter_filename?: string;
-  is_admin?: boolean;
 }
 
 export const logsService = {

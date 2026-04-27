@@ -14,6 +14,7 @@ const XANO_CANONICALS: Record<string, string> = {
   resume: "caf8Eo15",
   public: "W5ffWHW-",
   "extension-versions": "eqIK8vAt",
+  "extensions": "eqIK8vAt",
 };
 
 const XANO_BASES: Record<string, string> = Object.fromEntries(

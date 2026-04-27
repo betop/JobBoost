@@ -40,17 +40,6 @@ query "resume/generate" verb=POST {
       error = "Missing authorization key"
     }
   
-    // Check extension version (skipped when extension_version is not sent, e.g. staging env)
-    db.query extension_version {
-      where = $db.extension_version.extension_name == "swiftcv" && $db.extension_version.is_current == true && $db.extension_version.version == $input.extension_version
-      return = {type: "single"}
-    } as $current_version
-  
-    precondition ($current_version != null) {
-      error_type = "badrequest"
-      error = "Extension version mismatch. Please update your extension to the latest version."
-    }
-  
     db.query access_token {
       where = $db.access_token.token == $input.token && $db.access_token.is_active == true && $db.access_token.expires_at < now && $db.access_token.user_id != null
       return = {type: "single"}
@@ -81,6 +70,21 @@ query "resume/generate" verb=POST {
       error = "User account is inactive"
     }
   
+    conditional {
+      // Check user type and version mismatch for the bidder type users
+      if ($user.type == "bidder") {
+        db.query extension_version {
+          where = $db.extension_version.extension_name == "swiftcv" && $db.extension_version.is_current == true && $db.extension_version.version == $input.extension_version
+          return = {type: "single"}
+        } as $current_version
+      
+        precondition ($current_version != null) {
+          error_type = "badrequest"
+          error = "Extension version mismatch. Please update your extension to the latest version."
+        }
+      }
+    }
+  
     var $match_status {
       value = 1
     }
@@ -97,10 +101,6 @@ query "resume/generate" verb=POST {
       value = {}
     }
   
-    var $work_exp_array {
-      value = []
-    }
-  
     var $company_name {
       value = ""
     }
@@ -108,6 +108,22 @@ query "resume/generate" verb=POST {
     var $position_title {
       value = ""
     }
+  
+    db.get profile {
+      field_name = "id"
+      field_value = $input.profile_id
+    } as $prof
+  
+    precondition ($prof != null) {
+      error_type = "notfound"
+      error = "Profile not found"
+    }
+  
+    db.query work_experience {
+      where = $db.work_experience.profile_id == $prof.id
+      sort = {work_experience.start_date: "desc"}
+      return = {type: "list"}
+    } as $work
   
     conditional {
       if ($input.force_generate == false) {
@@ -155,7 +171,7 @@ query "resume/generate" verb=POST {
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
-                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true | false\",\n\"company\": \"full company name | null\",\n\"position\": \"full position title | null\",\n\"is_remote\": \"true | false\",\n\"travels_or_relocation_required\": \"true | false\",\n\"similar_to_outlier\": \"true | false\",\n\"similar_to_toptal\": \"true | false\",\n\"clearance_required\": \"true | false\",\n\"seniority\": \"intern | entry | junior | mid | senior | lead | staff | principal | manager | director | vice_president | c_level | founder\",\n\"tech_scope\": \"ai | machine_learning | data_science | data_analytics | data_engineering | data_research | computer_vision | mlops | software_engineering | full_stack | backend | frontend | devops\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true | false\",\n\"company\": \"full company name | null\",\n\"position\": \"full position title | null\",\n\"is_remote\": \"true | false\",\n\"travels_or_relocation_required\": \"true | false\",\n\"similar_to_outlier\": \"true | false\",\n\"similar_to_toptal\": \"true | false\",\n\"clearance_required\": \"true | false\",\n\"seniority\": \"one of these - intern | entry | junior | mid | senior | lead | staff | principal | manager | director | vice_president | c_level | founder\",\n\"tech_scope\": \"one of these - ai | machine_learning | data_science | data_analytics | data_engineering | data_research | computer_vision | mlops | software_engineering | full_stack | backend | frontend | devops\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
                       )
                     )
                   headers = []
@@ -268,31 +284,11 @@ query "resume/generate" verb=POST {
                                       
                                         conditional {
                                           if ($has_seniority) {
-                                            db.get profile {
-                                              field_name = "id"
-                                              field_value = $input.profile_id
-                                            } as $prof
-                                          
-                                            precondition ($prof != null) {
-                                              error_type = "notfound"
-                                              error = "Profile not found"
-                                            }
-                                          
-                                            db.query work_experience {
-                                              where = $db.work_experience.profile_id == $prof.id
-                                              sort = {work_experience.start_date: "desc"}
-                                              return = {type: "list"}
-                                            } as $work
-                                          
-                                            var.update $work_exp_array {
-                                              value = $work
-                                            }
-                                          
                                             var $has_previous_company {
                                               value = false
                                             }
                                           
-                                            foreach ($work_exp_array) {
+                                            foreach ($work) {
                                               each as $work_item {
                                                 conditional {
                                                   if (($work_item.company_name|to_lower|trim) == ($extraction_json.company|to_lower|trim)) {
@@ -311,7 +307,7 @@ query "resume/generate" verb=POST {
                                                 }
                                               
                                                 var.update $error_msg {
-                                                  value = "The candidate has worked at the same company before/currently. Try with another job."
+                                                  value = "The candidate has previously worked at or currently works for this company. Try with another job."
                                                 }
                                               }
                                             
@@ -388,7 +384,7 @@ query "resume/generate" verb=POST {
                                             }
                                           
                                             var.update $error_msg {
-                                              value = "This job requires too low/high seniority and not aligned to the candidate profile. Tray with anogher job."
+                                              value = "This job's seniority level does not match the candidate's profile. Try with another job."
                                             }
                                           }
                                         }
@@ -412,7 +408,7 @@ query "resume/generate" verb=POST {
                                     }
                                   
                                     var.update $error_msg {
-                                      value = "This job is not aligned to the candidate profile. It is a freelancer marketplace or a AI traning job. Try with another job."
+                                      value = "This job is not aligned to the candidate profile. It is a freelancer marketplace or an AI training job. Try with another job."
                                     }
                                   }
                                 }
@@ -424,7 +420,7 @@ query "resume/generate" verb=POST {
                                 }
                               
                                 var.update $error_msg {
-                                  value = "This job requires to travel or relocate. Try with another job."
+                                  value = "This job requires travel or relocation. Try with another job."
                                 }
                               }
                             }
@@ -508,7 +504,7 @@ query "resume/generate" verb=POST {
           value = ""
         }
       
-        foreach ($work_exp_array) {
+        foreach ($work) {
           each as $w {
             var $end_label {
               value = $w.end_date
@@ -763,7 +759,7 @@ query "resume/generate" verb=POST {
                 }
               
                 var.update $error_msg {
-                  value = "AI processing error: invalid JSON response. Please try again."
+                  value = "AI processing error: received an invalid response. Please try again."
                 }
               }
             

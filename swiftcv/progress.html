@@ -73,6 +73,15 @@
       .admin-warning-banner { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-top: 8px; text-align: left; }
       .admin-warning-banner .admin-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
       .admin-warning-banner .admin-warning-text { color: #78350f; font-size: 11px; margin: 0; line-height: 1.4; }
+      .version-banner { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
+      .version-banner .version-title { color: #991b1b; font-weight: 600; font-size: 14px; margin: 0 0 6px; }
+      .version-banner .version-body { color: #7f1d1d; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
+      .version-banner .version-btns { display: flex; gap: 8px; }
+      .version-banner .version-btns button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .version-banner .btn-version-close { background: #e5e7eb; color: #374151; }
+      .version-banner .btn-version-close:hover { background: #d1d5db; }
+      .version-banner .btn-version-generate { background: #f59e0b; color: #fff; }
+      .version-banner .btn-version-generate:hover { background: #d97706; }
       .ready-banner { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
       .ready-banner .ready-title { color: #15803d; font-weight: 600; font-size: 14px; margin: 0 0 4px; }
       .ready-banner .ready-body { color: #166534; font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
@@ -163,6 +172,14 @@
         <div id="adminWarningBanner" class="admin-warning-banner" style="display:none">
           <span class="admin-badge">🔑 Admin</span>
           <p id="adminWarningText" class="admin-warning-text"></p>
+        </div>
+        <div id="versionBanner" class="version-banner" style="display:none">
+          <p class="version-title">🔄 Extension Update Required</p>
+          <p id="versionBody" class="version-body">Please update the SwiftCV extension to the latest version.</p>
+          <div class="version-btns">
+            <button class="btn-version-close" id="versionClose">Close</button>
+            <button class="btn-version-generate" id="versionGenerate" style="display:none">🔑 Generate Anyway</button>
+          </div>
         </div>
         <div id="readyBanner" class="ready-banner" style="display:none">
           <p class="ready-title">✅ Resume is ready!</p>

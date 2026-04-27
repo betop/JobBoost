@@ -62,6 +62,7 @@ saveBtn.addEventListener("click", async () => {
       token,
       profileIds:   data.profile_ids   || [],
       profileNames: data.profile_names || [],
+      isAdmin:      data.is_admin === true,
       isConfirmed:  false,
       profileId:    null,
       profileName:  null,

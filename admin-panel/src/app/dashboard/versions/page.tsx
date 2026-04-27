@@ -50,7 +50,7 @@ export default function ExtensionManagement() {
   const fetchVersions = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/extension-versions");
+      const response = await fetch("/api/extensions/versions");
       if (!response.ok) throw new Error("Failed to fetch versions");
       const data = await response.json();
       setVersions(data);
@@ -85,7 +85,7 @@ export default function ExtensionManagement() {
     if (!pendingAction || pendingAction.type !== 'create') return;
 
     try {
-      const response = await fetch("/api/extension-versions", {
+      const response = await fetch("/api/extensions/versions", {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(pendingAction.data),
@@ -134,7 +134,7 @@ export default function ExtensionManagement() {
         body.release_date = new Date(pendingAction.data.release_date + "T00:00:00").toISOString();
       }
 
-      const response = await fetch(`/api/extension-versions/${pendingAction.versionId}/edit`, {
+      const response = await fetch(`/api/extensions/versions/${pendingAction.versionId}`, {
         method: "PATCH",
         headers: getAuthHeaders(),
         body: JSON.stringify(body),
@@ -156,7 +156,7 @@ export default function ExtensionManagement() {
     if (!pendingAction || pendingAction.type !== 'set-current') return;
 
     try {
-      const response = await fetch(`/api/extension-versions/${pendingAction.versionId}/set-current`, {
+      const response = await fetch(`/api/extensions/versions/${pendingAction.versionId}/set-current`, {
         method: "PATCH",
         headers: getAuthHeaders(),
       });

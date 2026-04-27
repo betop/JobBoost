@@ -8,7 +8,6 @@ const EXTENSION_ENV = "staging";
 // Xano API base URLs per group
 const XANO_PUBLIC_URL = "https://api.shsws-solutions.com/api:W5ffWHW-";
 const XANO_RESUME_URL = "https://api.shsws-solutions.com/api:caf8Eo15";
-const PROFILE_REFRESH_MAX_AGE_MS = 10 * 60 * 1000;
 
 let extensionState = {
   token: null,
@@ -18,6 +17,9 @@ let extensionState = {
   profileNames: [],
   isConfirmed: false,
   resumeTemplate: 1,
+  isAdmin: false,
+  versionOk: true,
+  versionError: "",
 };
 
 let lastProfilesSyncAt = 0;
@@ -43,9 +45,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onStartup.addListener(async () => {
   await loadExtensionState();
-  if (extensionState.token) {
-    await refreshProfilesIfNeeded();
-  }
 });
 
 // Load state from storage
@@ -61,6 +60,9 @@ async function loadExtensionState() {
       "resumeTemplate",
       "resumeTemplates",
       "lastProfilesSyncAt",
+      "isAdmin",
+      "versionOk",
+      "versionError",
     ]);
 
     if (stored.token)            extensionState.token          = stored.token;
@@ -71,14 +73,12 @@ async function loadExtensionState() {
     if (stored.isConfirmed)      extensionState.isConfirmed    = stored.isConfirmed;
     if (stored.resumeTemplate)   extensionState.resumeTemplate = stored.resumeTemplate;
     if (stored.lastProfilesSyncAt) lastProfilesSyncAt = stored.lastProfilesSyncAt;
+    extensionState.isAdmin   = stored.isAdmin === true;
+    extensionState.versionOk    = stored.versionOk !== false;
+    extensionState.versionError = stored.versionError || "";
   } catch (error) {
     console.error("Error loading extension state:", error);
   }
-}
-
-function isProfileDataStale(maxAgeMs = PROFILE_REFRESH_MAX_AGE_MS) {
-  if (!lastProfilesSyncAt) return true;
-  return (Date.now() - lastProfilesSyncAt) > maxAgeMs;
 }
 
 async function fetchTokenProfiles(endpoint = "token-profiles") {
@@ -87,12 +87,20 @@ async function fetchTokenProfiles(endpoint = "token-profiles") {
     return null;
   }
 
+  let body = { token: extensionState.token };
+  if (endpoint === "token-profiles") {
+    try {
+      const v = chrome.runtime.getManifest()?.version;
+      if (v) body.extension_version = v;
+    } catch (_) {}
+  }
+
   const response = await fetch(`${XANO_PUBLIC_URL}/public/${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ token: extensionState.token }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -121,6 +129,9 @@ async function applyProfilesData(data, { openDialogs = true } = {}) {
 
   extensionState.profileIds = ids;
   extensionState.profileNames = names;
+  extensionState.isAdmin = data.is_admin === true;
+  extensionState.versionOk = data.version_ok !== false;
+  extensionState.versionError = data.version_error || "";
 
   const previousProfileId = extensionState.profileId;
   const previousSelectionStillValid = previousProfileId && ids.includes(previousProfileId);
@@ -148,6 +159,9 @@ async function applyProfilesData(data, { openDialogs = true } = {}) {
     profileName: extensionState.profileName,
     resumeTemplate: extensionState.resumeTemplate,
     isConfirmed: extensionState.isConfirmed,
+    isAdmin: extensionState.isAdmin,
+    versionOk: extensionState.versionOk,
+    versionError: extensionState.versionError,
   });
 
   if (extensionState.profileId && extensionState.isConfirmed) {
@@ -206,16 +220,11 @@ async function refreshProfilesFromBackend(options = {}) {
 async function refreshProfilesIfNeeded(options = {}) {
   const {
     force = false,
-    maxAgeMs = PROFILE_REFRESH_MAX_AGE_MS,
     openDialogs = false,
     notify = false,
   } = options;
 
   if (!extensionState.token) {
-    return null;
-  }
-
-  if (!force && !isProfileDataStale(maxAgeMs)) {
     return null;
   }
 
@@ -307,7 +316,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     // Service worker may have gone idle — reload state from storage before checking
     await loadExtensionState();
-    await refreshProfilesIfNeeded({ openDialogs: false, notify: true, maxAgeMs: 2 * 60 * 1000 });
+    // Always force a fresh profile + version check before generating
+    await refreshProfilesIfNeeded({ force: true, openDialogs: false, notify: true });
 
     if (!extensionState.isConfirmed) {
       showNotification("Please confirm your profile first.");
@@ -337,7 +347,7 @@ async function ensureOffscreenDocument() {
 
 // Generate resume and cover letter
 async function generateResume(jobDescription, jobUrl = "") {
-  // Open progress window
+  // Open progress window (one window for the entire flow)
   const progressWin = await new Promise((resolve) =>
     chrome.windows.create(
       { url: "progress.html", type: "popup", width: 380, height: 550 },
@@ -352,7 +362,7 @@ async function generateResume(jobDescription, jobUrl = "") {
     chrome.runtime.sendMessage({ action: "progressUpdate", step, error, reason }).catch(() => {});
   }
 
-  // Wait for admin to click "Generate Anyway" or "Cancel" on override banner
+  // Wait for admin to click "Generate Anyway" or "Cancel"
   function waitForAdminDecision() {
     return new Promise((resolve) => {
       function handler(message) {
@@ -388,9 +398,7 @@ async function generateResume(jobDescription, jobUrl = "") {
   async function callGenerateApi(requestBody) {
     const response = await fetch(`${XANO_RESUME_URL}/resume/generate`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
     });
 
@@ -401,7 +409,6 @@ async function generateResume(jobDescription, jobUrl = "") {
 
         if (errorData?.message === "DUPLICATE_URL" && errorData?.payload) {
           const p = errorData.payload;
-          console.log("[BG] Duplicate URL detected:", p);
           const appliedDate = p.applied_date
             ? new Date(p.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
             : "unknown date";
@@ -411,10 +418,6 @@ async function generateResume(jobDescription, jobUrl = "") {
         }
 
         message = errorData?.message || errorData?.error || message;
-
-        if (EXTENSION_ENV === "prod" && (message.includes("version") || message.includes("Version"))) {
-          message = message + " — Please update the SwiftCV extension to the latest version.";
-        }
       } catch (_) {}
       throw new Error(message);
     }
@@ -434,14 +437,8 @@ async function generateResume(jobDescription, jobUrl = "") {
 
   function getResumePayload(data) {
     if (!data || typeof data !== "object") {
-      return {
-        resumeText: "",
-        coverLetterText: "",
-        resumeFilename: "Resume.pdf",
-        coverLetterFilename: "Cover_Letter.pdf",
-      };
+      return { resumeText: "", coverLetterText: "", resumeFilename: "Resume.pdf", coverLetterFilename: "Cover_Letter.pdf" };
     }
-
     return {
       resumeText: data.resume_text || "",
       coverLetterText: data.cover_letter_text || "",
@@ -451,15 +448,11 @@ async function generateResume(jobDescription, jobUrl = "") {
   }
 
   function getExtensionVersion() {
-    try {
-      return chrome.runtime.getManifest()?.version || "";
-    } catch (_) {
-      return "";
-    }
+    try { return chrome.runtime.getManifest()?.version || ""; } catch (_) { return ""; }
   }
 
   // Re-call generate API with force_generate=true (admin only)
-  async function retryWithForce(jd, url) {
+  async function retryWithForce(jd, url, logId) {
     const extensionVersion = getExtensionVersion();
     sendProgress("ai");
     const forceBody = {
@@ -469,6 +462,7 @@ async function generateResume(jobDescription, jobUrl = "") {
       ai_provider: "claude",
       job_url: url,
       force_generate: true,
+      log_id: logId || undefined,
       extension_version: extensionVersion || undefined,
     };
 
@@ -480,17 +474,13 @@ async function generateResume(jobDescription, jobUrl = "") {
     const forceStatus = getGenerateStatus(forceData);
     const forceReason = getGenerateReason(forceData);
 
-    // Even with force, if AI still errored out, let user retry
     if (forceStatus === 6) {
       sendProgress("ai_error", forceReason || "AI processing error. Please try again.");
       const retry = await waitForRetryDecision();
-      if (retry) {
-        await retryWithForce(jd, url);
-      }
+      if (retry) await retryWithForce(jd, url, logId);
       return;
     }
 
-    // Process the forced response (always has resume data)
     await processResumeResponse(forceData);
   }
 
@@ -524,8 +514,21 @@ async function generateResume(jobDescription, jobUrl = "") {
     sendProgress("done");
   }
 
+  // ── Version check ────────────────────────────────────────────────────────────
+  // Check version status from the profile refresh done before this call
+  if (!extensionState.versionOk) {
+    sendProgress("version_mismatch", extensionState.versionError);
+    if (!extensionState.isAdmin) return;
+
+    const confirmed = await waitForAdminDecision();
+    if (!confirmed) return;
+    // Admin confirmed → continue with generate in this same window
+  }
+
   try {
     const extensionVersion = getExtensionVersion();
+    const isAdmin = extensionState.isAdmin;
+
     const generateBody = {
       profile_id: extensionState.profileId,
       job_description: jobDescription,
@@ -534,63 +537,27 @@ async function generateResume(jobDescription, jobUrl = "") {
       job_url: jobUrl,
       extension_version: extensionVersion || undefined,
     };
+
+    // ── Initial generate call (loop only for status=6 admin retry) ────────────
     let data;
-    let isAdmin = false;
     while (true) {
       sendProgress("ai");
       data = await callGenerateApi(generateBody);
-      if (!data) {
-        return;
-      }
+      if (!data) return;
 
       console.log("Xano response:", JSON.stringify(data));
-
       await syncProfilesFromGenerateResponse(data);
+
       const status = getGenerateStatus(data);
       const reason = getGenerateReason(data);
-      isAdmin = data.is_admin === true;
 
-      // Duplicate URL responses now use match_status=4 + error_msg.
-      if (data.duplicate_info || status === 4) {
-        const d = data.duplicate_info;
-        const appliedDate = d?.created_at
-          ? new Date(d.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-          : "";
-        const detail = d
-          ? (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + (appliedDate ? " — applied on " + appliedDate : "")
-          : (reason || "This job has been applied before. Try with another job.");
-        console.log("[BG] Duplicate detected:", detail);
-
-        if (isAdmin) {
-          // Admin: show override prompt with "Generate Anyway"
-          // Note: the API already generated the resume for admins,
-          // so if confirmed we proceed with the existing data (no re-call needed)
-          sendProgress("admin_override", detail, "duplicate");
-          const confirmed = await waitForAdminDecision();
-          if (!confirmed) {
-            return;
-          }
-          console.log("[BG] Admin confirmed duplicate override, proceeding with existing data");
-          // Fall through to normal processing with already-generated data
-        } else {
-          // Bidder: block with duplicate banner (close only)
-          sendProgress("duplicate", undefined, detail);
-          return;
-        }
-      }
-
-      // If AI processing failed (match_status/is_matched === 6)
+      // AI error — admins can retry, bidders see close-only error
       if (status === 6) {
-        console.log("[BG] AI processing error:", reason);
         if (isAdmin) {
-          // Admins can retry
           sendProgress("ai_error", reason || "AI processing error. Please try again.");
           const retry = await waitForRetryDecision();
-          if (retry) {
-            continue;
-          }
+          if (retry) continue;
         } else {
-          // Bidders: show error with close only (no retry)
           sendProgress("error", reason || "AI processing error. Please try again later.");
         }
         return;
@@ -599,156 +566,73 @@ async function generateResume(jobDescription, jobUrl = "") {
       break;
     }
 
-    // If the content is not a real job description, warn the user
-    if (getGenerateStatus(data) === 3) {
-      const reason = getGenerateReason(data);
-      console.log("[BG] Not a job description:", reason);
-      if (isAdmin) {
-        sendProgress("admin_override", reason || "Not a job description", "not_jd");
-        const confirmed = await waitForAdminDecision();
-        if (confirmed) {
-          await retryWithForce(jobDescription, jobUrl);
-          return;
-        }
-      }
-      sendProgress("not_job_description", undefined, reason || "");
+    const status = getGenerateStatus(data);
+    const reason = getGenerateReason(data);
+
+    // ── Non-match statuses (0, 2, 3, 4, 5) ───────────────────────────────────
+    // Bidders: show blocked banner (OK/close only)
+    // Admins:  show admin_override banner (Force Generate) → retryWithForce
+
+    // Status 4: duplicate URL
+    if (status === 4 || data.duplicate_info) {
+      const d = data.duplicate_info;
+      const appliedDate = d?.created_at
+        ? new Date(d.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+        : "";
+      const detail = d
+        ? (d.position_title || "") + (d.company_name ? " at " + d.company_name : "") + (appliedDate ? " — applied on " + appliedDate : "")
+        : (reason || "This job has been applied before.");
+      if (!isAdmin) { sendProgress("duplicate", undefined, detail); return; }
+      sendProgress("admin_override", detail, "duplicate");
+      if (!await waitForAdminDecision()) return;
+      await retryWithForce(jobDescription, jobUrl, data.log_id);
       return;
     }
 
-    // If job is unfit — not remote, security clearance, AI annotation, etc.
-    if (data.skipped === true || getGenerateStatus(data) === 2) {
-      const reason = getGenerateReason(data);
-      console.log("[BG] Job unfit:", reason);
-      if (isAdmin) {
-        sendProgress("admin_override", reason || "Job does not meet requirements", "skipped");
-        const confirmed = await waitForAdminDecision();
-        if (confirmed) {
-          await retryWithForce(jobDescription, jobUrl);
-          return;
-        }
-      }
-      sendProgress("skipped", undefined, reason || "");
+    // Status 3: not a job description
+    if (status === 3) {
+      if (!isAdmin) { sendProgress("not_job_description", undefined, reason || ""); return; }
+      sendProgress("admin_override", reason || "Not a job description", "not_jd");
+      if (!await waitForAdminDecision()) return;
+      await retryWithForce(jobDescription, jobUrl, data.log_id);
       return;
     }
 
-    // If company+title match found in previous applications
-    // - non-admin: block apply
-    // - admin: allow explicit override confirmation
-    if (getGenerateStatus(data) === 5) {
-      const reason = getGenerateReason(data);
+    // Status 2: job unfit (not remote, clearance, freelance platform, etc.)
+    if (status === 2 || data.skipped === true) {
+      if (!isAdmin) { sendProgress("skipped", undefined, reason || ""); return; }
+      sendProgress("admin_override", reason || "Job does not meet requirements", "skipped");
+      if (!await waitForAdminDecision()) return;
+      await retryWithForce(jobDescription, jobUrl, data.log_id);
+      return;
+    }
+
+    // Status 5: reposted job
+    if (status === 5) {
       const appliedDate = data.applied_date
         ? new Date(data.applied_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
         : "";
-      const detail = (reason || "Same company and position found in previous application")
+      const detail = (reason || "Same company and position found in previous applications")
         + (appliedDate ? " (applied on " + appliedDate + ")" : "");
-      console.log("[BG] Repost detected:", detail);
-      
-      if (isAdmin) {
-        sendProgress("admin_override", detail, "reposted");
-        const confirmed = await waitForAdminDecision();
-        if (confirmed) {
-          await retryWithForce(jobDescription, jobUrl);
-          return;
-        }
-      }
-      sendProgress("reposted_blocked", undefined, detail);
+      if (!isAdmin) { sendProgress("reposted_blocked", undefined, detail); return; }
+      sendProgress("admin_override", detail, "reposted");
+      if (!await waitForAdminDecision()) return;
+      await retryWithForce(jobDescription, jobUrl, data.log_id);
       return;
     }
 
-    // If job does not match the profile:
-    // - non-admin: block apply immediately
-    // - admin: allow explicit override confirmation
-    let wasMismatched = false;
-    if (getGenerateStatus(data) === 0 || data.is_matched === false) {
-      const reason = getGenerateReason(data);
-      console.log("[BG] Job mismatch detected:", reason);
-      if (!isAdmin) {
-        sendProgress("mismatch_blocked", undefined, reason || "");
-        return;
-      }
-
-      sendProgress("mismatch", undefined, reason || "");
-
-      // Wait for user decision (confirmed or cancelled)
-      const confirmed = await new Promise((resolve) => {
-        function handler(message) {
-          if (message.action === "mismatchConfirmed") {
-            chrome.runtime.onMessage.removeListener(handler);
-            resolve(true);
-          } else if (message.action === "mismatchCancelled") {
-            chrome.runtime.onMessage.removeListener(handler);
-            resolve(false);
-          }
-        }
-        chrome.runtime.onMessage.addListener(handler);
-        // Auto-cancel after 5 minutes
-        setTimeout(() => { chrome.runtime.onMessage.removeListener(handler); resolve(false); }, 300000);
-      });
-
-      if (!confirmed) {
-        console.log("[BG] User cancelled after mismatch warning.");
-        return;
-      }
-
-      // User confirmed — call API again with force_generate to actually generate resume
-      console.log("[BG] Admin confirmed mismatch override, calling retryWithForce");
-      await retryWithForce(jobDescription, jobUrl);
+    // Status 0: job does not match the profile
+    if (status === 0 || data.is_matched === false) {
+      if (!isAdmin) { sendProgress("mismatch_blocked", undefined, reason || ""); return; }
+      sendProgress("admin_override", reason || "Job does not match profile", "mismatch");
+      if (!await waitForAdminDecision()) return;
+      await retryWithForce(jobDescription, jobUrl, data.log_id);
       return;
     }
 
-    // resume_text is now a JSON object from the new schema (or a string for legacy)
-    const payload = getResumePayload(data);
-    const rawData = payload.resumeText;
-    const rawDataStr = typeof rawData === "object" ? JSON.stringify(rawData) : String(rawData);
-    if (!rawDataStr || rawDataStr === "{}" || rawDataStr === "") {
-      throw new Error("No resume content returned from server. Check Xano debug logs for AI errors.");
-    }
+    // ── Status 1: successful match → generate PDFs ────────────────────────────
+    await processResumeResponse(data);
 
-    console.log("[BG] resume_text type:", typeof rawData, "| length:", rawDataStr.length, "| first 200 chars:", rawDataStr.slice(0, 200));
-
-    sendProgress("resume");
-
-    // Use offscreen document for PDF generation + download (required in MV3 service workers)
-    await ensureOffscreenDocument();
-
-    sendProgress("cover");
-
-    const pdfResult = await chrome.runtime.sendMessage({
-      action: "generateAndDownloadPDFs",
-      rawData: rawData,
-      coverLetterText: payload.coverLetterText,
-      resumeFilename: payload.resumeFilename,
-      coverLetterFilename: payload.coverLetterFilename,
-      templateId: extensionState.resumeTemplate || 1,
-    });
-
-    if (!pdfResult?.success) {
-      console.error("[BG] PDF generation failed, full result:", JSON.stringify(pdfResult));
-      throw new Error(pdfResult?.error || "PDF generation failed");
-    }
-
-    // For mismatched jobs the user chose to continue — show a confirmation before downloading
-    if (wasMismatched) {
-      sendProgress("ready");
-      await new Promise((resolve) => {
-        function handler(message) {
-          if (message.action === "downloadConfirmed") {
-            chrome.runtime.onMessage.removeListener(handler);
-            resolve();
-          }
-        }
-        chrome.runtime.onMessage.addListener(handler);
-        // Auto-proceed after 10 minutes if user doesn't click
-        setTimeout(() => { chrome.runtime.onMessage.removeListener(handler); resolve(); }, 600000);
-      });
-    }
-
-    sendProgress("download");
-    // Wait long enough for both PDFs to download before closing the offscreen doc
-    await new Promise((r) => setTimeout(r, 8000));
-    await chrome.offscreen.closeDocument().catch(() => {});
-
-    sendProgress("done");
   } catch (error) {
     console.error("Error generating resume:", error);
     sendProgress("error", error.message);

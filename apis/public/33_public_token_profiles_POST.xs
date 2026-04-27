@@ -4,6 +4,7 @@ query "public/token-profiles" verb=POST {
 
   input {
     text token?
+    text extension_version?
   }
 
   stack {
@@ -172,6 +173,36 @@ query "public/token-profiles" verb=POST {
     var $is_admin {
       value = ($bid.type == "admin" || $bid.type == "super_admin")
     }
+  
+    // Check extension version if provided
+    var $version_ok {
+      value = true
+    }
+  
+    var $version_error {
+      value = ""
+    }
+  
+    conditional {
+      if ($input.extension_version != null && $input.extension_version != "") {
+        db.query extension_version {
+          where = $db.extension_version.extension_name == "swiftcv" && $db.extension_version.is_current == true && $db.extension_version.version == $input.extension_version
+          return = {type: "single"}
+        } as $ver_check
+      
+        conditional {
+          if ($ver_check == null) {
+            var.update $version_ok {
+              value = false
+            }
+          
+            var.update $version_error {
+              value = "Extension version mismatch. Please update your extension to the latest version."
+            }
+          }
+        }
+      }
+    }
   }
 
   response = {
@@ -179,5 +210,7 @@ query "public/token-profiles" verb=POST {
     profile_names   : $profile_names
     resume_templates: $resume_templates
     is_admin        : $is_admin
+    version_ok      : $version_ok
+    version_error   : $version_error
   }
 }

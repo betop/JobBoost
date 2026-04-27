@@ -219,7 +219,7 @@ function showReady() {
 }
 
 // Admin override: show warning with "Generate Anyway" option
-// statusType is one of: "error", "not_jd", "skipped", "reposted", "duplicate"
+// statusType is one of: "error", "not_jd", "skipped", "reposted", "duplicate", "mismatch"
 function showAdminOverride(reason, statusType) {
   document.getElementById("spinner").style.display = "none";
   const titles = {
@@ -228,6 +228,7 @@ function showAdminOverride(reason, statusType) {
     skipped:   "⚠️ Job Not Qualified — Unfit",
     reposted:  "🔄 Possible Repost Detected",
     duplicate: "🚫 Duplicate URL Detected",
+    mismatch:  "⚠️ Profile Mismatch",
   };
   document.getElementById("statusText").textContent = titles[statusType] || "Status Warning";
   for (const s of STEPS) {
@@ -278,6 +279,38 @@ function showAdminWarning(title, detail) {
   }, 5000);
 }
 
+function showVersionMismatch(message, isAdmin) {
+  document.getElementById("spinner").style.display = "none";
+  document.getElementById("statusText").textContent = "Update required.";
+  for (const s of STEPS) {
+    const el = document.getElementById("step-" + s);
+    if (el) el.style.display = "none";
+  }
+  document.getElementById("versionBody").textContent = message || "Please update the SwiftCV extension to the latest version.";
+  const generateBtn = document.getElementById("versionGenerate");
+  if (generateBtn) generateBtn.style.display = isAdmin ? "" : "none";
+  document.getElementById("versionBanner").style.display = "block";
+
+  document.getElementById("versionClose").addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "adminOverrideCancelled" });
+    window.close();
+  });
+
+  if (isAdmin && generateBtn) {
+    generateBtn.addEventListener("click", () => {
+      chrome.runtime.sendMessage({ action: "adminOverrideConfirmed" });
+      document.getElementById("versionBanner").style.display = "none";
+      document.getElementById("spinner").style.display = "block";
+      for (const s of STEPS) {
+        const el = document.getElementById("step-" + s);
+        if (el) { el.style.display = "flex"; el.className = "step pending"; }
+      }
+      document.getElementById("step-ai").className = "step active";
+      document.getElementById("statusText").textContent = STATUS_MAP.ai;
+    });
+  }
+}
+
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === "progressUpdate") {
     const { step, error, reason } = message;
@@ -309,6 +342,12 @@ chrome.runtime.onMessage.addListener((message) => {
     } else if (step === "admin_warning") {
       // error = title, reason = detail
       showAdminWarning(error, reason);
+    } else if (step === "version_mismatch") {
+      // error = message text; background will have set isAdmin via storage
+      // We need to query storage to know if admin
+      chrome.storage.local.get(["isAdmin"], (result) => {
+        showVersionMismatch(error, result.isAdmin === true);
+      });
     } else {
       setStep(step);
     }
