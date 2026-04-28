@@ -510,6 +510,11 @@ async function generateResume(jobDescription, jobUrl = "") {
       throw new Error(pdfResult?.error || "PDF generation failed");
     }
 
+    // Save last successful log_id to storage for the chat bubble
+    if (data.log_id) {
+      chrome.storage.local.set({ lastLogId: data.log_id });
+    }
+
     sendProgress("download");
     sendProgress("done");
   }

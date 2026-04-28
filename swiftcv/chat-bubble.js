@@ -9,6 +9,7 @@
 
   // ── Constants ────────────────────────────────────────────────────────────
   const XANO_RESUME_URL = "https://api.shsws-solutions.com/api:caf8Eo15";
+  const XANO_LOGS_URL = "https://api.shsws-solutions.com/api:fMYNj_1_";
 
   // ── State ────────────────────────────────────────────────────────────────
   let attachedFiles = []; // { name, base64, type }
@@ -411,7 +412,7 @@
 
       <!-- Messages -->
       <div id="swiftcv-messages">
-        <div class="swiftcv-msg swiftcv-msg-assistant">👋 Hi! Attach your resume and cover letter (PDF) and ask me anything about them.</div>
+        <div class="swiftcv-msg swiftcv-msg-assistant" id="swiftcv-welcome-msg">👋 Hi! Attach your resume and cover letter (PDF) and ask me anything about them.</div>
       </div>
 
       <!-- File chips -->
@@ -459,6 +460,29 @@
   const fileInput   = document.getElementById("swiftcv-file-input");
   const sendBtn     = document.getElementById("swiftcv-send-btn");
 
+  // Fetch last log entry from backend and update the welcome message
+  async function refreshHeader() {
+    const stored = await new Promise(r => chrome.storage.local.get(["token", "lastLogId", "profileName"], r));
+    const welcomeEl = document.getElementById("swiftcv-welcome-msg");
+    if (!welcomeEl) return;
+
+    let intro = "";
+    if (stored.profileName) intro = `Hi, ${stored.profileName}! `;
+
+    if (!stored.token || !stored.lastLogId) {
+      welcomeEl.textContent = `👋 ${intro}Attach your resume and cover letter (PDF) and ask me anything — including answers to application form questions!`;
+      return;
+    }
+    try {
+      const res = await fetch(`${XANO_LOGS_URL}/logs/entry?token=${encodeURIComponent(stored.token)}&log_id=${encodeURIComponent(stored.lastLogId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const parts = [data.position_title, data.company_name].filter(Boolean);
+      const jobLine = parts.length ? ` for the <strong>${parts.join(" at ")}</strong>${parts.length > 1 ? " company" : ""}` : "";
+      welcomeEl.innerHTML = `👋 ${intro}Your last resume was generated${jobLine}. Ask me anything — I can help you craft answers to application form questions for this role!`;
+    } catch (_) { /* non-critical */ }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // OPEN / CLOSE
   // ─────────────────────────────────────────────────────────────────────────
@@ -467,6 +491,7 @@
     bubble.style.display = "none";
     popup.style.display  = "flex";
     textarea.focus();
+    refreshHeader();
   }
 
   function closePopup() {
@@ -611,7 +636,7 @@
 
     // Load the user's SwiftCV token from storage
     const stored = await new Promise((resolve) =>
-      chrome.storage.local.get(["token"], resolve)
+      chrome.storage.local.get(["token", "lastLogId"], resolve)
     );
     const token = stored.token;
     if (!token) {
@@ -640,6 +665,8 @@
       question,
       history: conversationHistory,
     };
+
+    if (stored.lastLogId) payload.log_id = stored.lastLogId;
 
     if (isFirstMessage || attachedFiles.length > 0) {
       if (resumeFile)  payload.resume_base64        = resumeFile.base64;

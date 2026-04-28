@@ -1,11 +1,13 @@
 // Chat assistant endpoint — proxies OpenAI GPT-4o keeping the API key server-side
 // Accepts a question, optional conversation history and up to 2 PDF file contents (base64)
+// When log_id is provided, fetches job_description and resume_content from DB for richer context
 query "resume/chat" verb=POST {
   api_group = "resume"
 
   input {
     text token?
     text question?
+    text log_id?
     text resume_base64?
     text cover_letter_base64?
     json history?
@@ -43,11 +45,90 @@ query "resume/chat" verb=POST {
       error = "User not found or inactive"
     }
   
+    // ── Fetch log context (JD + resume content) if log_id provided ────────
+    var $context_block {
+      value = ""
+    }
+  
+    conditional {
+      if ($input.log_id != null && ($input.log_id|strlen) > 0) {
+        db.get generation_log {
+          field_name = "id"
+          field_value = $input.log_id
+        } as $log
+      
+        conditional {
+          if ($log != null) {
+            var $jd_text {
+              value = $log.job_description
+            }
+          
+            var $resume_text {
+              value = ""
+            }
+          
+            conditional {
+              if ($log.content_id != null) {
+                db.get resume_content {
+                  field_name = "id"
+                  field_value = $log.content_id
+                } as $content
+              
+                conditional {
+                  if ($content != null) {
+                    var.update $resume_text {
+                      value = $content.raw_response
+                    }
+                  }
+                }
+              }
+            }
+          
+            var $parts {
+              value = ""
+            }
+          
+            conditional {
+              if ($jd_text != null && ($jd_text|strlen) > 0) {
+                var.update $parts {
+                  value = $parts ~ "=== JOB DESCRIPTION ===\n" ~ $jd_text ~ "\n\n"
+                }
+              }
+            }
+          
+            conditional {
+              if ($resume_text != null && ($resume_text|strlen) > 0) {
+                var.update $parts {
+                  value = $parts ~ "=== RESUME CONTENT ===\n" ~ $resume_text ~ "\n\n"
+                }
+              }
+            }
+          
+            var.update $context_block {
+              value = $parts
+            }
+          }
+        }
+      }
+    }
+  
     // ── Build messages array ──────────────────────────────────────────────
+    var $system_content {
+      value = 'You are a professional career coach and resume expert. Human writing help - Provide short, simple, clear, concise, and actionable answers on behalf of the user (The subject of all answers must be "I"). When reviewing documents, be specific and constructive. Keep responses professional yet approachable. No explanations needed, just answer the question based on the provided information.'
+    }
+  
+    conditional {
+      if (($context_block|strlen) > 0) {
+        var.update $system_content {
+          value = $system_content ~ "\n\nUse the following context to answer the user's questions:\n\n" ~ $context_block
+        }
+      }
+    }
+  
     var $system_message {
       value = {}
         |set:"role":"system"
-        |set:"content":'You are a professional career coach and resume expert. Human writing help - Provide short, simple, clear, concise, and actionable answers on behalf of the user (The subject of all answers must be "I"). When reviewing documents, be specific and constructive. Keep responses professional yet approachable. No explanations needed, just answer the question based on the provided information.'
+        |set:"content":$system_content
     }
   
     var $messages {
