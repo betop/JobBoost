@@ -373,6 +373,16 @@
   const root = document.createElement("div");
   root.id = "swiftcv-chat-root";
 
+  // Respect the show/hide toggle from the popup (default: shown)
+  chrome.storage.local.get(["chatBubbleEnabled"], (result) => {
+    if (result.chatBubbleEnabled === false) root.style.display = "none";
+  });
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.chatBubbleEnabled) {
+      root.style.display = changes.chatBubbleEnabled.newValue === false ? "none" : "";
+    }
+  });
+
   // ── Bubble ──
   root.innerHTML = `
     <button id="swiftcv-bubble" title="Ask SwiftCV AI">

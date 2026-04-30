@@ -62,4 +62,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Initial load
   updateStatus();
+
+  // ── Chat bubble toggle ────────────────────────────────────────────────────
+  const chatToggle = document.getElementById("chatBubbleToggle");
+  chrome.storage.local.get(["chatBubbleEnabled"], (result) => {
+    // default is enabled (true)
+    const enabled = result.chatBubbleEnabled !== false;
+    chatToggle.checked = enabled;
+  });
+  chatToggle.addEventListener("change", () => {
+    chrome.storage.local.set({ chatBubbleEnabled: chatToggle.checked });
+  });
 });
