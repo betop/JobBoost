@@ -44,7 +44,16 @@ query "logs/list" verb=GET {
     conditional {
       if ($auth_user.type != "super_admin" && $auth_user.type == "admin") {
         var $profile_ids {
-          value = $auth_user.profile_ids != null ? ($auth_user.profile_ids|join:",") : "NULL"
+          value = ""
+        }
+      
+        // $auth_user.profile_ids != null ? (($auth_user.profile_ids|join:",")|sql_esc) : "NULL"
+        foreach ($auth_user.profile_ids) {
+          each as $id {
+            var.update $profile_ids {
+              value = $profile_ids ~ ( $profile_ids == "" ? "" : ",") ~ ($id|sql_esc)
+            }
+          }
         }
       
         var.update $query {

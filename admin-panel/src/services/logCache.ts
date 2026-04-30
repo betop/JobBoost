@@ -235,6 +235,28 @@ export function setLastSyncAt(ts: string): Promise<void> {
   return setMeta("lastSyncAt", ts);
 }
 
+export interface PersistedDateFilter {
+  period: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+/** Returns the last date filter the user selected, or null if never set. */
+export async function getDateFilter(): Promise<PersistedDateFilter | null> {
+  const raw = await getMeta("dateFilter");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PersistedDateFilter;
+  } catch {
+    return null;
+  }
+}
+
+/** Persists the active date filter so it survives page reloads. */
+export function setDateFilter(filter: PersistedDateFilter): Promise<void> {
+  return setMeta("dateFilter", JSON.stringify(filter));
+}
+
 /**
  * Records the current timestamp as the new lastSyncAt.
  * @deprecated Prefer getLastSyncAt() + setLastSyncAt() so the update

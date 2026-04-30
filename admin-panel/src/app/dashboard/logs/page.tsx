@@ -665,7 +665,7 @@ export default function LogsPage() {
 
   const isSuperAdmin = admin?.type === "super_admin";
 
-  // Load state from URL on mount
+  // Load state from URL on mount, falling back to IndexedDB-persisted filter
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     
@@ -675,22 +675,8 @@ export default function LogsPage() {
     if (params.get("page")) setPage(Number(params.get("page")) || 1);
     if (params.get("pageSize")) setPageSize(Number(params.get("pageSize")) || 25);
     
-    const period = (params.get("statsPeriod") as LogsPeriod) || "today";
-    setStatsPeriod(period);
-    
-    // Resolve date range using EST-correct helper
-    const customFrom = params.get("date_from") ?? undefined;
-    const customTo   = params.get("date_to")   ?? undefined;
-    const range = getESTDateRange(period, customFrom, customTo);
-    if (range) {
-      setDateFrom(range.from);
-      setDateTo(range.to);
-    } else {
-      // "all time" — no date bounds
-      setDateFrom("");
-      setDateTo("");
-    }
-    
+    const urlPeriod = params.get("statsPeriod") as LogsPeriod | null;
+
     // Load client-side filters
     const filterObj: LogsFilters = {};
     const userParam = params.get("user_id");
@@ -705,8 +691,36 @@ export default function LogsPage() {
     if (regeneratedParam) {
       filterObj.is_regenerated = (regeneratedParam.split(",") as any) as ("0"|"1")[];
     }
-    
     setFilters(filterObj);
+
+    if (urlPeriod) {
+      // URL has an explicit period — use it
+      setStatsPeriod(urlPeriod);
+      const customFrom = params.get("date_from") ?? undefined;
+      const customTo   = params.get("date_to")   ?? undefined;
+      const range = getESTDateRange(urlPeriod, customFrom, customTo);
+      if (range) {
+        setDateFrom(range.from);
+        setDateTo(range.to);
+      } else {
+        setDateFrom("");
+        setDateTo("");
+      }
+    } else {
+      // No URL period — restore from IndexedDB
+      logCache.getDateFilter().then((saved) => {
+        const period = (saved?.period as LogsPeriod) ?? "today";
+        setStatsPeriod(period);
+        if (saved?.dateFrom !== undefined) {
+          setDateFrom(saved.dateFrom);
+          setDateTo(saved.dateTo);
+        } else {
+          const range = getESTDateRange(period);
+          if (range) { setDateFrom(range.from); setDateTo(range.to); }
+          else { setDateFrom(""); setDateTo(""); }
+        }
+      });
+    }
   }, []);
 
   // Update URL when state changes
@@ -865,15 +879,17 @@ export default function LogsPage() {
       setDateFrom(lastWeek.from);
       setDateTo(lastWeek.to);
       updateQueryParams({ statsPeriod: period, date_from: lastWeek.from, date_to: lastWeek.to, page: 1 });
+      logCache.setDateFilter({ period, dateFrom: lastWeek.from, dateTo: lastWeek.to });
     } else if (period === "all") {
-      // No date bounds — fetch everything
       setDateFrom("");
       setDateTo("");
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
+      logCache.setDateFilter({ period, dateFrom: "", dateTo: "" });
     } else if (range) {
       setDateFrom(range.from);
       setDateTo(range.to);
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
+      logCache.setDateFilter({ period, dateFrom: range.from, dateTo: range.to });
     }
   }
 
@@ -1143,6 +1159,7 @@ export default function LogsPage() {
               onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_from: e.target.value, page: 1 });
+                logCache.setDateFilter({ period: "custom", dateFrom: e.target.value, dateTo });
               }}
             />
           </div>
@@ -1157,6 +1174,7 @@ export default function LogsPage() {
               onBlur={(e) => {
                 setPage(1);
                 updateQueryParams({ date_to: e.target.value, page: 1 });
+                logCache.setDateFilter({ period: "custom", dateFrom, dateTo: e.target.value });
               }}
             />
           </div>
