@@ -113,12 +113,12 @@ export async function getCachedRecords(fromISO?: string, toISO?: string): Promis
     const from = fromISO ? new Date(fromISO).getTime() : 0;
     const to   = toISO   ? new Date(toISO).getTime()   : Infinity;
     records = records.filter((r) => {
-      const t = new Date(r.updated_at).getTime();
+      const t = new Date(r.created_at).getTime();
       return t >= from && t <= to;
     });
   }
 
-  records.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  records.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return records;
 }
 
