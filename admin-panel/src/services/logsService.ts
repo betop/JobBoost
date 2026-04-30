@@ -1,5 +1,6 @@
 import api from "./api";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import * as logCache from "./logCache";
 
 type LogsPeriod = "today" | "week" | "month" | "custom";
 
@@ -69,6 +70,7 @@ function getDateRangeForPeriod(period?: LogsPeriod): { dateFrom?: string; dateTo
 export interface GenerationLog {
   id: string;
   created_at: string;
+  updated_at: string;
   profile_id: string;
   profile_name: string;
   user_id: string;
@@ -147,27 +149,63 @@ export const logsService = {
   },
 
   /**
-   * Fetch ALL logs for a given date range in a single request.
-   * Used for full initial loads (especially "all time").
+   * Fetch ALL logs in pages of `pageSize` records.
+   * - Snapshots the current time BEFORE fetching so any records created during
+   *   the fetch are caught by the next delta sync.
+   * - Each page is immediately persisted to IndexedDB before the next request.
+   * - Saves `lastSyncAt` to IndexedDB after the final page succeeds.
+   * - `onBatch` is an optional UI callback called after each batch is saved.
    */
-  listAllPages: async (dateFrom?: string, dateTo?: string): Promise<GenerationLog[]> => {
-    const params = new URLSearchParams();
-    if (dateFrom) params.set("date_from", toStartOfDayEST(dateFrom));
-    if (dateTo)   params.set("date_to",   toEndOfDayEST(dateTo));
+  listAllPages: async (
+    onBatch?: () => Promise<void>,
+    pageSize = 500,
+  ): Promise<void> => {
+    // Snapshot now before any fetch so the next delta doesn't miss records
+    // created while this full-load was running.
+    const syncStart = new Date().toISOString();
 
-    const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
-    return response.data.items;
+    let offset = 0;
+    while (true) {
+      const params = new URLSearchParams();
+      params.set("limit",  String(pageSize));
+      params.set("offset", String(offset));
+
+      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
+      const items = response.data.items;
+
+      if (items.length > 0) {
+        // Persist to IndexedDB first, then notify UI
+        await logCache.mergeRecords(items);
+        if (onBatch) await onBatch();
+      }
+
+      if (items.length < pageSize) {
+        // Last page — all data is in IndexedDB, safe to commit the sync timestamp
+        await logCache.setLastSyncAt(syncStart);
+        break;
+      }
+      offset += pageSize;
+    }
   },
 
   /**
-   * Delta fetch: returns all records whose created_at OR updated_at >= updatedSince.
+   * Delta fetch: returns all records whose updated_at >= updatedSince.
+   * Persists results to IndexedDB and updates lastSyncAt.
    */
   listDelta: async (updatedSince: string): Promise<GenerationLog[]> => {
+    const syncStart = new Date().toISOString();
     const params = new URLSearchParams();
     params.set("updated_since", updatedSince);
 
     const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
-    return response.data.items;
+    const items = response.data.items;
+
+    if (items.length > 0) {
+      await logCache.mergeRecords(items);
+    }
+    await logCache.setLastSyncAt(syncStart);
+
+    return items;
   },
 
   stats: async (

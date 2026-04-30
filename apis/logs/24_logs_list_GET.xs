@@ -16,9 +16,9 @@ query "logs/list" verb=GET {
   auth = "users"
 
   input {
-    timestamp date_from?
-    timestamp date_to?
     timestamp updated_since?
+    int offset?
+    int limit?
   }
 
   stack {
@@ -32,122 +32,69 @@ query "logs/list" verb=GET {
       value = $input.updated_since != null
     }
   
-    var $has_from {
-      value = $input.date_from != null
+    var $query {
+      value = "SELECT * FROM x1_7"
     }
   
-    var $has_to {
-      value = $input.date_to != null
+    var $has_where {
+      value = false
+    }
+  
+    // {{ $auth.id|sql_esc }};"
+    conditional {
+      if ($auth_user.type != "super_admin" && $auth_user.type == "admin") {
+        var $profile_ids {
+          value = $auth_user.profile_ids != null ? ($auth_user.profile_ids|join:",") : "NULL"
+        }
+      
+        var.update $query {
+          value = $query ~ " WHERE profile_id IN (" ~ $profile_ids ~ ")"
+        }
+      
+        var.update $has_where {
+          value = true
+        }
+      }
     }
   
     conditional {
-      // ── Delta mode: return everything touched since updated_since ──
       if ($is_delta) {
-        db.query generation_log {
-          where = ($db.generation_log.created_at >= $input.updated_since || $db.generation_log.updated_at >= $input.updated_since)
-          sort = {generation_log.created_at: "desc"}
-          return = {type: "list"}
-        } as $logs
-      }
-    
-      // ── Full fetch mode: filter by date range ──
-      else {
-        db.query generation_log {
-          where = (($has_from == false || $db.generation_log.created_at >= $input.date_from) && ($has_to == false || $db.generation_log.created_at <= $input.date_to))
-          sort = {generation_log.created_at: "desc"}
-          return = {type: "list"}
-        } as $logs
+        var $delta_keyword {
+          value = $has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $query {
+          value = $query ~ $delta_keyword ~ " updated_at >= '" ~ $input.updated_since ~ "'"
+        }
       }
     }
   
-    // ── Access control: admins see only logs for their profiles ──
+    var.update $query {
+      value = $query ~ " ORDER BY created_at DESC"
+    }
+  
+    var $page_limit {
+      value = $input.limit != null ? $input.limit : 500
+    }
+  
+    var $page_offset {
+      value = $input.offset != null ? $input.offset : 0
+    }
+  
     conditional {
-      if ($auth_user.type == "super_admin") {
-        // Super admin sees everything — no filtering needed
-        var $filtered_items {
-          value = $logs
-        }
-      }
-    
-      else {
-        // Build set of allowed profile IDs for this admin
-        // 1. Profiles created by this admin
-        // 2. Profiles assigned to this admin (in auth_user.profile_ids)
-        db.query profile {
-          where = $db.profile.created_by == $auth.id
-          return = {type: "list"}
-        } as $created_profiles
-      
-        var $allowed_profile_ids {
-          value = []
-        }
-      
-        // Add created profile IDs
-        foreach ($created_profiles) {
-          each as $cp {
-            array.push $allowed_profile_ids {
-              value = $cp.id
-            }
-          }
-        }
-      
-        // Add assigned profile IDs
-        conditional {
-          if ($auth_user.profile_ids != null) {
-            foreach ($auth_user.profile_ids) {
-              each as $apid {
-                // Avoid duplicates — check before adding
-                var $already_in {
-                  value = false
-                }
-              
-                foreach ($allowed_profile_ids) {
-                  each as $existing {
-                    conditional {
-                      if ($existing == $apid) {
-                        var.update $already_in {
-                          value = true
-                        }
-                      }
-                    }
-                  }
-                }
-              
-                conditional {
-                  if ($already_in == false) {
-                    array.push $allowed_profile_ids {
-                      value = $apid
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      
-        // Filter logs to only include those with a matching profile_id
-        var $filtered_items {
-          value = []
-        }
-      
-        foreach ($logs) {
-          each as $log {
-            foreach ($allowed_profile_ids) {
-              each as $aid {
-                conditional {
-                  if ($log.profile_id == $aid) {
-                    array.push $filtered_items {
-                      value = $log
-                    }
-                  }
-                }
-              }
-            }
-          }
+      if ($is_delta == false) {
+        var.update $query {
+          value = $query ~ " LIMIT " ~ $page_limit ~ " OFFSET " ~ $page_offset
         }
       }
     }
+  
+    db.direct_query {
+      sql = "{{ $query }};"
+      parser = "template_engine"
+      response_type = "list"
+    } as $logs
   }
 
-  response = {items: $filtered_items}
+  response = {items: $logs}
 }

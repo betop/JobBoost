@@ -2,10 +2,18 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { dashboardService } from "@/services/dashboardService";
-import { logsService } from "@/services/logsService";
+import * as logCache from "@/services/logCache";
+import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
 import { Users, UserCheck, Key, FileText, Activity, Cpu } from "lucide-react";
 import Link from "next/link";
 import LoadingSpinner from "@/components/LoadingSpinner";
+
+/** Returns YYYY-MM-DD 30 days ago in local time */
+function thirtyDaysAgo(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function DashboardPage() {
   const { data: stats, isLoading } = useQuery({
@@ -13,15 +21,15 @@ export default function DashboardPage() {
     queryFn: dashboardService.getStats,
   });
 
-  const { data: logStats, error: logStatsError, isError: logStatsIsError } = useQuery({
+  const { data: logStats } = useQuery({
     queryKey: ["logs-stats-dashboard"],
-    queryFn: () => logsService.stats("month"),
-    retry: false,
+    queryFn: () => logCache.computeStats(
+      toStartOfDayEST(thirtyDaysAgo()),
+      toEndOfDayEST(new Date().toISOString().slice(0, 10)),
+    ),
+    // Re-compute whenever IndexedDB is updated (stale after 30s)
+    staleTime: 30_000,
   });
-
-  if (logStatsError) {
-    console.error("[Dashboard] logs/stats error:", logStatsError);
-  }
 
   if (isLoading) {
     return (

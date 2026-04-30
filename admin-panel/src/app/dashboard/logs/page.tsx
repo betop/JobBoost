@@ -728,9 +728,7 @@ export default function LogsPage() {
   // `cachedRows` is the slice of the global cache visible for the current date range.
   // It updates whenever the cache is refreshed by the fetch effect below.
   const [cachedRows, setCachedRows]     = useState<GenerationLog[]>([]);
-  const [logsLoading, setLogsLoading]   = useState(false);
-  const [logsFetching, setLogsFetching] = useState(false);
-  const fetchAbortRef = useRef<AbortController | null>(null);
+  const [logsLoading, setLogsLoading]   = useState(true);
 
   /**
    * Reads the current cache slice for the active date window into state.
@@ -743,74 +741,33 @@ export default function LogsPage() {
     setCachedRows(records);
   }, []);
 
-  /**
-   * Main fetch effect — runs whenever dateFrom/dateTo changes (i.e. tab switch).
-   *
-   * Strategy:
-   * 1. First ever visit (IndexedDB empty) → full paginated load, no date limit for
-   *    "all time", or date-bounded for specific periods. Marks initialLoadDone.
-   * 2. Subsequent tab switches → delta fetch only (updated_since = lastSyncAt).
-   *    The server returns records where created_at OR updated_at >= lastSyncAt,
-   *    so new records from ANY user and any edits (is_applied, is_matched) are
-   *    picked up automatically. Cache is then filtered client-side for the tab.
-   * 3. "All time" tab (dateFrom="" dateTo=""): no date filter sent to server.
-   */
-  useEffect(() => {
-    fetchAbortRef.current?.abort();
-    const abortCtrl = new AbortController();
-    fetchAbortRef.current = abortCtrl;
+  async function doFetch() {
+    const lastSync = await logCache.getLastSyncAt();
 
-    async function doFetch() {
-      const isAllTime = !dateFrom && !dateTo;
-
-      const initialDone = await logCache.isInitialLoadDone();
-
-      if (!initialDone) {
-        setLogsLoading(true);
+    try {
+      if (lastSync) {
+        // Delta: listDelta handles mergeRecords + setLastSyncAt internally
+        await logsService.listDelta(lastSync);
       } else {
-        setLogsFetching(true);
-        // Immediately show the cached slice while the delta loads in background
-        await flushCacheToState(dateFrom, dateTo);
+        // Full load: listAllPages handles IndexedDB writes AND setLastSyncAt per batch;
+        // After the first batch, drop the loading spinner so the UI becomes interactive
+        await logsService.listAllPages();
       }
 
-      try {
-        if (!initialDone) {
-          // ── Full initial load (first visit or after clearCache) ──
-          await logCache.markSyncStart();
-          const records = await logsService.listAllPages(
-            isAllTime ? undefined : dateFrom,
-            isAllTime ? undefined : dateTo,
-          );
-          if (abortCtrl.signal.aborted) return;
-          await logCache.mergeRecords(records);
-          await logCache.setInitialLoadDone(true);
-        } else {
-          // ── Delta fetch: only records touched since last sync ──
-          const lastSync = await logCache.getLastSyncAt();
-          if (lastSync) {
-            await logCache.markSyncStart();
-            const deltaRecords = await logsService.listDelta(lastSync);
-            if (abortCtrl.signal.aborted) return;
-            await logCache.mergeRecords(deltaRecords);
-          }
-        }
-
-        await flushCacheToState(dateFrom, dateTo);
-      } catch (err: unknown) {
-        if ((err as { name?: string })?.name === "AbortError") return;
-        console.error("[LogsPage] fetch error", err);
-      } finally {
-        if (!abortCtrl.signal.aborted) {
-          setLogsLoading(false);
-          setLogsFetching(false);
-        }
-      }
+      await flushCacheToState(dateFrom, dateTo);
+    } catch (err: unknown) {
+      if ((err as { name?: string })?.name === "AbortError") return;
+      console.error("[LogsPage] fetch error", err);
+    } finally {
+      setLogsLoading(false);
     }
+  }
 
+  useEffect(() => {
     doFetch();
-    return () => { abortCtrl.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo]);
+
 
   // All active users — used for building the user_name lookup map
   const { data: allUsers } = useQuery({
@@ -875,14 +832,7 @@ export default function LogsPage() {
     setIsRefreshing(true);
     try {
       await logCache.clearCache();
-      const isAllTime = !dateFrom && !dateTo;
-      await logCache.markSyncStart();
-      const records = await logsService.listAllPages(
-        isAllTime ? undefined : dateFrom,
-        isAllTime ? undefined : dateTo,
-      );
-      await logCache.mergeRecords(records);
-      await logCache.setInitialLoadDone(true);
+      await logsService.listAllPages();
       await flushCacheToState(dateFrom, dateTo);
     } finally {
       setIsRefreshing(false);
@@ -1114,13 +1064,10 @@ export default function LogsPage() {
           onClose={() => setRegenerateLog(null)}
           onSuccess={async () => {
             // Delta-sync so the new regenerated log appears immediately
+            // listDelta handles mergeRecords + setLastSyncAt internally
             const lastSync = await logCache.getLastSyncAt();
-            if (lastSync) {
-              await logCache.markSyncStart();
-              const delta = await logsService.listDelta(lastSync);
-              await logCache.mergeRecords(delta);
-              await flushCacheToState(dateFrom, dateTo);
-            }
+            await logsService.listDelta(lastSync ?? new Date(0).toISOString());
+            await flushCacheToState(dateFrom, dateTo);
             queryClient.invalidateQueries({ queryKey: ["logs-stats"] });
           }}
         />
@@ -1145,7 +1092,7 @@ export default function LogsPage() {
           {isSuperAdmin && (
             <button
               onClick={recoverUserIds}
-              disabled={isRecovering || isRefreshing || logsFetching}
+              disabled={isRecovering || isRefreshing || logsLoading}
               className="flex items-center gap-2 px-3 py-2 text-sm text-amber-700 bg-amber-50 border border-amber-300 rounded-lg hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             >
               {isRecovering ? "Recovering..." : "Recover User IDs"}
@@ -1154,22 +1101,22 @@ export default function LogsPage() {
           */}
           <button
             onClick={refreshData}
-            disabled={isRefreshing || logsFetching}
+            disabled={isRefreshing || logsLoading}
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
           >
-            <RotateCcw className={`w-4 h-4 ${isRefreshing || logsFetching ? "animate-spin" : ""}`} />
-            {isRefreshing ? "Refreshing..." : logsFetching ? "Loading..." : "Refresh"}
+            <RotateCcw className={`w-4 h-4 ${isRefreshing || logsLoading ? "animate-spin" : ""}`} />
+            {isRefreshing ? "Refreshing..." : logsLoading ? "Loading..." : "Refresh"}
           </button>
         </div>
       </div>
 
       {/* Period tabs */}
-      <div className={`flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit ${logsFetching ? "opacity-50 pointer-events-none" : ""}`}>
+      <div className={`flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit ${logsLoading ? "opacity-50 pointer-events-none" : ""}`}>
         {PERIOD_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             onClick={() => applyPeriod(opt.value)}
-            disabled={logsFetching}
+            disabled={logsLoading}
             className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
               statsPeriod === opt.value
                 ? "bg-white text-gray-900 font-medium shadow-sm"
@@ -1190,7 +1137,7 @@ export default function LogsPage() {
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateFrom}
-              disabled={logsFetching}
+              disabled={logsLoading}
               onChange={(e) => setDateFrom(e.target.value)}
               onBlur={(e) => {
                 setPage(1);
@@ -1204,7 +1151,7 @@ export default function LogsPage() {
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               value={dateTo}
-              disabled={logsFetching}
+              disabled={logsLoading}
               onChange={(e) => setDateTo(e.target.value)}
               onBlur={(e) => {
                 setPage(1);
@@ -1219,7 +1166,7 @@ export default function LogsPage() {
       {logsLoading ? (
         <div className="flex justify-center py-8"><LoadingSpinner /></div>
       ) : (
-        <div className={`space-y-3 mb-8 transition-opacity duration-200 ${logsFetching ? "opacity-50" : "opacity-100"}`}>
+        <div className={`space-y-3 mb-8 transition-opacity duration-200 ${logsLoading ? "opacity-50" : "opacity-100"}`}>
           {/* Row 1: Total, Applied, Est. Cost */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
@@ -1324,14 +1271,14 @@ export default function LogsPage() {
       )}
 
       {/* Filters */}
-      <div className={`bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end ${logsFetching ? "opacity-50 pointer-events-none" : ""}`}>
+      <div className={`bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end ${logsLoading ? "opacity-50 pointer-events-none" : ""}`}>
         <Filter className="w-4 h-4 text-gray-400 self-center mb-1" />
 
         <CheckboxDropdown
           label="User"
           options={userOptions}
           selected={filters.user_id ?? []}
-          disabled={logsFetching}
+          disabled={logsLoading}
           onChange={(next) => {
             setFilters((f) => ({ ...f, user_id: next.length > 0 ? next : undefined } as LogsFilters));
             setPage(1);
@@ -1343,7 +1290,7 @@ export default function LogsPage() {
           label="Profile"
           options={(profiles ?? []).map((p) => ({ value: p.id, label: p.full_name }))}
           selected={filters.profile_id ?? []}
-          disabled={logsFetching}
+          disabled={logsLoading}
           onChange={(next) => {
             setFilters((f) => ({ ...f, profile_id: next.length > 0 ? next : undefined } as LogsFilters));
             setPage(1);
@@ -1363,7 +1310,7 @@ export default function LogsPage() {
             { value: "6", label: "❌ AI Error" },
           ]}
           selected={(filters.is_matched ?? []) as string[]}
-          disabled={logsFetching}
+          disabled={logsLoading}
           onChange={(next) => {
             setFilters((f) => ({ ...f, is_matched: next.length > 0 ? next : undefined } as LogsFilters));
             setPage(1);
@@ -1378,7 +1325,7 @@ export default function LogsPage() {
             { value: "1", label: "🔄 Regenerated" },
           ]}
           selected={(filters.is_regenerated ?? []) as string[]}
-          disabled={logsFetching}
+          disabled={logsLoading}
           onChange={(next) => {
             setFilters((f) => ({ ...f, is_regenerated: next.length > 0 ? next : undefined } as LogsFilters));
             setPage(1);

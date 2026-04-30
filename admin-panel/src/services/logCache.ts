@@ -6,19 +6,17 @@
  *
  * Stores:
  *   "logs"  — all GenerationLog records, keyed by id
- *             indexes: created_at, updated_at
+ *             index: updated_at  (created_at omitted — server sets updated_at = created_at on insert)
  *   "meta"  — key/value pairs: { key: "lastSyncAt", value: ISO string }
- *                               { key: "initialLoadDone", value: "1" }
  *
- * Delta sync: on every fetch we record `lastSyncAt = now` BEFORE the request.
- * The server returns records where MAX(created_at, updated_at) >= lastSyncAt,
- * so we catch new records from any user AND edits (is_applied, is_matched).
+ * Delta sync: server returns records where updated_at >= lastSyncAt,
+ * covering both new records and edits (is_applied, is_matched).
  */
 
 import type { GenerationLog } from "./logsService";
 
 const DB_NAME    = "jobboost_logs";
-const DB_VERSION = 2;          // v2: bidder_id → user_id rename — force cache rebuild
+const DB_VERSION = 3;          // v3: drop created_at index, use updated_at only
 const STORE_LOGS = "logs";
 const STORE_META = "meta";
 
@@ -45,7 +43,6 @@ function openDB(): Promise<IDBDatabase> {
       }
 
       const logsStore = db.createObjectStore(STORE_LOGS, { keyPath: "id" });
-      logsStore.createIndex("created_at", "created_at", { unique: false });
       logsStore.createIndex("updated_at", "updated_at", { unique: false });
 
       db.createObjectStore(STORE_META, { keyPath: "key" });
@@ -101,7 +98,8 @@ export async function mergeRecords(records: GenerationLog[]): Promise<void> {
 
 /**
  * Returns all cached records, filtered to the given UTC ISO date window.
- * Sorted newest-first by created_at.
+ * Uses updated_at for filtering and sorting (server sets updated_at = created_at on insert).
+ * Sorted newest-first.
  */
 export async function getCachedRecords(fromISO?: string, toISO?: string): Promise<GenerationLog[]> {
   const db = await openDB();
@@ -115,18 +113,95 @@ export async function getCachedRecords(fromISO?: string, toISO?: string): Promis
     const from = fromISO ? new Date(fromISO).getTime() : 0;
     const to   = toISO   ? new Date(toISO).getTime()   : Infinity;
     records = records.filter((r) => {
-      const t = new Date(r.created_at).getTime();
+      const t = new Date(r.updated_at).getTime();
       return t >= from && t <= to;
     });
   }
 
-  records.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  records.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   return records;
 }
 
 /** Total number of records stored in IndexedDB. */
 export async function cacheSize(): Promise<number> {
   return withStore<number>("readonly", STORE_LOGS, (store) => store.count());
+}
+
+/** Aggregated metrics computed from IndexedDB records within an optional date window. */
+export interface CachedStats {
+  total_generations: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  claude_count: number;
+  openai_count: number;
+  matched_count: number;
+  mismatched_count: number;
+  skipped_count: number;
+  duplicated_count: number;
+  not_jd_count: number;
+  reposted_count: number;
+  error_count: number;
+  applied_count: number;
+  all_time_total: number;
+}
+
+/**
+ * Compute stats from IndexedDB.
+ * `fromISO` / `toISO` scope the period metrics; all_time_total always uses the full cache.
+ */
+export async function computeStats(fromISO?: string, toISO?: string): Promise<CachedStats> {
+  const db = await openDB();
+  const tx = db.transaction(STORE_LOGS, "readonly");
+  const all = await idbRequest<import("./logsService").GenerationLog[]>(tx.objectStore(STORE_LOGS).getAll());
+
+  const all_time_total = all.length;
+
+  let records = all;
+  if (fromISO || toISO) {
+    const from = fromISO ? new Date(fromISO).getTime() : 0;
+    const to   = toISO   ? new Date(toISO).getTime()   : Infinity;
+    records = all.filter((r) => {
+      const t = new Date(r.updated_at).getTime();
+      return t >= from && t <= to;
+    });
+  }
+
+  let total_input_tokens = 0, total_output_tokens = 0;
+  let claude_count = 0, openai_count = 0;
+  let matched_count = 0, mismatched_count = 0, skipped_count = 0;
+  let duplicated_count = 0, not_jd_count = 0, reposted_count = 0;
+  let error_count = 0, applied_count = 0;
+
+  for (const r of records) {
+    total_input_tokens  += r.input_tokens  ?? 0;
+    total_output_tokens += r.output_tokens ?? 0;
+    if (r.ai_provider === "claude") claude_count++; else openai_count++;
+    if (r.is_matched === 1) matched_count++;
+    else if (r.is_matched === 0) mismatched_count++;
+    else if (r.is_matched === 2) skipped_count++;
+    else if (r.is_matched === 3) not_jd_count++;
+    else if (r.is_matched === 4) duplicated_count++;
+    else if (r.is_matched === 5) reposted_count++;
+    else if (r.is_matched === 6) error_count++;
+    if (r.is_applied || r.is_matched === 1) applied_count++;
+  }
+
+  return {
+    total_generations: records.length,
+    total_input_tokens,
+    total_output_tokens,
+    claude_count,
+    openai_count,
+    matched_count,
+    mismatched_count,
+    skipped_count,
+    duplicated_count,
+    not_jd_count,
+    reposted_count,
+    error_count,
+    applied_count,
+    all_time_total,
+  };
 }
 
 // ── Meta helpers ──────────────────────────────────────────────────────────────
@@ -155,11 +230,15 @@ export function getLastSyncAt(): Promise<string | null> {
   return getMeta("lastSyncAt");
 }
 
+/** Persist an explicit timestamp as the new lastSyncAt. */
+export function setLastSyncAt(ts: string): Promise<void> {
+  return setMeta("lastSyncAt", ts);
+}
+
 /**
  * Records the current timestamp as the new lastSyncAt.
- * Call this BEFORE starting a fetch so any records created/updated
- * during the in-flight request are caught in the next delta.
- * Returns the recorded timestamp.
+ * @deprecated Prefer getLastSyncAt() + setLastSyncAt() so the update
+ * happens AFTER a successful fetch rather than before.
  */
 export async function markSyncStart(): Promise<string> {
   const ts = new Date().toISOString();
