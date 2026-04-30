@@ -728,7 +728,7 @@ export default function LogsPage() {
   // `cachedRows` is the slice of the global cache visible for the current date range.
   // It updates whenever the cache is refreshed by the fetch effect below.
   const [cachedRows, setCachedRows]     = useState<GenerationLog[]>([]);
-  const [logsLoading, setLogsLoading]   = useState(true);
+  const [logsLoading, setLogsLoading]   = useState(false);
 
   /**
    * Reads the current cache slice for the active date window into state.
@@ -742,6 +742,7 @@ export default function LogsPage() {
   }, []);
 
   async function doFetch() {
+    setLogsLoading(true);
     const lastSync = await logCache.getLastSyncAt();
 
     try {
