@@ -123,6 +123,68 @@ const PRICING = {
   openai: { input: 0.15, output: 0.6 },
 };
 
+function RefreshDropdown({
+  disabled,
+  isRefreshing,
+  isLoading,
+  onFastRefresh,
+  onHardRefresh,
+}: {
+  disabled: boolean;
+  isRefreshing: boolean;
+  isLoading: boolean;
+  onFastRefresh: () => void;
+  onHardRefresh: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = isRefreshing ? "Refreshing..." : isLoading ? "Loading..." : "Refresh";
+
+  return (
+    <div className="relative flex">
+      {/* Main label button — triggers fast refresh */}
+      <button
+        onClick={() => { setOpen(false); onFastRefresh(); }}
+        disabled={disabled}
+        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-l-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+      >
+        <RotateCcw className={`w-4 h-4 ${isRefreshing || isLoading ? "animate-spin" : ""}`} />
+        {label}
+      </button>
+      {/* Chevron to open dropdown */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        className="flex items-center px-2 py-2 text-sm text-gray-600 border border-l-0 border-gray-300 rounded-r-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+        aria-label="Refresh options"
+      >
+        <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[160px] py-1">
+            <button
+              onClick={() => { setOpen(false); onFastRefresh(); }}
+              className="w-full flex flex-col items-start px-4 py-2 hover:bg-gray-50 text-left"
+            >
+              <span className="text-sm text-gray-700 font-medium">Fast Refresh</span>
+              <span className="text-xs text-gray-400">Sync new changes only</span>
+            </button>
+            <button
+              onClick={() => { setOpen(false); onHardRefresh(); }}
+              className="w-full flex flex-col items-start px-4 py-2 hover:bg-gray-50 text-left"
+            >
+              <span className="text-sm text-gray-700 font-medium">Hard Refresh</span>
+              <span className="text-xs text-gray-400">Clear cache &amp; reload all</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
@@ -843,12 +905,21 @@ export default function LogsPage() {
     gcTime: 60 * 60 * 1000,
   });
 
-  async function refreshData() {
+  async function hardRefresh() {
     setIsRefreshing(true);
     try {
       await logCache.clearCache();
       await logsService.listAllPages();
       await flushCacheToState(dateFrom, dateTo);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  async function fastRefresh() {
+    setIsRefreshing(true);
+    try {
+      await doFetch();
     } finally {
       setIsRefreshing(false);
     }
@@ -861,7 +932,7 @@ export default function LogsPage() {
   //     const result = await logsService.recoverUserIds();
   //     alert(`Recovery complete:\n• Total logs: ${result.total_logs}\n• Updated: ${result.updated_count}\n• Skipped: ${result.skipped_count} (no matching user for profile)`);
   //     // Refresh data to pull updated records
-  //     await refreshData();
+  //     await hardRefresh();
   //   } catch (err: any) {
   //     alert(`Recovery failed: ${err?.response?.data?.message || err.message}`);
   //   } finally {
@@ -1116,14 +1187,13 @@ export default function LogsPage() {
             </button>
           )}
           */}
-          <button
-            onClick={refreshData}
+          <RefreshDropdown
             disabled={isRefreshing || logsLoading}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-          >
-            <RotateCcw className={`w-4 h-4 ${isRefreshing || logsLoading ? "animate-spin" : ""}`} />
-            {isRefreshing ? "Refreshing..." : logsLoading ? "Loading..." : "Refresh"}
-          </button>
+            isRefreshing={isRefreshing}
+            isLoading={logsLoading}
+            onFastRefresh={fastRefresh}
+            onHardRefresh={hardRefresh}
+          />
         </div>
       </div>
 

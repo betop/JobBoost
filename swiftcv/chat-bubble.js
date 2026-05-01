@@ -77,7 +77,7 @@
       right: 24px;
       z-index: 2147483647;
       width: 390px;
-      max-height: 660px;
+      max-height: min(660px, 60dvh);
       background: #ffffff;
       border-radius: 16px;
       box-shadow: 0 8px 40px rgba(0,0,0,0.18);

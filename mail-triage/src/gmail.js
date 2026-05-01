@@ -14,6 +14,7 @@ async function gmailFetch(path, { method = "GET", token, body } = {}) {
     throw new Error(`Gmail API error ${res.status}: ${text || res.statusText}`);
   }
 
+  if (res.status === 204 || res.headers.get("content-length") === "0") return null;
   return res.json();
 }
 

@@ -64,11 +64,17 @@ function renderSummary(s) {
 
   if (s.mode === "stages") {
     summaryEl.textContent =
+      `total:       ${s.total || 0}\n` +
       `application: ${s.application || 0}\n` +
-      `failed:      ${s.failed || 0}\n` +
-      `assessment:  ${s.assessment || 0}\n` +
       `interview:   ${s.interview || 0}\n` +
-      `offer:       ${s.offer || 0}`;
+      `assessment:  ${s.assessment || 0}\n` +
+      `offer:       ${s.offer || 0}\n` +
+      `followup:    ${s.followup || 0}\n` +
+      `survey:      ${s.survey || 0}\n` +
+      `failed:      ${s.failed || 0}\n` +
+      `general:     ${s.general || 0}\n` +
+      `other:       ${s.other || 0}\n` +
+      `errors:      ${s.errors || 0}`;
     return;
   }
 
@@ -180,7 +186,9 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 
   if (p.type === "done") {
-    runStatus.textContent = "Done";
+    if (!runStatus.textContent || runStatus.textContent === "Checking…" || runStatus.textContent.startsWith("Applying") || runStatus.textContent.startsWith("Classifying") || runStatus.textContent.startsWith("Fetching") || runStatus.textContent.startsWith("Listing") || runStatus.textContent.startsWith("Checking spam") || runStatus.textContent.startsWith("Ensuring") || runStatus.textContent.startsWith("Batch")) {
+      runStatus.textContent = "Done";
+    }
     renderSummary(p.summary);
     btnCheck.disabled = false;
     stopKeepAlive();

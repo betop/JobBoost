@@ -39,6 +39,23 @@ function tryParseJson(text) {
   }
 }
 
+function mapResultToStage(r) {
+  const bool = (v) =>
+    v === true || v === "true" || v === 1 || v === "1" ||
+    String(v || "").toLowerCase() === "true";
+
+  if (bool(r.is_job_application_form_submition_confirmation)) return { is_job: true,  stage: "application" };
+  if (bool(r.is_interview_schedule_request))                   return { is_job: true,  stage: "interview" };
+  if (bool(r.is_scheduled_interview_confirmation))             return { is_job: true,  stage: "interview" };
+  if (bool(r.is_not_move_forward_notification))                return { is_job: true,  stage: "failed" };
+  if (bool(r.is_required_some_questions_before_moving_forward)) return { is_job: true, stage: "followup" };
+  if (bool(r.is_technical_assessment))                         return { is_job: true,  stage: "assessment" };
+  if (bool(r.is_final_job_offer))                              return { is_job: true,  stage: "offer" };
+  if (bool(r.is_important_survey_to_complete_application_form_submition)) return { is_job: true, stage: "survey" };
+  if (bool(r.is_new_job_postings_promotion))                   return { is_job: true,  stage: "other" };
+  return { is_job: false, stage: "other" };
+}
+
 function parseAndNormalizeResults(text, list) {
   const parsed = extractFirstJsonValue(text) || tryParseJson(text);
   if (!parsed) throw new Error(`AI returned non-JSON: ${String(text).slice(0, 300)}`);
@@ -54,22 +71,15 @@ function parseAndNormalizeResults(text, list) {
   for (const r of raw) {
     const id = String(r?.id ?? "").trim();
     if (!id || seen.has(id)) continue;
-    const rawIsJob = r?.is_job;
-    const isJob =
-      rawIsJob === true ||
-      rawIsJob === "true" ||
-      rawIsJob === 1 ||
-      rawIsJob === "1" ||
-      String(rawIsJob || "").toLowerCase() === "true";
-    const stage = String(r?.stage || "other").toLowerCase().trim();
-    seen.set(id, { id, is_job: isJob, stage });
+    const { is_job, stage } = mapResultToStage(r);
+    seen.set(id, { id, is_job, stage });
   }
 
   // Fill any missing IDs with safe defaults.
   return list.map((id) => seen.get(id) || { id, is_job: false, stage: "other" });
 }
 
-function buildBatchTriagePrompt(emails) {
+function buildMailContents(emails) {
   const input = {
     emails: emails.map((e) => ({
       id: e.id,
@@ -80,57 +90,18 @@ function buildBatchTriagePrompt(emails) {
     }))
   };
 
-  return {
-    system:
-      "You are a strict JSON generator. Output MUST be a single JSON value and nothing else (no markdown, no code fences, no commentary).",
-    user:
-      "You will be given a JSON object with an `emails` array. For each email, decide whether it is job-application related and assign a stage using `subject` + `body`.\n\n" +
-      "Return ONLY this JSON object schema (no extra keys):\n" +
-      "{\n" +
-      "  \"results\": [\n" +
-      "    {\"id\": string, \"is_job\": boolean, \"stage\": \"application\"|\"failed\"|\"assessment\"|\"interview\"|\"offer\"|\"other\"}\n" +
-      "  ]\n" +
-      "}\n\n" +
-      "Hard requirements:\n" +
-      "- `results` length MUST equal `emails` length\n" +
-      "- Every `id` in input MUST appear exactly once in `results`\n" +
-      "- Preserve `id` exactly as provided\n" +
-      "- If `is_job` is false, `stage` MUST be \"other\"\n\n" +
-      "NOT a job email (is_job MUST be false):\n" +
-      "- Security/verification codes, OTP, 2FA, 'enter this code', 'your code is', 'security code'\n" +
-      "- Password reset or account activation emails\n" +
-      "- Generic marketing, newsletters, promotions unrelated to a specific job\n" +
-      "- Receipts, invoices, shipping notifications\n" +
-      "- Any email whose primary purpose is account/identity verification, even if it mentions the word 'application'\n\n" +
-      "Rules for stage (only when is_job=true):\n" +
-      "- application: ONLY a true submission confirmation/receipt from an employer or ATS (e.g., 'we received your application', 'your application has been submitted', 'your application is under review', includes application/req ID or portal confirmation).\n" +
-      "  - IMPORTANT: 'thank you for applying' alone is NOT enough. Verification/code emails are NEVER application.\n" +
-      "- failed: rejection / decline, 'we've decided to move forward with another candidate', 'not moving forward'\n" +
-      "- assessment: coding test, online assessment, take-home assignment, technical screen task\n" +
-      "- interview: interview scheduling, phone screen, onsite, recruiter call\n" +
-      "- offer: offer letter, compensation details, you received an offer\n" +
-      "- other: job-related but not the above\n\n" +
-      "Precedence rule:\n" +
-      "- If the email contains rejection language (not moving forward / another candidate / other candidates / unfortunately / regret / position filled), stage MUST be \"failed\" even if it also says 'thank you for applying'.\n\n" +
-      "Examples:\n" +
-      "- 'Your security code is P7WYfA3i. Enter it to resubmit your application.' => is_job=false, stage=other\n" +
-      "- 'Copy and paste this code into the security code field on your application' => is_job=false, stage=other\n" +
-      "- 'Thank you for applying... we have decided to move forward with other candidates' => failed\n" +
-      "- 'Thank you for your application... we are not moving forward at this time' => failed\n" +
-      "- 'We received your application for X. We will review and get back to you' => application\n\n" +
-      "If you are unsure, set `is_job=false` and `stage=\"other\"`.\n\n" +
-      "Input JSON:\n" +
-      JSON.stringify(input)
-  };
+  return JSON.stringify(input);
 }
 
 export async function classifyEmailsBatch({ backendApiUrl, backendApiKey, emails }) {
-  const prompt = buildBatchTriagePrompt(emails);
+  const mailContents = buildMailContents(emails);
   const list = emails.map((e) => String(e.id));
 
   if (!backendApiUrl) {
     throw new Error("Missing backendApiUrl in config.json");
   }
+
+  const version = chrome.runtime.getManifest().version;
 
   const res = await fetch(backendApiUrl, {
     method: "POST",
@@ -139,14 +110,22 @@ export async function classifyEmailsBatch({ backendApiUrl, backendApiKey, emails
       ...(backendApiKey ? { "x-gmail-analyze-key": backendApiKey } : {})
     },
     body: JSON.stringify({
-      system_prompt: prompt.system,
-      user_prompt: prompt.user
+      mail_contents: mailContents,
+      version,
     })
   });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Analyze API error ${res.status}: ${text || res.statusText}`);
+    const raw = await res.text().catch(() => "");
+    let message = raw || res.statusText;
+    try {
+      const json = JSON.parse(raw);
+      if (json?.message) message = json.message;
+      else if (json?.error) message = json.error;
+    } catch { /* not JSON */ }
+    const err = new Error(message);
+    err.fatal = res.status === 400;
+    throw err;
   }
 
   const data = await res.json();

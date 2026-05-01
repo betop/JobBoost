@@ -82,7 +82,9 @@ function normalizeStage(stage) {
     s === "failed" ||
     s === "assessment" ||
     s === "interview" ||
-    s === "offer"
+    s === "offer" ||
+    s === "followup" ||
+    s === "survey"
   )
     return s;
   return "other";
@@ -170,11 +172,13 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
 
   const jobsStageLabelIds = {
     application: await ensureLabelId({ token, name: "Jobs/Applications" }),
-    failed: await ensureLabelId({ token, name: "Jobs/Failures" }),
-    assessment: await ensureLabelId({ token, name: "Jobs/Assessments" }),
-    interview: await ensureLabelId({ token, name: "Jobs/Interviews" }),
-    offer: await ensureLabelId({ token, name: "Jobs/Offers" }),
-    other: await ensureLabelId({ token, name: "Jobs/Other" })
+    failed:      await ensureLabelId({ token, name: "Jobs/Failures" }),
+    assessment:  await ensureLabelId({ token, name: "Jobs/Assessments" }),
+    interview:   await ensureLabelId({ token, name: "Jobs/Interviews" }),
+    offer:       await ensureLabelId({ token, name: "Jobs/Offers" }),
+    followup:    await ensureLabelId({ token, name: "Jobs/Follow Up" }),
+    survey:      await ensureLabelId({ token, name: "Jobs/Surveys" }),
+    other:       await ensureLabelId({ token, name: "Jobs/Other" })
   };
 
   const start = String(startDate || "").trim();
@@ -233,6 +237,10 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
     assessment: 0,
     interview: 0,
     offer: 0,
+    followup: 0,
+    survey: 0,
+    general: 0,
+    other: 0,
     errors: 0
   };
 
@@ -305,7 +313,11 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
       const batch = await classifyChunk(group);
       batchResults = Array.isArray(batch?.results) ? batch.results : [];
     } catch (e) {
-      sendProgress({ type: "error", message: `${label}: classification failed — ${e?.message || String(e)}` });
+      sendProgress({ type: "error", message: e?.message || String(e) });
+      if (e?.fatal) {
+        sendProgress({ type: "done", summary });
+        return summary;
+      }
       batchResults = group.map((em) => ({ id: em.id, is_job: false, stage: "other" }));
     }
     results.push(...batchResults);
@@ -328,6 +340,11 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
       else if (stage === "assessment") summary.assessment++;
       else if (stage === "interview") summary.interview++;
       else if (stage === "offer") summary.offer++;
+      else if (stage === "followup") summary.followup++;
+      else if (stage === "survey") summary.survey++;
+      else if (stage === "other") summary.other++;
+    } else {
+      summary.general++;
     }
 
     const ops = decideOps({
