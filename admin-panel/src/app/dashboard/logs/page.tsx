@@ -768,6 +768,7 @@ export default function LogsPage() {
         setDateFrom("");
         setDateTo("");
       }
+      setDatesReady(true);
     } else {
       // No URL period — restore from IndexedDB
       logCache.getDateFilter().then((saved) => {
@@ -781,6 +782,7 @@ export default function LogsPage() {
           if (range) { setDateFrom(range.from); setDateTo(range.to); }
           else { setDateFrom(""); setDateTo(""); }
         }
+        setDatesReady(true);
       });
     }
   }, []);
@@ -805,6 +807,8 @@ export default function LogsPage() {
   // It updates whenever the cache is refreshed by the fetch effect below.
   const [cachedRows, setCachedRows]     = useState<GenerationLog[]>([]);
   const [logsLoading, setLogsLoading]   = useState(false);
+  const [datesReady, setDatesReady]     = useState(false);
+  const hasFetchedRef                   = useRef(false);
 
   /**
    * Reads the current cache slice for the active date window into state.
@@ -841,6 +845,18 @@ export default function LogsPage() {
   }
 
   useEffect(() => {
+    if (!datesReady) return;
+    if (!hasFetchedRef.current) {
+      // First load — run once
+      hasFetchedRef.current = true;
+      doFetch();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datesReady]);
+
+  useEffect(() => {
+    if (!datesReady || !hasFetchedRef.current) return;
+    // Subsequent date changes (period switch, custom date) — re-fetch
     doFetch();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo]);

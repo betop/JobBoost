@@ -149,43 +149,62 @@ export const logsService = {
   },
 
   /**
-   * Fetch ALL logs in pages of `pageSize` records.
-   * - Snapshots the current time BEFORE fetching so any records created during
-   *   the fetch are caught by the next delta sync.
-   * - Each page is immediately persisted to IndexedDB before the next request.
-   * - Saves `lastSyncAt` to IndexedDB after the final page succeeds.
-   * - `onBatch` is an optional UI callback called after each batch is saved.
+   * Fetch ALL logs in parallel batches of up to CONCURRENT_PAGES requests at a time.
+   * 1. First fetches the total record count.
+   * 2. Computes all page offsets.
+   * 3. Fires up to CONCURRENT_PAGES requests concurrently; each saves to IndexedDB as
+   *    soon as it resolves (no waiting for the rest of the batch).
+   * 4. Repeats for the next group of pages until all are done.
+   * 5. Saves lastSyncAt after all pages succeed.
+   * `onBatch` is called after each page is persisted (for UI flush).
    */
   listAllPages: async (
     onBatch?: () => Promise<void>,
     pageSize = 500,
   ): Promise<void> => {
-    // Snapshot now before any fetch so the next delta doesn't miss records
-    // created while this full-load was running.
+    const CONCURRENT_PAGES = 10;
     const syncStart = new Date().toISOString();
 
-    let offset = 0;
-    while (true) {
-      const params = new URLSearchParams();
-      params.set("limit",  String(pageSize));
-      params.set("offset", String(offset));
+    // Step 1: get total count
+    const countRes = await api.get<{ total: number }>(`/logs/list?count_only=true`);
+    const total = Number(countRes.data.total) || 0;
 
-      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
-      const items = response.data.items;
-
-      if (items.length > 0) {
-        // Persist to IndexedDB first, then notify UI
-        await logCache.mergeRecords(items);
-        if (onBatch) await onBatch();
-      }
-
-      if (items.length < pageSize) {
-        // Last page — all data is in IndexedDB, safe to commit the sync timestamp
-        await logCache.setLastSyncAt(syncStart);
-        break;
-      }
-      offset += pageSize;
+    if (total === 0) {
+      await logCache.setLastSyncAt(syncStart);
+      return;
     }
+
+    // Step 2: build all offsets
+    const offsets: number[] = [];
+    for (let off = 0; off < total; off += pageSize) {
+      offsets.push(off);
+    }
+
+    // Step 3: process in groups of CONCURRENT_PAGES
+    for (let i = 0; i < offsets.length; i += CONCURRENT_PAGES) {
+      const group = offsets.slice(i, i + CONCURRENT_PAGES);
+
+      // Fire all requests in this group simultaneously; each saves to IDB as it resolves
+      await Promise.all(
+        group.map((offset) => {
+          const params = new URLSearchParams();
+          params.set("limit", String(pageSize));
+          params.set("offset", String(offset));
+          return api
+            .get<LogsListResponse>(`/logs/list?${params.toString()}`)
+            .then(async (response) => {
+              const items = response.data.items;
+              if (items.length > 0) {
+                await logCache.mergeRecords(items);
+                if (onBatch) await onBatch();
+              }
+            });
+        })
+      );
+    }
+
+    // Step 4: all pages done — commit sync timestamp
+    await logCache.setLastSyncAt(syncStart);
   },
 
   /**

@@ -19,6 +19,7 @@ query "logs/list" verb=GET {
     timestamp updated_since?
     int offset?
     int limit?
+    bool count_only?
   }
 
   stack {
@@ -91,19 +92,37 @@ query "logs/list" verb=GET {
     }
   
     conditional {
-      if ($is_delta == false) {
+      if ($is_delta == false && $input.count_only != true) {
         var.update $query {
           value = $query ~ " LIMIT " ~ $page_limit ~ " OFFSET " ~ $page_offset
         }
       }
     }
   
-    db.direct_query {
-      sql = "{{ $query }};"
-      parser = "template_engine"
-      response_type = "list"
-    } as $logs
+    conditional {
+      if ($input.count_only) {
+        var $count_query {
+          value = "SELECT COUNT(*) as total FROM (" ~ $query ~ ") AS sub"
+        }
+      
+        db.direct_query {
+          sql = "{{ $count_query }};"
+          parser = "template_engine"
+          response_type = "single"
+        } as $count_result
+      }
+    }
+  
+    conditional {
+      if ($input.count_only != true) {
+        db.direct_query {
+          sql = "{{ $query }};"
+          parser = "template_engine"
+          response_type = "list"
+        } as $logs
+      }
+    }
   }
 
-  response = {items: $logs}
+  response = $input.count_only == true ? {total: $count_result.total} : {items: $logs}
 }
