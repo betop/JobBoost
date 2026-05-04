@@ -81,6 +81,32 @@ function renderSummary(s) {
   summaryEl.textContent = `Total: ${s.total || 0}\nErrors: ${s.errors || 0}`;
 }
 
+btnResetCache.addEventListener('click', async () => {
+  btnResetCache.disabled = true;
+  try {
+    const res = await sendMessage({ type: 'CLEAR_MAIL_CACHE' });
+    runStatus.textContent = res.ok ? 'Cache cleared — all emails will be re-evaluated next run.' : (res.error || 'Failed to clear cache');
+  } catch (e) {
+    runStatus.textContent = e?.message || String(e);
+  } finally {
+    btnResetCache.disabled = false;
+  }
+});
+
+btnResetCache.addEventListener("click", async () => {
+  btnResetCache.disabled = true;
+  try {
+    const res = await sendMessage({ type: "CLEAR_MAIL_CACHE" });
+    runStatus.textContent = res.ok
+      ? "Cache cleared — all emails will be re-evaluated next run."
+      : (res.error || "Failed to clear cache");
+  } catch (e) {
+    runStatus.textContent = e?.message || String(e);
+  } finally {
+    btnResetCache.disabled = false;
+  }
+});
+
 async function sendMessage(msg) {
   return chrome.runtime.sendMessage(msg);
 }
@@ -169,6 +195,8 @@ openOptions.addEventListener("click", async (e) => {
   await chrome.runtime.openOptionsPage();
 });
 
+let lastError = null;
+
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type !== "PROGRESS") return;
   const p = msg.payload;
@@ -182,13 +210,18 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 
   if (p.type === "error") {
-    runStatus.textContent = p.message || "Run error";
+    lastError = p.message || "Run error";
+    runStatus.textContent = lastError;
   }
 
   if (p.type === "done") {
-    if (!runStatus.textContent || runStatus.textContent === "Checking…" || runStatus.textContent.startsWith("Applying") || runStatus.textContent.startsWith("Classifying") || runStatus.textContent.startsWith("Fetching") || runStatus.textContent.startsWith("Listing") || runStatus.textContent.startsWith("Checking spam") || runStatus.textContent.startsWith("Ensuring") || runStatus.textContent.startsWith("Batch")) {
-      runStatus.textContent = "Done";
-    }
+    const hasErrors = p.summary?.errors > 0;
+    runStatus.textContent = hasErrors
+      ? `Done with ${p.summary.errors} error(s) — check console for details`
+      : lastError
+      ? lastError
+      : "Done";
+    lastError = null;
     renderSummary(p.summary);
     btnCheck.disabled = false;
     stopKeepAlive();

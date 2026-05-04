@@ -96,7 +96,7 @@ export async function createLabel({ token, name }) {
 
 export async function ensureLabelId({ token, name }) {
   const labels = await listLabels({ token });
-  const existing = labels.find((l) => (l.name || "").toLowerCase() === name.toLowerCase());
+  const existing = labels.find((l) => l.name === name);
   if (existing?.id) return existing.id;
   const created = await createLabel({ token, name });
   if (!created?.id) throw new Error(`Failed to create label: ${name}`);

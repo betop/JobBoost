@@ -13,6 +13,7 @@ import {
   Activity,
   Package,
   Mail,
+  BarChart2,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
@@ -21,6 +22,7 @@ import { cn } from "@/utils/cn";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, superOnly: false },
+  { name: "Overview", href: "/dashboard/overview", icon: BarChart2, superOnly: false },
   { name: "Profiles", href: "/dashboard/profiles", icon: Users, superOnly: false },
   { name: "Users", href: "/dashboard/users", icon: UserCheck, superOnly: false },
   { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: false },

@@ -40,19 +40,13 @@ function tryParseJson(text) {
 }
 
 function mapResultToStage(r) {
-  const bool = (v) =>
-    v === true || v === "true" || v === 1 || v === "1" ||
-    String(v || "").toLowerCase() === "true";
-
-  if (bool(r.is_job_application_form_submition_confirmation)) return { is_job: true,  stage: "application" };
-  if (bool(r.is_interview_schedule_request))                   return { is_job: true,  stage: "interview" };
-  if (bool(r.is_scheduled_interview_confirmation))             return { is_job: true,  stage: "interview" };
-  if (bool(r.is_not_move_forward_notification))                return { is_job: true,  stage: "failed" };
-  if (bool(r.is_required_some_questions_before_moving_forward)) return { is_job: true, stage: "followup" };
-  if (bool(r.is_technical_assessment))                         return { is_job: true,  stage: "assessment" };
-  if (bool(r.is_final_job_offer))                              return { is_job: true,  stage: "offer" };
-  if (bool(r.is_important_survey_to_complete_application_form_submition)) return { is_job: true, stage: "survey" };
-  if (bool(r.is_new_job_postings_promotion))                   return { is_job: true,  stage: "other" };
+  // New prompt returns is_job + stage directly
+  if (typeof r.is_job === "boolean" || r.is_job === "true" || r.is_job === "false") {
+    const isJob = r.is_job === true || r.is_job === "true";
+    const validStages = ["application","failed","assessment","interview","offer","followup","survey","other"];
+    const stage = validStages.includes(r.stage) ? r.stage : "other";
+    return { is_job: isJob, stage: isJob ? stage : "other" };
+  }
   return { is_job: false, stage: "other" };
 }
 

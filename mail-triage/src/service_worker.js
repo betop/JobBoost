@@ -10,6 +10,7 @@ import {
   batchModifyMessages
 } from "./gmail.js";
 import { classifyEmailsBatch } from "./ai.js";
+import { getProcessedIds, markProcessed, clearProcessedIds } from "./mailCache.js";
 
 let currentRun = null;
 const keepAlivePorts = new Set();
@@ -132,16 +133,17 @@ function decideOps({
 
   // System labels: UNREAD, STARRED
   // Rules:
-  // - Job: mark read when labeling
-  // - Job + success (assessment/interview/offer): also star
-  // - Non-job (General): keep original read/unread (do not touch UNREAD)
-  if (isJob) remove.push("UNREAD");
+  // - Do not touch UNREAD — keep original read/unread state for all emails
+  // - Job + success (assessment/interview/offer): star
 
   if (isJob && (stage === "assessment" || stage === "interview" || stage === "offer")) {
     add.push("STARRED");
   }
 
-  return { addLabelIds: Array.from(new Set(add)), removeLabelIds: Array.from(new Set(remove)) };
+  return {
+    addLabelIds: Array.from(new Set(add)).filter(Boolean),
+    removeLabelIds: Array.from(new Set(remove)).filter((id) => id && !add.includes(id)),
+  };
 }
 
 async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) {
@@ -157,28 +159,34 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
   const max = Number(maxEmailsPerRun ?? settings.maxEmailsPerRun ?? 0);
 
   sendProgress({ type: "status", message: "Ensuring labels…" });
-  const jobsRootLabelId = await ensureLabelId({ token, name: "Jobs" });
-  const generalLabelId = await ensureLabelId({ token, name: "General" });
 
-  // Migration support: if an older label name exists, strip it from messages.
-  let legacyFailedLabelId = null;
+  // Fetch all existing labels once — passed to every ensureLabelId call so
+  // we never make redundant list requests and avoid 409 races.
+  let existingLabels = [];
   try {
-    const existingLabels = await listLabels({ token });
-    legacyFailedLabelId =
-      existingLabels.find((l) => (l.name || "").toLowerCase() === "jobs/failed")?.id || null;
+    existingLabels = await listLabels({ token });
   } catch {
-    legacyFailedLabelId = null;
+    existingLabels = [];
   }
 
+  const ensure = (name) => ensureLabelId({ token, name, labels: existingLabels });
+
+  const jobsRootLabelId = await ensure("Jobs");
+  const generalLabelId  = await ensure("General");
+
+  // Migration support: if an older label name exists, strip it from messages.
+  const legacyFailedLabelId =
+    existingLabels.find((l) => (l.name || "").toLowerCase() === "jobs/failed")?.id || null;
+
   const jobsStageLabelIds = {
-    application: await ensureLabelId({ token, name: "Jobs/Applications" }),
-    failed:      await ensureLabelId({ token, name: "Jobs/Failures" }),
-    assessment:  await ensureLabelId({ token, name: "Jobs/Assessments" }),
-    interview:   await ensureLabelId({ token, name: "Jobs/Interviews" }),
-    offer:       await ensureLabelId({ token, name: "Jobs/Offers" }),
-    followup:    await ensureLabelId({ token, name: "Jobs/Follow Up" }),
-    survey:      await ensureLabelId({ token, name: "Jobs/Surveys" }),
-    other:       await ensureLabelId({ token, name: "Jobs/Other" })
+    application: await ensure("Jobs/Applications"),
+    failed:      await ensure("Jobs/Failures"),
+    assessment:  await ensure("Jobs/Assessments"),
+    interview:   await ensure("Jobs/Interviews"),
+    offer:       await ensure("Jobs/Offers"),
+    followup:    await ensure("Jobs/Follow-Up"),
+    survey:      await ensure("Jobs/Surveys"),
+    other:       await ensure("Jobs/Other"),
   };
 
   const start = String(startDate || "").trim();
@@ -247,18 +255,31 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
   sendProgress({ type: "summary", summary });
 
   sendProgress({ type: "status", message: "Fetching message metadata…" });
+
+  // Filter out messages already processed in a previous run
+  const processedIds = await getProcessedIds();
+  const newIds = ids.filter((id) => !processedIds.has(String(id)));
+  const skippedCount = ids.length - newIds.length;
+  if (skippedCount > 0) {
+    sendProgress({ type: "status", message: `Skipping ${skippedCount} already-processed message(s)…` });
+  }
+
+  // Update summary total to reflect only new messages
+  summary.total = newIds.length;
+  sendProgress({ type: "summary", summary });
+
   const emails = [];
   
   // Fetch emails in parallel batches (up to 10 at a time) for better performance
   const batchSize = 10;
-  for (let batchStart = 0; batchStart < ids.length; batchStart += batchSize) {
+  for (let batchStart = 0; batchStart < newIds.length; batchStart += batchSize) {
     if (currentRun?.cancelled) {
       sendProgress({ type: "status", message: "Cancelled." });
       break;
     }
     
-    const batchEnd = Math.min(batchStart + batchSize, ids.length);
-    const batchIds = ids.slice(batchStart, batchEnd);
+    const batchEnd = Math.min(batchStart + batchSize, newIds.length);
+    const batchIds = newIds.slice(batchStart, batchEnd);
     
     // Fetch multiple emails in parallel
     const batchPromises = batchIds.map(async (messageId, index) => {
@@ -384,9 +405,13 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
       sendProgress({ type: "status", message: "Cancelled." });
       break;
     }
+    if (addLabelIds.length === 0 && removeLabelIds.length === 0) continue;
+    console.log(`[triage] batchModify ${ids.length} msg(s) add=${JSON.stringify(addLabelIds)} remove=${JSON.stringify(removeLabelIds)}`);
     try {
       await batchModifyMessages({ token, ids, addLabelIds, removeLabelIds });
+      await markProcessed(ids);
     } catch (e) {
+      console.error("[triage] batchModify failed:", e);
       summary.errors += ids.length;
       sendProgress({
         type: "error",
@@ -479,6 +504,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type === "CANCEL_TRIAGE") {
       if (currentRun) currentRun.cancelled = true;
       sendResponse({ ok: true });
+      return;
+    }
+
+    if (msg?.type === "CLEAR_MAIL_CACHE") {
+      try {
+        await clearProcessedIds();
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: e?.message || String(e) });
+      }
       return;
     }
 
