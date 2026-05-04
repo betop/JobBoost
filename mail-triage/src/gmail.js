@@ -79,6 +79,7 @@ function extractTextFromPayload(payload) {
 
 export async function listLabels({ token }) {
   const data = await gmailFetch("users/me/labels", { token });
+  console.log("Gmail labels:", data.labels);
   return data.labels || [];
 }
 

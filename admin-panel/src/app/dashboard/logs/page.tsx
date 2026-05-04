@@ -671,19 +671,21 @@ function getESTDateRange(period: LogsPeriod, customFrom?: string, customTo?: str
     return { from: today, to: today };
   }
   if (period === "week") {
-    // Sun 00:00 – Sat 23:59 EST
+    // Sun 00:00 – Sat 23:59 EST (current week)
     const dayOfWeek = nowEST.getDay(); // 0=Sun
     const sun = new Date(nowEST);
     sun.setDate(nowEST.getDate() - dayOfWeek);
-    return { from: formatESTLocalDate(sun), to: today };
+    const sat = new Date(sun);
+    sat.setDate(sun.getDate() + 6);
+    return { from: formatESTLocalDate(sun), to: formatESTLocalDate(sat) };
   }
   if (period === "month") {
-    // 1st of current month – today
+    // 1st of current month – last day of current month
     const first = new Date(nowEST.getFullYear(), nowEST.getMonth(), 1);
-    return { from: formatESTLocalDate(first), to: today };
+    const last  = new Date(nowEST.getFullYear(), nowEST.getMonth() + 1, 0);
+    return { from: formatESTLocalDate(first), to: formatESTLocalDate(last) };
   }
   if (period === "all") {
-    // No lower bound — send a very early date so Xano returns everything
     return null; // caller will send no date_from / date_to
   }
   if (period === "custom") {
@@ -706,6 +708,9 @@ export default function LogsPage() {
   const [statsPeriod, setStatsPeriod] = useState<LogsPeriod>("today");
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
+  // Pending dates: updated as user types, applied only on Check button click
+  const [pendingFrom, setPendingFrom] = useState(today);
+  const [pendingTo, setPendingTo] = useState(today);
 
   // Client-side filters — these do NOT trigger API calls
   const [filters, setFilters] = useState<LogsFilters>({});
@@ -777,9 +782,11 @@ export default function LogsPage() {
         if (saved?.dateFrom !== undefined) {
           setDateFrom(saved.dateFrom);
           setDateTo(saved.dateTo);
+          setPendingFrom(saved.dateFrom);
+          setPendingTo(saved.dateTo);
         } else {
           const range = getESTDateRange(period);
-          if (range) { setDateFrom(range.from); setDateTo(range.to); }
+          if (range) { setDateFrom(range.from); setDateTo(range.to); setPendingFrom(range.from); setPendingTo(range.to); }
           else { setDateFrom(""); setDateTo(""); }
         }
         setDatesReady(true);
@@ -821,7 +828,9 @@ export default function LogsPage() {
     setCachedRows(records);
   }, []);
 
-  async function doFetch() {
+  async function doFetch(from?: string, to?: string) {
+    const effectiveFrom = from !== undefined ? from : dateFrom;
+    const effectiveTo   = to   !== undefined ? to   : dateTo;
     setLogsLoading(true);
     const lastSync = await logCache.getLastSyncAt();
 
@@ -835,7 +844,7 @@ export default function LogsPage() {
         await logsService.listAllPages();
       }
 
-      await flushCacheToState(dateFrom, dateTo);
+      await flushCacheToState(effectiveFrom, effectiveTo);
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === "AbortError") return;
       console.error("[LogsPage] fetch error", err);
@@ -849,17 +858,10 @@ export default function LogsPage() {
     if (!hasFetchedRef.current) {
       // First load — run once
       hasFetchedRef.current = true;
-      doFetch();
+      doFetch(dateFrom, dateTo);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datesReady]);
-
-  useEffect(() => {
-    if (!datesReady || !hasFetchedRef.current) return;
-    // Subsequent date changes (period switch, custom date) — re-fetch
-    doFetch();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo]);
 
 
   // All active users — used for building the user_name lookup map
@@ -935,7 +937,7 @@ export default function LogsPage() {
   async function fastRefresh() {
     setIsRefreshing(true);
     try {
-      await doFetch();
+      await doFetch(dateFrom, dateTo);
     } finally {
       setIsRefreshing(false);
     }
@@ -965,18 +967,23 @@ export default function LogsPage() {
       const lastWeek = getLastWeekRange();
       setDateFrom(lastWeek.from);
       setDateTo(lastWeek.to);
+      setPendingFrom(lastWeek.from);
+      setPendingTo(lastWeek.to);
       updateQueryParams({ statsPeriod: period, date_from: lastWeek.from, date_to: lastWeek.to, page: 1 });
       logCache.setDateFilter({ period, dateFrom: lastWeek.from, dateTo: lastWeek.to });
+      // Don't auto-fetch for custom — user must click Check
     } else if (period === "all") {
       setDateFrom("");
       setDateTo("");
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
       logCache.setDateFilter({ period, dateFrom: "", dateTo: "" });
+      doFetch("", "");
     } else if (range) {
       setDateFrom(range.from);
       setDateTo(range.to);
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
       logCache.setDateFilter({ period, dateFrom: range.from, dateTo: range.to });
+      doFetch(range.from, range.to);
     }
   }
 
@@ -1233,20 +1240,15 @@ export default function LogsPage() {
 
       {/* Custom date range */}
       {statsPeriod === "custom" && (
-        <div className="flex gap-3 mb-6 items-center">
+        <div className="flex gap-3 mb-6 items-end">
           <div>
             <label className="block text-xs text-gray-500 mb-1">From</label>
             <input
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              value={dateFrom}
+              value={pendingFrom}
               disabled={logsLoading}
-              onChange={(e) => setDateFrom(e.target.value)}
-              onBlur={(e) => {
-                setPage(1);
-                updateQueryParams({ date_from: e.target.value, page: 1 });
-                logCache.setDateFilter({ period: "custom", dateFrom: e.target.value, dateTo });
-              }}
+              onChange={(e) => setPendingFrom(e.target.value)}
             />
           </div>
           <div>
@@ -1254,16 +1256,27 @@ export default function LogsPage() {
             <input
               type="date"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              value={dateTo}
+              value={pendingTo}
               disabled={logsLoading}
-              onChange={(e) => setDateTo(e.target.value)}
-              onBlur={(e) => {
-                setPage(1);
-                updateQueryParams({ date_to: e.target.value, page: 1 });
-                logCache.setDateFilter({ period: "custom", dateFrom, dateTo: e.target.value });
-              }}
+              onChange={(e) => setPendingTo(e.target.value)}
             />
           </div>
+          <button
+            type="button"
+            disabled={logsLoading}
+            onClick={() => {
+              setDateFrom(pendingFrom);
+              setDateTo(pendingTo);
+              setPage(1);
+              updateQueryParams({ date_from: pendingFrom, date_to: pendingTo, page: 1 });
+              logCache.setDateFilter({ period: "custom", dateFrom: pendingFrom, dateTo: pendingTo });
+              doFetch(pendingFrom, pendingTo);
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            Check
+          </button>
         </div>
       )}
 

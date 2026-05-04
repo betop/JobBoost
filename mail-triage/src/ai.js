@@ -80,6 +80,9 @@ function buildMailContents(emails) {
       from: e.from,
       subject: e.subject,
       date: e.date,
+      labels: (e.labelIds || []).filter((l) =>
+        l.startsWith("CATEGORY_") || l === "INBOX" || l === "SPAM"
+      ),
       body: e.body || ""
     }))
   };

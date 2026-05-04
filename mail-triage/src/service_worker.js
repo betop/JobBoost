@@ -10,7 +10,7 @@ import {
   batchModifyMessages
 } from "./gmail.js";
 import { classifyEmailsBatch } from "./ai.js";
-import { getProcessedIds, markProcessed, clearProcessedIds } from "./mailCache.js";
+import { getProcessedIds, getProcessedWithStages, markProcessed, clearProcessedIds } from "./mailCache.js";
 
 let currentRun = null;
 const keepAlivePorts = new Set();
@@ -262,10 +262,20 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
   const skippedCount = ids.length - newIds.length;
   if (skippedCount > 0) {
     sendProgress({ type: "status", message: `Skipping ${skippedCount} already-processed message(s)…` });
+    // Count cached emails into their stage counters
+    const cachedEntries = await getProcessedWithStages();
+    const cachedIdSet = new Set(ids.filter((id) => processedIds.has(String(id))).map(String));
+    for (const entry of cachedEntries) {
+      if (!cachedIdSet.has(String(entry.id))) continue;
+      if (entry.is_job) {
+        const s = entry.stage || "other";
+        if (s in summary) summary[s]++;
+        else summary.other++;
+      } else {
+        summary.general++;
+      }
+    }
   }
-
-  // Update summary total to reflect only new messages
-  summary.total = newIds.length;
   sendProgress({ type: "summary", summary });
 
   const emails = [];
@@ -409,7 +419,12 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
     console.log(`[triage] batchModify ${ids.length} msg(s) add=${JSON.stringify(addLabelIds)} remove=${JSON.stringify(removeLabelIds)}`);
     try {
       await batchModifyMessages({ token, ids, addLabelIds, removeLabelIds });
-      await markProcessed(ids);
+      // Build entries with stage info for cache
+      const entries = ids.map((id) => {
+        const r = byId.get(String(id));
+        return { id, stage: r?.stage || "other", is_job: r?.is_job ?? true };
+      });
+      await markProcessed(entries);
     } catch (e) {
       console.error("[triage] batchModify failed:", e);
       summary.errors += ids.length;
