@@ -241,6 +241,16 @@ function JobDetailsModal({
                   {log.company_name}
                 </div>
               )}
+              {log.seniority && (
+                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium">
+                  {log.seniority}
+                </div>
+              )}
+              {log.tech_scope && (
+                <div className="flex items-center gap-1.5 bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg text-sm font-medium">
+                  {log.tech_scope}
+                </div>
+              )}
               {log.job_url && (
                 <a href={log.job_url} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 text-sm underline">
@@ -264,10 +274,12 @@ function JobDetailsModal({
 // Regenerate Confirm Modal
 function RegenerateModal({
   log,
+  resumeTemplate,
   onClose,
   onSuccess,
 }: {
   log: GenerationLog;
+  resumeTemplate: number;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -349,7 +361,7 @@ function RegenerateModal({
       const result = await logsService.regenerate(log.id, forceGenerate);
       if (result.match_status === 1) {
         const regenFilename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || result.resume_filename;
-        await downloadResumePDF(result.resume_text, regenFilename);
+        await downloadResumePDF(result.resume_text, regenFilename, resumeTemplate);
         setDone(true);
         setStatusResult(null);
         onSuccess();
@@ -381,7 +393,7 @@ function RegenerateModal({
     if (statusResult.is_matched === 0 && statusResult.resume_text) {
       try {
         const goAnywayFilename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || statusResult.resume_filename;
-        await downloadResumePDF(statusResult.resume_text, goAnywayFilename);
+        await downloadResumePDF(statusResult.resume_text, goAnywayFilename, resumeTemplate);
         setDone(true);
         setStatusResult(null);
         onSuccess();
@@ -451,6 +463,12 @@ function RegenerateModal({
                   <div className="flex items-center gap-2 text-sm">
                     <Building2 className="w-4 h-4 text-gray-400" />
                     <span className="text-gray-600">{log.company_name}</span>
+                  </div>
+                )}
+                {(log.seniority || log.tech_scope) && (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    {log.seniority && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">{log.seniority}</span>}
+                    {log.tech_scope && <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded text-xs font-medium">{log.tech_scope}</span>}
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -1172,6 +1190,7 @@ export default function LogsPage() {
       {regenerateLog && (
         <RegenerateModal
           log={regenerateLog}
+          resumeTemplate={profiles?.find((p) => p.id === regenerateLog.profile_id)?.resume_template ?? 1}
           onClose={() => setRegenerateLog(null)}
           onSuccess={async () => {
             // Delta-sync so the new regenerated log appears immediately
@@ -1791,7 +1810,8 @@ export default function LogsPage() {
                               try {
                                 const data = await logsService.getContent(log.content_id);
                                 const filename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || "Resume";
-                                await downloadResumePDF(data.raw_response, filename);
+                                const tpl = profiles?.find((p) => p.id === log.profile_id)?.resume_template ?? 1;
+                                await downloadResumePDF(data.raw_response, filename, tpl);
                               } catch (err) {
                                 console.error("Failed to download resume:", err);
                                 alert("Failed to download resume PDF.");

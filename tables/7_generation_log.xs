@@ -30,6 +30,8 @@ table generation_log {
     int is_matched?
     text match_reason?
     bool is_applied?
+    text seniority?
+    text tech_scope?
     uuid? content_id? {
       table = "resume_content"
     }

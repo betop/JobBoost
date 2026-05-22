@@ -103,6 +103,7 @@ query profiles verb=GET {
             linkedin       : $p.linkedin_url
             github         : $p.github_url
             job_category   : $p.job_category
+            resume_template: $p.resume_template
             created_at     : $p.created_at
             education      : []
             work_experience: []

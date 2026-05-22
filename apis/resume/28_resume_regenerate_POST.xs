@@ -81,7 +81,7 @@ query "resume/regenerate" verb=POST {
     foreach ($work) {
       each as $w {
         var $end_label {
-          value = $w.end_date
+          value = $w.end_date|to_text|first_notnull:""
         }
       
         conditional {
@@ -126,7 +126,7 @@ query "resume/regenerate" verb=POST {
         }
       
         var.update $work_text {
-          value = $work_text ~ $title_display ~ " | " ~ $w.company_name ~ " | " ~ $location_display ~ " | " ~ $w.start_date ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
+          value = $work_text ~ ($title_display|first_notnull:"") ~ " | " ~ ($w.company_name|first_notnull:"") ~ " | " ~ ($location_display|first_notnull:"") ~ " | " ~ ($w.start_date|to_text|first_notnull:"") ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
         }
       }
     }
@@ -139,7 +139,7 @@ query "resume/regenerate" verb=POST {
     foreach ($education) {
       each as $e {
         var.update $edu_text {
-          value = $edu_text ~ $e.degree_title ~ " in " ~ $e.field_of_study ~ " from " ~ $e.university_name ~ " (" ~ $e.end_date ~ ") "
+          value = $edu_text ~ ($e.degree_title|first_notnull:"") ~ " in " ~ ($e.field_of_study|first_notnull:"") ~ " from " ~ ($e.university_name|first_notnull:"") ~ " (" ~ ($e.end_date|to_text|first_notnull:"") ~ ") "
         }
       }
     }
@@ -393,6 +393,8 @@ query "resume/regenerate" verb=POST {
         is_regenerated       : 1
         is_matched           : $match_status
         match_reason         : $error_msg
+        seniority            : $log.seniority
+        tech_scope           : $log.tech_scope
         content_id           : $resume_content_id
       }
     } as $log

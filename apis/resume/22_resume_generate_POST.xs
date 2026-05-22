@@ -109,6 +109,14 @@ query "resume/generate" verb=POST {
       value = ""
     }
   
+    var $seniority_txt {
+      value = ""
+    }
+  
+    var $tech_scope_txt {
+      value = ""
+    }
+  
     db.get profile {
       field_name = "id"
       field_value = $input.profile_id
@@ -167,17 +175,16 @@ query "resume/generate" verb=POST {
                   method = "POST"
                   params = {}
                     |set:"model":"gpt-4o-mini"
-                    |set:"max_tokens":200
+                    |set:"max_tokens":400
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
-                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true | false\",\n\"company\": \"full company name | null\",\n\"position\": \"full position title | null\",\n\"is_remote\": \"true | false\",\n\"travels_or_relocation_required\": \"true | false\",\n\"is_similar_to_outlier\": \"true | false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true | false\",\n\"clearance_required\": \"true | false\",\n\"seniority\": \"one of these - intern | entry | junior | mid | senior | lead | staff | principal | manager | director | vice_president | c_level | founder\",\n\"tech_scope\": \"one of these - ai | machine_learning | data_science | data_analytics | data_engineering | data_research | computer_vision | mlops | full_stack_ai | ai_software_engineering | software_engineering | full_stack | backend | frontend | devops\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"either intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"either ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
                       )
                     )
                   headers = []
                     |push:"Content-Type: application/json"
                     |push:"Authorization: " ~ $openai_auth
-                  timeout = 60
                 } as $extraction_resp
               
                 var.update $extraction_text {
@@ -228,6 +235,14 @@ query "resume/generate" verb=POST {
               
                 var.update $position_title {
                   value = $extraction_json.position
+                }
+              
+                var.update $seniority_txt {
+                  value = $extraction_json.seniority
+                }
+              
+                var.update $tech_scope_txt {
+                  value = $extraction_json.tech_scope
                 }
               
                 conditional {
@@ -384,7 +399,7 @@ query "resume/generate" verb=POST {
                                             }
                                           
                                             var.update $error_msg {
-                                              value = "This job's seniority level does not match the candidate's profile. Try with another job."
+                                              value = "This job's seniority level (" ~ $extraction_json.seniority ~ ") does not match the candidate's profile. Try with another job."
                                             }
                                           }
                                         }
@@ -451,6 +466,16 @@ query "resume/generate" verb=POST {
                   }
                 }
               }
+            
+              else {
+                var.update $match_status {
+                  value = 6
+                }
+              
+                var.update $error_msg {
+                  value = "Could not extract structured information from the job description. Please make sure the job description is clear and try again."
+                }
+              }
             }
           }
         }
@@ -499,15 +524,141 @@ query "resume/generate" verb=POST {
           return = {type: "list"}
         } as $rules
       
+        // Map tech_scope codes to full job title base
+        var $tech_scope_full_map {
+          value = {}
+            |set:"ai":"AI Engineer"
+            |set:"machine_learning":"Machine Learning Engineer"
+            |set:"data_science":"Data Scientist"
+            |set:"data_analytics":"Data Analyst"
+            |set:"data_engineering":"Data Engineer"
+            |set:"data_research":"Research Scientist"
+            |set:"computer_vision":"Computer Vision Engineer"
+            |set:"mlops":"MLOps Engineer"
+            |set:"generative_ai":"Generative AI Engineer"
+            |set:"ai_security":"AI Safety Engineer"
+            |set:"ai_product":"AI Product Engineer"
+            |set:"ai_research":"AI Research Engineer"
+            |set:"edge_ai":"Edge AI Engineer"
+            |set:"speech_ai":"Speech & Audio Engineer"
+            |set:"recommendation_systems":"Recommendation Systems Engineer"
+            |set:"knowledge_systems":"Knowledge Engineer"
+            |set:"full_stack_ai":"Full Stack AI Engineer"
+            |set:"backend_ai":"Backend AI Engineer"
+            |set:"frontend_ai":"Frontend AI Engineer"
+            |set:"ai_software_engineering":"AI Software Engineer"
+            |set:"software_engineering":"Software Engineer"
+            |set:"full_stack":"Full Stack Engineer"
+            |set:"backend":"Backend Engineer"
+            |set:"frontend":"Frontend Engineer"
+            |set:"devops":"DevOps Engineer"
+        }
+      
+        // Get most recent job title from profile work experience (sorted desc)
+        var $profile_job_title {
+          value = $work
+            |first
+            |get:"job_title"
+            |first_notnull:""
+        }
+      
+        // Look up tech_scope display name — only if $tech_scope_txt is non-empty
+        // If key not found or $tech_scope_txt is empty, fall back to the profile's own job title
+        var $tech_scope_full {
+          value = $profile_job_title
+        }
+      
+        // Track whether we resolved a mapped tech scope (vs falling back to profile title)
+        var $tech_scope_mapped {
+          value = false
+        }
+      
+        conditional {
+          if ($tech_scope_txt != "") {
+            var $tech_scope_lookup {
+              value = $tech_scope_full_map
+                |get:$tech_scope_txt
+                |first_notnull:""
+            }
+          
+            conditional {
+              if ($tech_scope_lookup != "") {
+                var.update $tech_scope_full {
+                  value = $tech_scope_lookup
+                }
+              
+                var.update $tech_scope_mapped {
+                  value = true
+                }
+              }
+            }
+          }
+        }
+      
+        // Extract seniority prefix from the profile's most recent job title
+        // e.g. "Senior Machine Learning Engineer" → "Senior"
+        var $known_seniority_words {
+          value = [
+            "Intern"
+            "Junior"
+            "Senior"
+            "Lead"
+            "Staff"
+            "Principal"
+            "Manager"
+            "Director"
+            "Founder"
+          ]
+        }
+      
+        var $profile_title_first_word {
+          value = ($profile_job_title|split:" ")|first|first_notnull:""
+        }
+      
+        var $seniority_prefix {
+          value = ""
+        }
+      
+        foreach ($known_seniority_words) {
+          each as $sw {
+            conditional {
+              if ($sw == $profile_title_first_word) {
+                var.update $seniority_prefix {
+                  value = $sw
+                }
+              }
+            }
+          }
+        }
+      
+        // Only prepend seniority when tech_scope came from the map (not the profile title fallback)
+        // If using profile title fallback, it already contains seniority — use it as-is
+        var $last_position_title_for_prompt {
+          value = $profile_job_title
+        }
+      
+        conditional {
+          if ($tech_scope_mapped) {
+            var.update $last_position_title_for_prompt {
+              value = ($seniority_prefix ~ " " ~ $tech_scope_full)|trim
+            }
+          }
+        }
+      
         // Build work experience text
+        // The most recent entry (first) uses $last_position_title_for_prompt as the job title
         var $work_text {
           value = ""
+        }
+      
+        var $work_idx {
+          value = 0
         }
       
         foreach ($work) {
           each as $w {
             var $end_label {
-              value = $w.end_date
+              value = $w.end_date|to_text|first_notnull:""
             }
           
             conditional {
@@ -531,6 +682,15 @@ query "resume/generate" verb=POST {
               value = $w.job_title
             }
           
+            // For the most recent entry, override with the computed prompt title
+            conditional {
+              if ($work_idx == 0) {
+                var.update $title_display {
+                  value = $last_position_title_for_prompt
+                }
+              }
+            }
+          
             var $paren_parts {
               value = $w.job_title|split:"("
             }
@@ -545,14 +705,23 @@ query "resume/generate" verb=POST {
                   value = $closing_parts|first
                 }
               
-                var.update $title_display {
-                  value = ($paren_parts|first)|trim
+                // Only override title_display from parens if NOT the first entry
+                conditional {
+                  if ($work_idx != 0) {
+                    var.update $title_display {
+                      value = ($paren_parts|first)|trim
+                    }
+                  }
                 }
               }
             }
           
             var.update $work_text {
-              value = $work_text ~ $title_display ~ " | " ~ $w.company_name ~ " | " ~ $location_display ~ " | " ~ $w.start_date ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
+              value = $work_text ~ ($title_display|first_notnull:"") ~ " | " ~ ($w.company_name|first_notnull:"") ~ " | " ~ ($location_display|first_notnull:"") ~ " | " ~ ($w.start_date|to_text|first_notnull:"") ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
+            }
+          
+            var.update $work_idx {
+              value = $work_idx + 1
             }
           }
         }
@@ -565,7 +734,7 @@ query "resume/generate" verb=POST {
         foreach ($education) {
           each as $e {
             var.update $edu_text {
-              value = $edu_text ~ $e.degree_title ~ " in " ~ $e.field_of_study ~ " from " ~ $e.university_name ~ " (" ~ $e.end_date ~ ") "
+              value = $edu_text ~ ($e.degree_title|first_notnull:"") ~ " in " ~ ($e.field_of_study|first_notnull:"") ~ " from " ~ ($e.university_name|first_notnull:"") ~ " (" ~ ($e.end_date|to_text|first_notnull:"") ~ ") "
             }
           }
         }
@@ -588,7 +757,7 @@ query "resume/generate" verb=POST {
           value = {}
             |set:"header":({}
               |set:"name":"FULL NAME CAPS"
-              |set:"title":"Most recent or target title"
+              |set:"title":$last_position_title_for_prompt
               |set:"location":"City, State"
               |set:"email":"..."
               |set:"phone":"..."
@@ -842,6 +1011,8 @@ query "resume/generate" verb=POST {
             is_regenerated       : 0
             is_matched           : $match_status
             match_reason         : $error_msg
+            seniority            : $seniority_txt
+            tech_scope           : $tech_scope_txt
             content_id           : $resume_content_id
           }
         } as $log

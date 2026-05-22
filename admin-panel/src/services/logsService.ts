@@ -90,6 +90,8 @@ export interface GenerationLog {
   is_matched: number | null;  // 1=matched, 0=mismatched, 2=skipped(not-remote), 3=not_job_description, 4=duplicate_url, 5=reposted, 6=error, null=unknown
   match_reason: string;
   is_applied: boolean;
+  seniority: string | null;
+  tech_scope: string | null;
   content_id: string | null;
 }
 

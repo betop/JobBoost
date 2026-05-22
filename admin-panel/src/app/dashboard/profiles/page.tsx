@@ -5,16 +5,18 @@ import { useRouter } from "next/navigation";
 import { profileService, type Profile } from "@/services/profileService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
-import { Edit, Trash2, Eye, Plus } from "lucide-react";
+import { Edit, Trash2, Eye, Plus, Tags, X } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useState } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
+import { labelForCode } from "@/components/JobCategoryInput";
 
 export default function ProfilesPage() {
   const router = useRouter();
   const showToast = useUIStore((state) => state.showToast);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [categoryModal, setCategoryModal] = useState<{ name: string; categories: string[] } | null>(null);
 
   const { data: profiles = [], isLoading, refetch } = useQuery({
     queryKey: ["profiles"],
@@ -31,8 +33,14 @@ export default function ProfilesPage() {
     }
   };
 
-  // Extract unique filter options from data
-  const jobCategories = [...new Set(profiles.map((p: Profile) => p.job_category).filter((v): v is string => !!v))];
+  // Extract unique filter options — expand comma-separated codes into individual entries
+  const jobCategoryCodes = [
+    ...new Set(
+      profiles
+        .flatMap((p: Profile) => (p.job_category ? p.job_category.split(",").map((c) => c.trim()) : []))
+        .filter(Boolean)
+    ),
+  ];
   const locations = [...new Set(profiles.map((p: Profile) => p.location).filter((v): v is string => !!v))];
 
   const columns = [
@@ -41,9 +49,21 @@ export default function ProfilesPage() {
     {
       key: "job_category",
       label: "Category",
-      sortable: true,
-      filterOptions: jobCategories.map((c: string) => ({ value: c, label: c })),
-      render: (value: string) => value || "—",
+      sortable: false,
+      filterOptions: jobCategoryCodes.map((c: string) => ({ value: c, label: labelForCode(c) })),
+      render: (value: string, row: Profile) => {
+        if (!value) return <span className="text-gray-400">—</span>;
+        const codes = value.split(",").map((c) => c.trim()).filter(Boolean);
+        return (
+          <button
+            onClick={() => setCategoryModal({ name: row.full_name, categories: codes })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-full text-xs font-medium transition-colors"
+          >
+            <Tags className="w-3 h-3" />
+            {codes.length} {codes.length === 1 ? "category" : "categories"}
+          </button>
+        );
+      },
     },
     {
       key: "location",
@@ -121,6 +141,33 @@ export default function ProfilesPage() {
         confirmText="Delete"
         variant="danger"
       />
+
+      {/* Category modal */}
+      {categoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900 text-base">
+                {categoryModal.name} — Categories
+              </h3>
+              <button
+                onClick={() => setCategoryModal(null)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <ul className="px-5 py-4 space-y-2">
+              {categoryModal.categories.map((code) => (
+                <li key={code} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                  {labelForCode(code)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </>
   );
 }
