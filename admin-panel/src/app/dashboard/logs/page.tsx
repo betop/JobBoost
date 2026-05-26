@@ -188,8 +188,9 @@ function RefreshDropdown({
 const ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
-  const rates = provider === "claude" ? PRICING.claude : PRICING.openai;
-  return (inputTokens / 1_000_000) * rates.input + (outputTokens / 1_000_000) * rates.output;
+  // const rates = provider === "claude" ? PRICING.claude : PRICING.openai;
+  const rates = PRICING.claude;
+  return (inputTokens * rates.input + outputTokens * rates.output) / 1_000_000;
 }
 
 function formatCost(usd: number): string {
@@ -889,10 +890,10 @@ export default function LogsPage() {
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
-  // Bidder-only list — used for the filter dropdown
+  // All users — used for the filter dropdown
   const { data: users } = useQuery({
-    queryKey: ["users", "bidder"],
-    queryFn: () => userService.getAll("bidder"),
+    queryKey: ["users", "all-types"],
+    queryFn: () => userService.getAll(),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });

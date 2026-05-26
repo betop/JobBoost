@@ -5,6 +5,7 @@ query "public/gmail-analyze" verb=POST {
   input {
     text mail_contents?
     text version?
+    text gmail_email?
   }
 
   stack {
@@ -16,6 +17,11 @@ query "public/gmail-analyze" verb=POST {
     precondition ($input.version != null && $input.version != "") {
       error_type = "badrequest"
       error = "version is required"
+    }
+  
+    precondition ($input.gmail_email != null && $input.gmail_email != "") {
+      error_type = "badrequest"
+      error = "gmail_email is required"
     }
   
     // Version check: reject outdated extension clients
@@ -92,6 +98,74 @@ query "public/gmail-analyze" verb=POST {
         |replace:"```":""
         |trim
     }
+  
+    // ── Log this API call ──────────────────────────────────────────────────
+    var $log_profile_id {
+      value = null
+    }
+  
+    var $input_tokens {
+      value = $resp.response.result.usage
+        |get:"input_tokens"
+        |first_notnull:0
+    }
+  
+    var $output_tokens {
+      value = $resp.response.result.usage
+        |get:"output_tokens"
+        |first_notnull:0
+    }
+  
+    // Count emails in the batch (mail_contents is JSON with "emails" array)
+    var $email_count {
+      value = 0
+    }
+  
+    try_catch {
+      try {
+        var $parsed_contents {
+          value = $input.mail_contents|json_decode
+        }
+      
+        var $emails_arr {
+          value = $parsed_contents|get:"emails"
+        }
+      
+        var.update $email_count {
+          value = $emails_arr|count
+        }
+      }
+    
+      catch {
+        var $noop {
+          value = 0
+        }
+      }
+    }
+  
+    // Look up profile by gmail_email if provided
+    conditional {
+      if ($input.gmail_email != null && $input.gmail_email != "") {
+        db.query profile {
+          where = $db.profile.email == $input.gmail_email
+          return = {type: "single"}
+        } as $matched_profile
+      
+        var.update $log_profile_id {
+          value = $matched_profile.id
+        }
+      }
+    }
+  
+    db.add mail_triage_log {
+      data = {
+        gmail_email  : $input.gmail_email|first_notnull:""
+        profile_id   : $log_profile_id
+        input_tokens : $input_tokens
+        output_tokens: $output_tokens
+        email_count  : $email_count
+      }
+    } as $triage_log
   }
 
   response = {ai_response: $clean_response}

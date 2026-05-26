@@ -86,9 +86,10 @@ export default function DashboardLayout({
   useEffect(() => {
     if (authStatus === "unauthenticated") {
       logout();
-      router.push("/login");
+      const returnTo = encodeURIComponent(pathname);
+      router.push(`/login?returnTo=${returnTo}`);
     }
-  }, [authStatus, logout, router]);
+  }, [authStatus, logout, router, pathname]);
 
   // Redirect non-super_admin users away from restricted routes
   useEffect(() => {

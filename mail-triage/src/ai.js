@@ -90,7 +90,7 @@ function buildMailContents(emails) {
   return JSON.stringify(input);
 }
 
-export async function classifyEmailsBatch({ backendApiUrl, backendApiKey, emails }) {
+export async function classifyEmailsBatch({ backendApiUrl, backendApiKey, emails, gmailEmail }) {
   const mailContents = buildMailContents(emails);
   const list = emails.map((e) => String(e.id));
 
@@ -109,6 +109,7 @@ export async function classifyEmailsBatch({ backendApiUrl, backendApiKey, emails
     body: JSON.stringify({
       mail_contents: mailContents,
       version,
+      gmail_email: gmailEmail || "",
     })
   });
 

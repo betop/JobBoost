@@ -156,6 +156,19 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
 
   const token = await getGmailToken(true);
 
+  let gmailEmail = "";
+  try {
+    const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (resp.ok) {
+      const info = await resp.json();
+      gmailEmail = info.email || "";
+    }
+  } catch {
+    // Non-fatal; gmailEmail stays ""
+  }
+
   const max = Number(maxEmailsPerRun ?? settings.maxEmailsPerRun ?? 0);
 
   sendProgress({ type: "status", message: "Ensuring labels…" });
@@ -328,7 +341,8 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
     classifyEmailsBatch({
       backendApiUrl: settings.backendApiUrl,
       backendApiKey: settings.backendApiKey,
-      emails: chunk
+      emails: chunk,
+      gmailEmail,
     });
 
   const chunkSize = 50;
