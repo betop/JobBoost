@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { userService, type UserType } from "@/services/userService";
 import { profileService } from "@/services/profileService";
+import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
@@ -31,6 +32,8 @@ type UserFormData = z.infer<typeof userSchema>;
 export default function NewUserPage() {
   const router = useRouter();
   const showToast = useUIStore((state) => state.showToast);
+  const admin = useAuthStore((state) => state.admin);
+  const isSuperAdmin = admin?.type === "super_admin";
 
   const { data: profiles = [] } = useQuery({
     queryKey: ["profiles"],
@@ -91,22 +94,26 @@ export default function NewUserPage() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Role <span className="text-red-500">*</span>
           </label>
-          <div className="flex gap-4">
-            {(["bidder", "admin"] as const).map((t) => (
-              <label
-                key={t}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <input
-                  type="radio"
-                  value={t}
-                  className="w-4 h-4 text-primary-600"
-                  {...register("type")}
-                />
-                <span className="text-sm font-medium text-gray-800 capitalize">{t}</span>
-              </label>
-            ))}
-          </div>
+          {isSuperAdmin ? (
+            <div className="flex gap-4">
+              {(["bidder", "admin"] as const).map((t) => (
+                <label key={t} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    value={t}
+                    className="w-4 h-4 text-primary-600"
+                    {...register("type")}
+                  />
+                  <span className="text-sm font-medium text-gray-800 capitalize">{t}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg w-fit">
+              <span className="text-sm font-medium text-gray-700 capitalize">Bidder</span>
+              <input type="hidden" {...register("type")} value="bidder" />
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

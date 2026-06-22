@@ -39,12 +39,10 @@ export default function UsersPage() {
   const [approveId, setApproveId] = useState<string | null>(null);
   const [profilesModal, setProfilesModal] = useState<{ name: string; profiles: string[] } | null>(null);
 
-  // Admins always see only bidders; super_admins use the tab filter
-  const queryType = isSuperAdmin ? (activeTab === "all" ? undefined : activeTab) : "bidder";
-
+  // Admins always see only bidders; super_admins fetch all and filter client-side
   const { data: rawUsers = [], isLoading, refetch } = useQuery({
-    queryKey: ["users", isSuperAdmin ? activeTab : "bidder"],
-    queryFn: () => userService.getAll(queryType),
+    queryKey: ["users", "all"],
+    queryFn: () => userService.getAll(undefined),
   });
 
   const { data: allProfiles = [] } = useQuery({
@@ -68,8 +66,13 @@ export default function UsersPage() {
     return map;
   }, [allProfiles]);
 
-  // Never show super_admin in the users list
-  const users = rawUsers.filter((u) => u.type !== "super_admin");
+  // Never show super_admin in the list; filter by active tab client-side
+  const users = rawUsers.filter((u) => {
+    if (u.type === "super_admin") return false;
+    if (!isSuperAdmin) return u.type === "bidder";
+    if (activeTab === "all") return true;
+    return u.type === activeTab;
+  });
 
   const handleDelete = async (id: string) => {
     try {
@@ -271,6 +274,7 @@ export default function UsersPage() {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <DataTable
+          key={activeTab}
           data={users}
           columns={columns}
           searchable

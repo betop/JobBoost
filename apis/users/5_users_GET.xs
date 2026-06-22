@@ -16,17 +16,12 @@ query users verb=GET {
       field_value = $auth.id
     } as $auth_user
   
-    var $users_query {
-      value = "SELECT * FROM x1_2"
-    }
-  
     // Fetch the candidate pool
     conditional {
       if ($auth_user.type == "super_admin") {
-        db.direct_query {
-          sql = "{{ $users_query }};"
-          parser = "template_engine"
-          response_type = "list"
+        db.query users {
+          sort = {users.created_at: "desc"}
+          return = {type: "list"}
         } as $users
       }
     

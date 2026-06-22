@@ -35,6 +35,17 @@ query users verb=POST {
       }
     }
   
+    // Only super_admin can create admin users
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $auth_user
+  
+    precondition ($auth_user.type == "super_admin" || $user_type != "admin") {
+      error_type = "unauthorized"
+      error = "Only super admins can create admin users"
+    }
+  
     var $ids {
       value = $input.profile_ids
     }
@@ -48,7 +59,6 @@ query users verb=POST {
     }
   
     db.add users {
-      enforce_hidden_fields = false
       data = {
         created_at : now
         full_name  : $input.full_name

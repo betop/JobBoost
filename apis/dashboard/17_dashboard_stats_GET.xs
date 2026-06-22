@@ -38,7 +38,7 @@ query "dashboard/stats" verb=GET {
       }
     
       else {
-        // Admin: only see metrics for assigned bidders
+        // Admin: only see metrics for assigned/created bidders
         db.query users {
           where = $db.users.type == "bidder"
           return = {type: "list"}
@@ -88,7 +88,7 @@ query "dashboard/stats" verb=GET {
           }
         }
       
-        // Build set of bidder IDs for filtering
+        // Build set of bidder IDs for filtering tokens
         var $my_bidder_ids {
           value = []
         }
@@ -106,23 +106,23 @@ query "dashboard/stats" verb=GET {
           value = $my_bidders|count
         }
       
-        // Count profiles owned by my bidders
-        db.query profile {
-          return = {type: "list"}
-        } as $all_profiles
-      
-        var $my_profiles {
+        // Count profiles: collect all profile_ids from my bidders, deduplicate, count
+        var $my_profile_ids {
           value = []
         }
       
-        foreach ($all_profiles) {
-          each as $prof {
-            foreach ($my_bidder_ids) {
-              each as $bid_id {
-                conditional {
-                  if ($prof.user_id == $bid_id) {
-                    array.push $my_profiles {
-                      value = $prof
+        foreach ($my_bidders) {
+          each as $b {
+            var $pids {
+              value = $b.profile_ids
+            }
+          
+            conditional {
+              if ($pids != null) {
+                foreach ($pids) {
+                  each as $pid {
+                    array.push $my_profile_ids {
+                      value = $pid
                     }
                   }
                 }
@@ -132,7 +132,7 @@ query "dashboard/stats" verb=GET {
         }
       
         var $total_profiles {
-          value = $my_profiles|count
+          value = $my_profile_ids|unique|count
         }
       
         // Count active tokens for my bidders
@@ -165,35 +165,11 @@ query "dashboard/stats" verb=GET {
           value = $my_tokens|count
         }
       
-        // Count active rules for my bidders
+        // Rules are global — count all active rules
         db.query rule {
           where = $db.rule.is_active == true
-          return = {type: "list"}
-        } as $all_rules
-      
-        var $my_rules {
-          value = []
-        }
-      
-        foreach ($all_rules) {
-          each as $rule {
-            foreach ($my_bidder_ids) {
-              each as $bid_id {
-                conditional {
-                  if ($rule.user_id == $bid_id) {
-                    array.push $my_rules {
-                      value = $rule
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      
-        var $active_rules {
-          value = $my_rules|count
-        }
+          return = {type: "count"}
+        } as $active_rules
       }
     }
   }
