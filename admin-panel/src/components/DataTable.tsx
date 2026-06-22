@@ -38,6 +38,8 @@ interface DataTableProps<T> {
   defaultPageSize?: number;
   /** Available page sizes (default: [5, 10, 25, 50]) */
   pageSizeOptions?: number[];
+  /** Pre-selected column filter values */
+  defaultFilters?: Record<string, string>;
 }
 
 type SortDir = "asc" | "desc" | null;
@@ -81,6 +83,7 @@ export default function DataTable<T extends { id: string }>({
   persistToUrl = true,
   defaultPageSize = 10,
   pageSizeOptions = [5, 10, 25, 50],
+  defaultFilters = {},
 }: DataTableProps<T>) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -90,7 +93,7 @@ export default function DataTable<T extends { id: string }>({
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>(defaultFilters);
 
   // ── URL persistence ────────────────────────────────────────────
   useEffect(() => {

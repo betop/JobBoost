@@ -655,17 +655,21 @@ function StatCard({
   );
 }
 
-// Helper: get last week's Monday–Sunday in YYYY-MM-DD
+// Helper: get last week's Sunday–Saturday in YYYY-MM-DD
 function getLastWeekRange(): { from: string; to: string } {
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun
-  // Last Sunday = today - dayOfWeek (if Sun, -7)
-  const lastSun = new Date(now);
-  lastSun.setDate(now.getDate() - (dayOfWeek === 0 ? 7 : dayOfWeek));
-  const lastMon = new Date(lastSun);
-  lastMon.setDate(lastSun.getDate() - 6);
+  const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
+  // This week's Sunday = today - dayOfWeek days
+  const thisWeekSun = new Date(now);
+  thisWeekSun.setDate(now.getDate() - dayOfWeek);
+  // Last week's Sunday = thisWeekSun - 7
+  const lastWeekSun = new Date(thisWeekSun);
+  lastWeekSun.setDate(thisWeekSun.getDate() - 7);
+  // Last week's Saturday = lastWeekSun + 6
+  const lastWeekSat = new Date(lastWeekSun);
+  lastWeekSat.setDate(lastWeekSun.getDate() + 6);
   const fmt = (d: Date) => d.toISOString().split("T")[0];
-  return { from: fmt(lastMon), to: fmt(lastSun) };
+  return { from: fmt(lastWeekSun), to: fmt(lastWeekSat) };
 }
 
 // ── EST date helpers (used throughout LogsPage) ──
@@ -725,8 +729,8 @@ export default function LogsPage() {
   
   // Date range state — only these trigger API calls
   const [statsPeriod, setStatsPeriod] = useState<LogsPeriod>("today");
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState(today);
+  const [dateFrom, setDateFrom] = useState<number | undefined>(() => new Date(toStartOfDayEST(today)).getTime());
+  const [dateTo, setDateTo] = useState<number | undefined>(() => new Date(toEndOfDayEST(today)).getTime());
   // Pending dates: updated as user types, applied only on Check button click
   const [pendingFrom, setPendingFrom] = useState(today);
   const [pendingTo, setPendingTo] = useState(today);
@@ -786,11 +790,11 @@ export default function LogsPage() {
       const customTo   = params.get("date_to")   ?? undefined;
       const range = getESTDateRange(urlPeriod, customFrom, customTo);
       if (range) {
-        setDateFrom(range.from);
-        setDateTo(range.to);
+        setDateFrom(new Date(toStartOfDayEST(range.from)).getTime());
+        setDateTo(new Date(toEndOfDayEST(range.to)).getTime());
       } else {
-        setDateFrom("");
-        setDateTo("");
+        setDateFrom(undefined);
+        setDateTo(undefined);
       }
       setDatesReady(true);
     } else {
@@ -799,14 +803,14 @@ export default function LogsPage() {
         const period = (saved?.period as LogsPeriod) ?? "today";
         setStatsPeriod(period);
         if (saved?.dateFrom !== undefined) {
-          setDateFrom(saved.dateFrom);
-          setDateTo(saved.dateTo);
+          setDateFrom(saved.dateFrom ? new Date(toStartOfDayEST(saved.dateFrom)).getTime() : undefined);
+          setDateTo(saved.dateTo ? new Date(toEndOfDayEST(saved.dateTo)).getTime() : undefined);
           setPendingFrom(saved.dateFrom);
           setPendingTo(saved.dateTo);
         } else {
           const range = getESTDateRange(period);
-          if (range) { setDateFrom(range.from); setDateTo(range.to); setPendingFrom(range.from); setPendingTo(range.to); }
-          else { setDateFrom(""); setDateTo(""); }
+          if (range) { setDateFrom(new Date(toStartOfDayEST(range.from)).getTime()); setDateTo(new Date(toEndOfDayEST(range.to)).getTime()); setPendingFrom(range.from); setPendingTo(range.to); }
+          else { setDateFrom(undefined); setDateTo(undefined); }
         }
         setDatesReady(true);
       });
@@ -840,14 +844,14 @@ export default function LogsPage() {
    * Reads the current cache slice for the active date window into state.
    * Called after every successful fetch/merge.
    */
-  const flushCacheToState = useCallback(async (from: string, to: string) => {
-    const fromISO = from ? toStartOfDayEST(from) : undefined;
-    const toISO   = to   ? toEndOfDayEST(to)     : undefined;
+  const flushCacheToState = useCallback(async (from: number | undefined, to: number | undefined) => {
+    const fromISO = from ? new Date(from).toISOString() : undefined;
+    const toISO   = to   ? new Date(to).toISOString()   : undefined;
     const records = await logCache.getCachedRecords(fromISO, toISO);
     setCachedRows(records);
   }, []);
 
-  async function doFetch(from?: string, to?: string) {
+  async function doFetch(from?: number, to?: number) {
     const effectiveFrom = from !== undefined ? from : dateFrom;
     const effectiveTo   = to   !== undefined ? to   : dateTo;
     setLogsLoading(true);
@@ -883,20 +887,15 @@ export default function LogsPage() {
   }, [datesReady]);
 
 
-  // All active users — used for building the user_name lookup map
+  // All active users — used for building the user_name lookup map AND filter dropdown
   const { data: allUsers } = useQuery({
-    queryKey: ["users", "all"],
-    queryFn: () => userService.getAll(),
+    queryKey: ["users", "bidder"],
+    queryFn: () => userService.getAll("bidder"),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
-  // All users — used for the filter dropdown
-  const { data: users } = useQuery({
-    queryKey: ["users", "all-types"],
-    queryFn: () => userService.getAll(),
-    staleTime: 10 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
-  });
+
+  console.log(allUsers)
   // Extra name map for user IDs that appear in logs but are missing from allUsers
   // (i.e. deleted users). Populated lazily once cachedRows + allUsers are both ready.
   const [extraUserNames, setExtraUserNames] = useState<Map<string, string | null>>(new Map());
@@ -984,25 +983,27 @@ export default function LogsPage() {
     const range = getESTDateRange(period);
     if (period === "custom") {
       const lastWeek = getLastWeekRange();
-      setDateFrom(lastWeek.from);
-      setDateTo(lastWeek.to);
+      setDateFrom(new Date(toStartOfDayEST(lastWeek.from)).getTime());
+      setDateTo(new Date(toEndOfDayEST(lastWeek.to)).getTime());
       setPendingFrom(lastWeek.from);
       setPendingTo(lastWeek.to);
       updateQueryParams({ statsPeriod: period, date_from: lastWeek.from, date_to: lastWeek.to, page: 1 });
       logCache.setDateFilter({ period, dateFrom: lastWeek.from, dateTo: lastWeek.to });
       // Don't auto-fetch for custom — user must click Check
     } else if (period === "all") {
-      setDateFrom("");
-      setDateTo("");
+      setDateFrom(undefined);
+      setDateTo(undefined);
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
       logCache.setDateFilter({ period, dateFrom: "", dateTo: "" });
-      doFetch("", "");
+      doFetch(undefined, undefined);
     } else if (range) {
-      setDateFrom(range.from);
-      setDateTo(range.to);
+      const fromMs = new Date(toStartOfDayEST(range.from)).getTime();
+      const toMs = new Date(toEndOfDayEST(range.to)).getTime();
+      setDateFrom(fromMs);
+      setDateTo(toMs);
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
       logCache.setDateFilter({ period, dateFrom: range.from, dateTo: range.to });
-      doFetch(range.from, range.to);
+      doFetch(fromMs, toMs);
     }
   }
 
@@ -1070,14 +1071,14 @@ export default function LogsPage() {
   }, [cachedRows, profiles, allUsers, extraUserNames, admin]);
 
   const userOptions = useMemo(() => {
-    const options = (users ?? []).map((u) => ({ value: u.id, label: u.full_name }));
+    const options = (allUsers ?? []).map((u) => ({ value: u.id, label: u.full_name }));
     const hasAdminRows = allRows.some((log) => {
       const userId = (log.user_id ?? "").trim();
       return userId === "" || userId === ADMIN_USER_ID;
     });
     if (!hasAdminRows) return options;
     return [{ value: ADMIN_USER_ID, label: "Admin" }, ...options];
-  }, [users, allRows]);
+  }, [allUsers, allRows]);
 
   // ── Client-side filtering: user, profile, match status, type, search ──
   const filtered = useMemo(() => {
@@ -1285,12 +1286,15 @@ export default function LogsPage() {
             type="button"
             disabled={logsLoading}
             onClick={() => {
-              setDateFrom(pendingFrom);
-              setDateTo(pendingTo);
+              const fromMs = new Date(toStartOfDayEST(pendingFrom)).getTime();
+              const toMs = new Date(toEndOfDayEST(pendingTo)).getTime();
+              setDateFrom(fromMs);
+              setDateTo(toMs);
               setPage(1);
               updateQueryParams({ date_from: pendingFrom, date_to: pendingTo, page: 1 });
+              console.log(fromMs, toMs);
               logCache.setDateFilter({ period: "custom", dateFrom: pendingFrom, dateTo: pendingTo });
-              doFetch(pendingFrom, pendingTo);
+              doFetch(fromMs, toMs);
             }}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
@@ -1306,7 +1310,7 @@ export default function LogsPage() {
       ) : (
         <div className={`space-y-3 mb-8 transition-opacity duration-200 ${logsLoading ? "opacity-50" : "opacity-100"}`}>
           {/* Row 1: Total, Applied, Est. Cost */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${isSuperAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
               <div className="bg-blue-500 w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Activity className="w-4 h-4 text-white" />
@@ -1326,6 +1330,7 @@ export default function LogsPage() {
                 <p className="text-[10px] text-gray-400">{stats.total_generations ? Math.round((stats.applied_count / stats.total_generations) * 100) : 0}% of total</p>
               </div>
             </div>
+            {isSuperAdmin && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
               <div className="bg-purple-600 w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
                 <DollarSign className="w-4 h-4 text-white" />
@@ -1335,6 +1340,7 @@ export default function LogsPage() {
                 <p className="text-xl font-bold text-gray-900">{formatCost(periodCost)}</p>
               </div>
             </div>
+            )}
           </div>
           {/* Row 2: Matched, Mismatched, Duplicated, Reposted, Not a JD, Skipped, Error */}
           <div className="grid grid-cols-7 gap-2">
@@ -1550,6 +1556,65 @@ export default function LogsPage() {
           </div>
         ) : (
           <>
+            {/* Top pagination */}
+            <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-end gap-1 text-sm bg-white">
+              <span className="text-xs text-gray-500 mr-2">
+                Page {safePage} of {totalPages}
+              </span>
+              <button
+                onClick={() => { setPage(1); updateQueryParams({ page: 1 }); }}
+                disabled={safePage === 1}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="First page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => { const newPage = Math.max(1, safePage - 1); setPage(newPage); updateQueryParams({ page: newPage }); }}
+                disabled={safePage === 1}
+                className="px-2.5 py-1.5 rounded text-xs hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((n) => n === 1 || n === totalPages || Math.abs(n - safePage) <= 1)
+                .reduce<(number | "…")[]>((acc, n, idx, arr) => {
+                  if (idx > 0 && n - (arr[idx - 1] as number) > 1) acc.push("…");
+                  acc.push(n);
+                  return acc;
+                }, [])
+                .map((n, idx) =>
+                  n === "…" ? (
+                    <span key={`top-ellipsis-${idx}`} className="px-1 text-gray-400 text-xs">…</span>
+                  ) : (
+                    <button
+                      key={`top-${n}`}
+                      onClick={() => { setPage(n as number); updateQueryParams({ page: n as number }); }}
+                      className={`w-7 h-7 rounded text-xs font-medium transition-colors ${
+                        safePage === n ? "bg-blue-600 text-white" : "hover:bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => { const newPage = Math.min(totalPages, safePage + 1); setPage(newPage); updateQueryParams({ page: newPage }); }}
+                disabled={safePage === totalPages}
+                className="px-2.5 py-1.5 rounded text-xs hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+              <button
+                onClick={() => { setPage(totalPages); updateQueryParams({ page: totalPages }); }}
+                disabled={safePage === totalPages}
+                className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Last page"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -1557,12 +1622,12 @@ export default function LogsPage() {
                     {(
                       [
                         { field: "created_at",    label: "Date",        align: "left",  hidden: false },
-                        { field: "user_name",     label: "User",        align: "left",  hidden: !!filters.user_id },
-                        { field: "profile_name",  label: "Profile",     align: "left",  hidden: !!filters.profile_id },
+                        { field: "user_name",     label: "User",        align: "left",  hidden: false },
+                        { field: "profile_name",  label: "Profile",     align: "left",  hidden: false },
                         { field: null,            label: "Job URL",     align: "left",  hidden: false },
                         { field: "position_title",label: "Position",    align: "left",  hidden: false },
                         { field: "company_name",  label: "Company",     align: "left",  hidden: false },
-                        { field: null,            label: "Est. Cost",   align: "right", hidden: false },
+                        { field: null,            label: "Est. Cost",   align: "right", hidden: !isSuperAdmin },
                         { field: null,            label: "Actions",     align: "left",  hidden: false },
                       ] as { field: SortField | null; label: string; align: string; hidden: boolean }[]
                     ).filter((col) => !col.hidden).map(({ field, label, align }) => (
@@ -1598,29 +1663,26 @@ export default function LogsPage() {
                           {new Date(log.created_at).toLocaleString("en-US", {
                             month: "short", day: "numeric", year: "numeric",
                             hour: "2-digit", minute: "2-digit",
+                            timeZone: "America/New_York",
                           })}
                         </div>
                       </td>
 
                       {/* User */}
-                      {!filters.user_id && (
-                        <td className="px-4 py-3 font-medium text-gray-900">
-                          {(() => {
-                            const uid = (log.user_id ?? "").trim();
-                            if (log.user_name) return log.user_name;
-                            if (uid && extraUserNames.get(uid) === null)
-                              return <span className="text-red-400 italic text-xs">Deleted user</span>;
-                            return <span className="text-gray-400 italic">—</span>;
-                          })()}
-                        </td>
-                      )}
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {(() => {
+                          const uid = (log.user_id ?? "").trim();
+                          if (log.user_name) return log.user_name;
+                          if (uid && extraUserNames.get(uid) === null)
+                            return <span className="text-red-400 italic text-xs">Deleted user</span>;
+                          return <span className="text-gray-400 italic">—</span>;
+                        })()}
+                      </td>
 
                       {/* Profile */}
-                      {!filters.profile_id && (
-                        <td className="px-4 py-3 text-gray-700">
-                          {log.profile_name || <span className="text-gray-400 italic">—</span>}
-                        </td>
-                      )}
+                      <td className="px-4 py-3 text-gray-700">
+                        {log.profile_name || <span className="text-gray-400 italic">—</span>}
+                      </td>
 
                       {/* Job URL */}
                       <td className="px-4 py-3 max-w-[160px]">
@@ -1773,9 +1835,11 @@ export default function LogsPage() {
                       </td>
 
                       {/* Est. Cost */}
+                      {isSuperAdmin && (
                       <td className="px-4 py-3 text-right font-mono text-xs text-emerald-700 font-semibold">
                         {formatCost(calcCost(log.ai_provider, log.input_tokens ?? 0, log.output_tokens ?? 0))}
                       </td>
+                      )}
 
                       {/* Actions */}
                       <td className="px-4 py-3">
@@ -1854,14 +1918,18 @@ export default function LogsPage() {
                 ) : (
                   <span><span className="font-semibold text-gray-700">{allRows.length}</span> logs</span>
                 )}
-                <span className="text-gray-300">·</span>
-                <span className="font-semibold text-emerald-700">
-                  {formatCost(
-                    allRows.reduce(
-                      (s: number, l: GenerationLog) => s + calcCost(l.ai_provider, l.input_tokens ?? 0, l.output_tokens ?? 0), 0
-                    )
-                  )}
-                </span>
+                {isSuperAdmin && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span className="font-semibold text-emerald-700">
+                      {formatCost(
+                        allRows.reduce(
+                          (s: number, l: GenerationLog) => s + calcCost(l.ai_provider, l.input_tokens ?? 0, l.output_tokens ?? 0), 0
+                        )
+                      )}
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* Right: pagination controls */}

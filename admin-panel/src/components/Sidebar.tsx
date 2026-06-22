@@ -29,7 +29,7 @@ const navigation = [
   { name: "Rules", href: "/dashboard/rules", icon: FileText, superOnly: true },
   { name: "Extensions", href: "/dashboard/versions", icon: Package, superOnly: true },
   { name: "Generation Logs", href: "/dashboard/logs", icon: Activity, superOnly: false },
-  { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail, superOnly: false },
+  { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail, superOnly: true },
 ];
 
 export default function Sidebar() {
@@ -70,13 +70,13 @@ export default function Sidebar() {
             </h1>
           </div>
 
-          <nav className="flex-1 px-4 py-6 space-y-2">
+          <nav className="sidebar-nav flex-1 px-4 py-6 space-y-2 overflow-y-auto">
             {visibleNav.map((item) => {
               const Icon = item.icon;
               const isActive =
                 item.href === "/dashboard"
                   ? pathname === "/dashboard"
-                  : pathname.startsWith(item.href);
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
 
               return (
                 <Link

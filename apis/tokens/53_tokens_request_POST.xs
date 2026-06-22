@@ -74,6 +74,7 @@ query "tokens/request" verb=POST {
     // Xano db.add inserts all table columns; unset uuid fields get "" which is invalid
     // Use placeholder values for reviewed_by/generated_token_id (will be overwritten on approve/decline)
     db.add token_request {
+      enforce_hidden_fields = false
       data = {
         created_at        : now
         requested_by      : $auth_user.id

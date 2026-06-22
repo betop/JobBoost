@@ -61,6 +61,7 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
     }
   
     db.add access_token {
+      enforce_hidden_fields = false
       data = {
         created_at         : now
         token              : $raw_token
@@ -78,6 +79,7 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
     db.edit token_request {
       field_name = "id"
       field_value = $req.id
+      enforce_hidden_fields = false
       data = {
         status            : "approved"
         reviewed_by       : $auth_user.id

@@ -39,6 +39,7 @@ query "auth/register" verb=POST {
     security.create_uuid as $new_user_id
   
     db.add users {
+      enforce_hidden_fields = false
       data = {
         id                 : $new_user_id
         created_at         : now

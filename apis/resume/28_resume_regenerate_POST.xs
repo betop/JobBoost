@@ -267,6 +267,7 @@ query "resume/regenerate" verb=POST {
       
         // Save resume/cover letter content for reference
         db.add resume_content {
+          enforce_hidden_fields = false
           data = {raw_response: $response_text}
         } as $content_record
       
@@ -379,6 +380,7 @@ query "resume/regenerate" verb=POST {
     }
   
     db.add generation_log {
+      enforce_hidden_fields = false
       data = {
         profile_id           : $log.profile_id
         user_id              : $auth.id

@@ -48,6 +48,7 @@ query users verb=POST {
     }
   
     db.add users {
+      enforce_hidden_fields = false
       data = {
         created_at : now
         full_name  : $input.full_name

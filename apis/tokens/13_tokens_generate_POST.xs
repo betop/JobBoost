@@ -53,6 +53,7 @@ query "tokens/generate" verb=POST {
     }
   
     db.add access_token {
+      enforce_hidden_fields = false
       data = {
         created_at         : now
         token              : $raw_token

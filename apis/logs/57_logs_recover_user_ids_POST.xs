@@ -83,6 +83,7 @@ query "logs/recover-user-ids" verb=POST {
             db.edit generation_log {
               field_name = "id"
               field_value = $log.id
+              enforce_hidden_fields = false
               data = {user_id: $found_user_id}
             } as $updated_log
           

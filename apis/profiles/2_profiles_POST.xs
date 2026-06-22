@@ -17,6 +17,7 @@ query profiles verb=POST {
 
   stack {
     db.add profile {
+      enforce_hidden_fields = false
       data = {
         created_at  : now
         full_name   : $input.full_name
@@ -34,6 +35,7 @@ query profiles verb=POST {
     foreach ($input.education) {
       each as $e {
         db.add education {
+          enforce_hidden_fields = false
           data = {
             created_at     : now
             profile_id     : $p.id
@@ -52,6 +54,7 @@ query profiles verb=POST {
     foreach ($input.work_experience) {
       each as $w {
         db.add work_experience {
+          enforce_hidden_fields = false
           data = {
             created_at     : now
             profile_id     : $p.id

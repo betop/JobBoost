@@ -100,10 +100,6 @@ query "public/gmail-analyze" verb=POST {
     }
   
     // ── Log this API call ──────────────────────────────────────────────────
-    var $log_profile_id {
-      value = null
-    }
-  
     var $input_tokens {
       value = $resp.response.result.usage
         |get:"input_tokens"
@@ -143,24 +139,20 @@ query "public/gmail-analyze" verb=POST {
       }
     }
   
-    // Look up profile by gmail_email if provided
-    conditional {
-      if ($input.gmail_email != null && $input.gmail_email != "") {
-        db.query profile {
-          where = $db.profile.email == $input.gmail_email
-          return = {type: "single"}
-        } as $matched_profile
-      
-        var.update $log_profile_id {
-          value = $matched_profile.id
-        }
-      }
+    // Validate gmail_email against the allowlist
+    db.query mail_triage_allowlist {
+      where = $db.mail_triage_allowlist.email == $input.gmail_email
+      return = {type: "single"}
+    } as $allowlist_entry
+  
+    precondition ($allowlist_entry != null) {
+      error_type = "unauthorized"
+      error = "This email is not authorized to use Mail Triage."
     }
   
     db.add mail_triage_log {
       data = {
         gmail_email  : $input.gmail_email|first_notnull:""
-        profile_id   : $log_profile_id
         input_tokens : $input_tokens
         output_tokens: $output_tokens
         email_count  : $email_count

@@ -63,6 +63,7 @@ query "tokens/{token_id}/assign-admins" verb=PATCH {
     db.edit access_token {
       field_name = "id"
       field_value = $input.token_id
+      enforce_hidden_fields = false
       data = {assigned_admin_ids: $validated_ids}
     } as $updated_token
   }

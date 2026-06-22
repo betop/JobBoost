@@ -7,8 +7,7 @@ export interface User {
   full_name: string;
   email: string;
   type: UserType;
-  profile_ids?: string[];
-  profile_names?: string[];
+  profile_ids?: string[] | string;
   assigned_bidder_ids?: string[];
   is_active: boolean;
   is_approved: boolean;

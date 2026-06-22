@@ -3,18 +3,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { profileService, type Profile } from "@/services/profileService";
+import { userService, type User } from "@/services/userService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import { Edit, Trash2, Eye, Plus, Tags, X } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
+import { useAuthStore } from "@/store/authStore";
 import { labelForCode } from "@/components/JobCategoryInput";
 
 export default function ProfilesPage() {
   const router = useRouter();
   const showToast = useUIStore((state) => state.showToast);
+  const admin = useAuthStore((state) => state.admin);
+  const isSuperAdmin = admin?.type === "super_admin";
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [categoryModal, setCategoryModal] = useState<{ name: string; categories: string[] } | null>(null);
 
@@ -22,6 +26,35 @@ export default function ProfilesPage() {
     queryKey: ["profiles"],
     queryFn: profileService.getAll,
   });
+
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ["users", "all"],
+    queryFn: () => userService.getAll(undefined),
+  });
+
+  // Parse PostgreSQL array strings like "{uuid1,uuid2}" into JS arrays
+  const parseProfileIds = (ids: any): string[] => {
+    if (!ids) return [];
+    if (Array.isArray(ids)) return ids;
+    if (typeof ids === "string") {
+      return ids.replace(/^\{|\}$/g, "").split(",").filter(Boolean);
+    }
+    return [];
+  };
+
+  // Build a map: profile_id → list of admin full_names assigned to it
+  const adminsByProfile = useMemo(() => {
+    const map = new Map<string, string[]>();
+    allUsers
+      .filter((u: User) => u.type === "admin" || u.type === "super_admin")
+      .forEach((u: User) => {
+        parseProfileIds(u.profile_ids).forEach((pid) => {
+          if (!map.has(pid)) map.set(pid, []);
+          map.get(pid)!.push(u.full_name);
+        });
+      });
+    return map;
+  }, [allUsers]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -72,6 +105,24 @@ export default function ProfilesPage() {
       filterOptions: locations.map((l: string) => ({ value: l, label: l })),
       render: (value: string) => value || "-",
     },
+    ...(isSuperAdmin ? [{
+      key: "id",
+      label: "Admin",
+      sortable: false,
+      render: (_: any, row: Profile) => {
+        const names = adminsByProfile.get(row.id) ?? [];
+        if (names.length === 0) return <span className="text-gray-400 text-xs">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {names.map((name) => (
+              <span key={name} className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-xs font-medium">
+                {name}
+              </span>
+            ))}
+          </div>
+        );
+      },
+    }] : []),
     {
       key: "created_at",
       label: "Created Date",

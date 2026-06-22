@@ -41,6 +41,7 @@ query "tokens/requests/{token_request_id}/decline" verb=PATCH {
     db.edit token_request {
       field_name = "id"
       field_value = $req.id
+      enforce_hidden_fields = false
       data = {
         status      : "declined"
         reviewed_by : $auth_user.id

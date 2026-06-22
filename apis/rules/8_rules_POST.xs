@@ -16,6 +16,7 @@ query rules verb=POST {
     }
   
     db.add rule {
+      enforce_hidden_fields = false
       data = {
         created_at         : now
         sentence           : $input.sentence

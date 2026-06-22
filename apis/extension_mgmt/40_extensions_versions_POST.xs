@@ -26,6 +26,7 @@ query "extensions/versions" verb=POST {
     }
   
     db.add extension_version {
+      enforce_hidden_fields = false
       data = {
         extension_name: $input.extension_name
         version       : $input.version

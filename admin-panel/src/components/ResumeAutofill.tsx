@@ -38,15 +38,7 @@ async function importPdfJsFromCdn(): Promise<PdfJsModule> {
 
 async function loadPdfJsModule(): Promise<PdfJsModule> {
   if (!pdfJsModulePromise) {
-    pdfJsModulePromise = (async () => {
-      try {
-        const localModulePath = "pdfjs-dist/webpack.mjs";
-        return (await import(localModulePath)) as PdfJsModule;
-      } catch (localErr) {
-        console.warn("Local pdfjs import failed, using CDN fallback", localErr);
-        return importPdfJsFromCdn();
-      }
-    })();
+    pdfJsModulePromise = importPdfJsFromCdn();
   }
 
   return pdfJsModulePromise;

@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { userService, type User, type UserType } from "@/services/userService";
+import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/authStore";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
-import { Edit, Trash2, UserX, UserCheck, Plus, Shield, User as UserIcon, CheckCircle } from "lucide-react";
+import { Edit, Trash2, UserX, UserCheck, Plus, Shield, User as UserIcon, CheckCircle, Tags, X } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 
 // Tabs only shown to super_admin
@@ -31,11 +32,12 @@ export default function UsersPage() {
   const admin = useAuthStore((state) => state.admin);
   const isSuperAdmin = admin?.type === "super_admin";
 
-  const [activeTab, setActiveTab] = useState<UserType | "all">("all");
+  const [activeTab, setActiveTab] = useState<UserType | "all">("bidder");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
   const [activateId, setActivateId] = useState<string | null>(null);
   const [approveId, setApproveId] = useState<string | null>(null);
+  const [profilesModal, setProfilesModal] = useState<{ name: string; profiles: string[] } | null>(null);
 
   // Admins always see only bidders; super_admins use the tab filter
   const queryType = isSuperAdmin ? (activeTab === "all" ? undefined : activeTab) : "bidder";
@@ -44,6 +46,27 @@ export default function UsersPage() {
     queryKey: ["users", isSuperAdmin ? activeTab : "bidder"],
     queryFn: () => userService.getAll(queryType),
   });
+
+  const { data: allProfiles = [] } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: profileService.getAll,
+  });
+
+  // Parse PostgreSQL array strings like "{uuid1,uuid2}" into JS arrays
+  const parseProfileIds = (ids: any): string[] => {
+    if (!ids) return [];
+    if (Array.isArray(ids)) return ids;
+    if (typeof ids === "string") {
+      return ids.replace(/^\{|\}$/g, "").split(",").filter(Boolean);
+    }
+    return [];
+  };
+
+  const profileNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    allProfiles.forEach((p) => map.set(p.id, p.full_name));
+    return map;
+  }, [allProfiles]);
 
   // Never show super_admin in the users list
   const users = rawUsers.filter((u) => u.type !== "super_admin");
@@ -119,10 +142,21 @@ export default function UsersPage() {
       },
     }] : []),
     {
-      key: "profile_names",
+      key: "profile_ids",
       label: "Profiles",
-      render: (value: string[]) =>
-        value && value.length > 0 ? value.join(", ") : <span className="text-gray-400 text-xs">None</span>,
+      render: (_: unknown, row: User) => {
+        const names = parseProfileIds(row.profile_ids).map((id) => profileNameMap.get(id)).filter(Boolean) as string[];
+        if (names.length === 0) return <span className="text-gray-400">—</span>;
+        return (
+          <button
+            onClick={() => setProfilesModal({ name: row.full_name, profiles: names })}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-full text-xs font-medium transition-colors"
+          >
+            <Tags className="w-3 h-3" />
+            {names.length} {names.length === 1 ? "profile" : "profiles"}
+          </button>
+        );
+      },
     },
     {
       key: "is_active",
@@ -242,6 +276,7 @@ export default function UsersPage() {
           searchable
           searchPlaceholder="Search users..."
           loading={isLoading}
+          defaultFilters={{ is_active: "true" }}
         />
       </div>
 
@@ -288,6 +323,33 @@ export default function UsersPage() {
         cancelText="No, Cancel"
         variant="info"
       />
+
+      {/* Profiles modal */}
+      {profilesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900 text-base">
+                {profilesModal.name} — Profiles
+              </h3>
+              <button
+                onClick={() => setProfilesModal(null)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <ul className="px-5 py-4 space-y-2">
+              {profilesModal.profiles.map((name) => (
+                <li key={name} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                  {name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </>
   );
 }

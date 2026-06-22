@@ -7,6 +7,7 @@ query "admin/setup-mail-triage" verb=POST {
 
   stack {
     db.add extension_version {
+      enforce_hidden_fields = false
       data = {
         extension_name: "mail-triage"
         version       : "0.1.1"

@@ -860,6 +860,7 @@ query "resume/generate" verb=POST {
           
             // Save resume/cover letter content for reference
             db.add resume_content {
+              enforce_hidden_fields = false
               data = {raw_response: $response_text}
             } as $content_record
           
@@ -986,6 +987,7 @@ query "resume/generate" verb=POST {
         db.edit generation_log {
           field_name = "id"
           field_value = $input.log_id
+          enforce_hidden_fields = false
           data = {
             input_tokens : $input_tokens
             output_tokens: $output_tokens
@@ -997,6 +999,7 @@ query "resume/generate" verb=POST {
     
       else {
         db.add generation_log {
+          enforce_hidden_fields = false
           data = {
             profile_id           : $input.profile_id
             user_id              : $access.user_id
