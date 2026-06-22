@@ -67,13 +67,19 @@ export default function EditUserPage() {
 
   const selectedType = watch("type");
 
+  const parseProfileIds = (ids: string | string[] | undefined): string[] => {
+    if (!ids) return [];
+    if (Array.isArray(ids)) return ids;
+    return ids.replace(/^\{|\}$/g, "").split(",").filter(Boolean);
+  };
+
   useEffect(() => {
     if (user) {
       reset({
         full_name: user.full_name,
         email: user.email,
         type: user.type === "super_admin" ? "admin" : user.type,
-        profile_ids: user.profile_ids ?? [],
+        profile_ids: parseProfileIds(user.profile_ids),
         assigned_bidder_ids: user.assigned_bidder_ids ?? [],
         is_active: user.is_active,
       });
