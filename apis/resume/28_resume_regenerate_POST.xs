@@ -35,6 +35,11 @@ query "resume/regenerate" verb=POST {
       error = "Profile not found"
     }
   
+    precondition ($prof.is_approved) {
+      error_type = "accessdenied"
+      error = "Profile is not approved. Please contact your admin."
+    }
+  
     var $input_tokens {
       value = 0
     }

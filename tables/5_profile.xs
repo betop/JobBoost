@@ -13,13 +13,19 @@ table profile {
     text job_category?
     int resume_template?=1
     timestamp updated_at?
+    bool is_approved?
     uuid created_by? {
       table = "users"
     }
+  
+    bool include_key_projects?=true
+    bool include_certifications?=true
+    bool include_achievements?=true
   }
 
   index = [
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
+    {type: "btree", field: [{name: "is_approved", op: "asc"}]}
   ]
 }

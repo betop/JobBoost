@@ -46,6 +46,9 @@ const profileSchema = z.object({
   resume_template: z.number().int().min(1).max(10).optional().default(1),
   education: z.array(educationSchema).min(1, "At least one education entry is required"),
   work_experience: z.array(workExperienceSchema).min(1, "At least one work experience is required"),
+  include_key_projects: z.boolean().optional().default(true),
+  include_certifications: z.boolean().optional().default(true),
+  include_achievements: z.boolean().optional().default(true),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -76,6 +79,9 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       github: profile.github ?? "",
       job_category: profile.job_category ?? "",
       resume_template: profile.resume_template ?? 1,
+      include_key_projects: profile.include_key_projects ?? false,
+      include_certifications: profile.include_certifications ?? false,
+      include_achievements: profile.include_achievements ?? false,
       education: profile.education?.length
         ? profile.education.map((e) => ({
             ...e,
@@ -273,6 +279,38 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
             <TemplatePicker value={field.value ?? 1} onChange={field.onChange} />
           )}
         />
+      </div>
+
+      {/* Resume Sections */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">Resume Sections</h2>
+        <p className="text-sm text-gray-500 mb-4">Choose which optional sections to include when generating this profile&apos;s resume.</p>
+        <div className="flex flex-col gap-3">
+          {(
+            [
+              { name: "include_key_projects", label: "Key Projects" },
+              { name: "include_certifications", label: "Certifications" },
+              { name: "include_achievements", label: "Awards & Recognition" },
+            ] as const
+          ).map(({ name, label }) => (
+            <Controller
+              key={name}
+              name={name}
+              control={control}
+              render={({ field }) => (
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={field.value ?? false}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  {label}
+                </label>
+              )}
+            />
+          ))}
+        </div>
       </div>
 
       <div className="flex gap-4 pt-4">

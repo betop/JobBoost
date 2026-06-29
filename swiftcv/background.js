@@ -308,10 +308,104 @@ function setupContextMenu() {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "generate_resume") {
     const selectedText = info.selectionText;
-    
+
     if (!selectedText || selectedText.trim().length === 0) {
       showNotification("Please select job description text first.");
       return;
+    }
+
+    // Capture HTML FIRST — before any async network calls that can clear the selection.
+    // executeScript runs directly in the tab context (no message passing, no timing issues).
+    let jobDescription = selectedText;
+    try {
+      const [injected] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          // ── Sanitizer: keep semantic tags, strip scripts/styles/events ──
+          function sanitizeHtml(rootEl) {
+            const ALLOWED_TAGS = new Set([
+              "p","br","ul","ol","li","h1","h2","h3","h4","h5","h6",
+              "strong","em","b","i","u","span","div","a","blockquote",
+              "table","thead","tbody","tr","td","th","section","article",
+              "header","main","dl","dt","dd","pre","code","figure","figcaption",
+            ]);
+            const STRIP_TAGS = new Set([
+              "script","style","iframe","frame","frameset","form","input",
+              "button","select","textarea","svg","link","meta","object",
+              "embed","noscript","canvas","video","audio","img","picture",
+            ]);
+
+            function clean(node) {
+              if (node.nodeType === Node.TEXT_NODE) return node.cloneNode();
+              if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+              const tag = node.tagName.toLowerCase();
+
+              // Strip entire subtree for dangerous tags
+              if (STRIP_TAGS.has(tag)) return null;
+
+              // For unknown/unwanted wrapper tags just pass through children
+              const out = ALLOWED_TAGS.has(tag)
+                ? document.createElement(tag)
+                : document.createElement("span");
+
+              // Allow only safe attributes
+              if (tag === "a") {
+                const href = node.getAttribute("href");
+                if (href && !href.trim().toLowerCase().startsWith("javascript:")) {
+                  out.setAttribute("href", href);
+                }
+              }
+
+              // Strip all event handlers and style attributes
+              for (const child of node.childNodes) {
+                const cleaned = clean(child);
+                if (cleaned) out.appendChild(cleaned);
+              }
+              return out;
+            }
+
+            const wrapper = document.createElement("div");
+            for (const child of rootEl.childNodes) {
+              const cleaned = clean(child);
+              if (cleaned) wrapper.appendChild(cleaned);
+            }
+            return wrapper.innerHTML.trim();
+          }
+
+          // Prefer the window-level cache set by content.js on mouseup
+          let rawHtml = "";
+          let rawText = "";
+
+          if (window._swiftcvCachedHtml && window._swiftcvCachedHtml.trim()) {
+            rawHtml = window._swiftcvCachedHtml;
+            rawText = window._swiftcvCachedText || "";
+          } else {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0 || !sel.toString().trim()) return { html: "", text: "" };
+            const range = sel.getRangeAt(0);
+            const div = document.createElement("div");
+            div.appendChild(range.cloneContents());
+            rawHtml = div.innerHTML.trim();
+            rawText = sel.toString().trim();
+          }
+
+          if (!rawHtml) return { html: "", text: rawText };
+
+          // Parse and sanitize
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(rawHtml, "text/html");
+          const sanitized = sanitizeHtml(doc.body);
+
+          return { html: sanitized || rawText, text: rawText };
+        },
+      });
+      if (injected?.result?.html && injected.result.html.trim().length > 0) {
+        jobDescription = injected.result.html;
+        console.log("[SwiftCV] Captured sanitized HTML, length:", jobDescription.length);
+      }
+    } catch (err) {
+      console.warn("[SwiftCV] executeScript failed, using plain text:", err.message);
     }
 
     // Service worker may have gone idle — reload state from storage before checking
@@ -327,7 +421,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Capture the URL of the tab where the user right-clicked
     const jobUrl = tab?.url || "";
 
-    await generateResume(selectedText, jobUrl);
+    await generateResume(jobDescription, jobUrl);
   }
 });
 

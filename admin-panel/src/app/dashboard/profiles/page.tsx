@@ -1,12 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { profileService, type Profile } from "@/services/profileService";
 import { userService, type User } from "@/services/userService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
-import { Edit, Trash2, Eye, Plus, Tags, X } from "lucide-react";
+import { Edit, Trash2, Eye, Plus, Tags, X, CheckCircle, XCircle } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useState, useMemo } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -20,7 +20,11 @@ export default function ProfilesPage() {
   const admin = useAuthStore((state) => state.admin);
   const isSuperAdmin = admin?.type === "super_admin";
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [approveId, setApproveId] = useState<{ id: string; approve: boolean } | null>(null);
   const [categoryModal, setCategoryModal] = useState<{ name: string; categories: string[] } | null>(null);
+  const [activeTab, setActiveTab] = useState<"pending" | "approved">("approved");
+
+  const queryClient = useQueryClient();
 
   const { data: profiles = [], isLoading, refetch } = useQuery({
     queryKey: ["profiles"],
@@ -66,6 +70,18 @@ export default function ProfilesPage() {
     }
   };
 
+  const approveMutation = useMutation({
+    mutationFn: ({ id, is_approved }: { id: string; is_approved: boolean }) =>
+      profileService.approve(id, is_approved),
+    onSuccess: (_, { id, is_approved }) => {
+      showToast(is_approved ? "Profile approved" : "Profile approval revoked", "success");
+      queryClient.setQueryData(["profiles"], (old: Profile[] = []) =>
+        old.map((p) => (p.id === id ? { ...p, is_approved } : p))
+      );
+    },
+    onError: () => showToast("Failed to update approval status", "error"),
+  });
+
   // Extract unique filter options — expand comma-separated codes into individual entries
   const jobCategoryCodes = [
     ...new Set(
@@ -75,6 +91,12 @@ export default function ProfilesPage() {
     ),
   ];
   const locations = [...new Set(profiles.map((p: Profile) => p.location).filter((v): v is string => !!v))];
+
+  const filteredProfiles = activeTab === "approved"
+    ? profiles.filter((p: Profile) => p.is_approved)
+    : profiles.filter((p: Profile) => !p.is_approved);
+
+  const pendingCount = profiles.filter((p: Profile) => !p.is_approved).length;
 
   const columns = [
     { key: "full_name", label: "Full Name", sortable: true },
@@ -106,7 +128,7 @@ export default function ProfilesPage() {
       render: (value: string) => value || "-",
     },
     ...(isSuperAdmin ? [{
-      key: "id",
+      key: "admin_id",
       label: "Admin",
       sortable: false,
       render: (_: any, row: Profile) => {
@@ -130,7 +152,7 @@ export default function ProfilesPage() {
       render: (value: string) => formatDate(value),
     },
     {
-      key: "id",
+      key: "actions",
       label: "Actions",
       render: (_: any, row: Profile) => (
         <div className="flex items-center gap-2">
@@ -148,6 +170,25 @@ export default function ProfilesPage() {
           >
             <Edit className="w-4 h-4" />
           </button>
+          {isSuperAdmin && (
+            row.is_approved ? (
+              <button
+                onClick={() => setApproveId({ id: row.id, approve: false })}
+                className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
+                title="Revoke Approval"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setApproveId({ id: row.id, approve: true })}
+                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"
+                title="Approve Profile"
+              >
+                <CheckCircle className="w-4 h-4" />
+              </button>
+            )
+          )}
           <button
             onClick={() => setDeleteId(row.id)}
             className="p-1.5 text-red-600 hover:bg-red-50 rounded"
@@ -173,9 +214,33 @@ export default function ProfilesPage() {
         </Button>
       </div>
 
+      <div className="flex gap-1 mb-6 border-b border-gray-200">
+        {(["approved", "pending"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === tab
+                ? "border-primary-600 text-primary-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab === "approved" ? "Approved" : "Pending"}
+            {tab === "pending" && pendingCount > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+                activeTab === "pending" ? "bg-primary-100 text-primary-700" : "bg-yellow-100 text-yellow-700"
+              }`}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <DataTable
-          data={profiles}
+          key={activeTab}
+          data={filteredProfiles}
           columns={columns}
           searchable
           searchPlaceholder="Search profiles..."
@@ -193,10 +258,27 @@ export default function ProfilesPage() {
         variant="danger"
       />
 
+      <ConfirmDialog
+        isOpen={approveId !== null}
+        onClose={() => setApproveId(null)}
+        onConfirm={() => {
+          if (approveId) approveMutation.mutate({ id: approveId.id, is_approved: approveId.approve });
+          setApproveId(null);
+        }}
+        title={approveId?.approve ? "Approve Profile" : "Revoke Approval"}
+        message={
+          approveId?.approve
+            ? "Are you sure you want to approve this profile? It will become active."
+            : "Are you sure you want to revoke approval? The profile will be marked as pending."
+        }
+        confirmText={approveId?.approve ? "Approve" : "Revoke"}
+        variant={approveId?.approve ? "info" : "warning"}
+      />
+
       {/* Category modal */}
       {categoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setCategoryModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900 text-base">
                 {categoryModal.name} — Categories

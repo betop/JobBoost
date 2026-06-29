@@ -37,6 +37,7 @@ import {
   Copy,
   XCircle,
   ChevronDown as ChevronDownIcon,
+  Link2,
 } from "lucide-react";
 
 type SortField = "created_at" | "user_name" | "profile_name" | "position_title" | "company_name";
@@ -215,17 +216,65 @@ function JobDetailsModal({
   log: GenerationLog;
   onClose: () => void;
 }) {
+  const content = log.job_description || log.job_description_snippet || "";
+  const isHtml = /<[a-z][\s\S]*>/i.test(content);
+  const [viewHtml, setViewHtml] = useState(isHtml);
+  const [copied, setCopied] = useState(false);
+
+  function copyLink() {
+    const url = `${window.location.origin}/jd/${log.id}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } else {
+      // Fallback for non-HTTPS or unsupported browsers
+      const el = document.createElement("textarea");
+      el.value = url;
+      el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-gray-900">Job Description</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {isHtml && (
+              <button
+                onClick={() => setViewHtml((v) => !v)}
+                className="text-xs px-2.5 py-1 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                {viewHtml ? "Plain text" : "HTML view"}
+              </button>
+            )}
+            <button
+              onClick={copyLink}
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition-colors ${
+                copied
+                  ? "border-green-400 bg-green-50 text-green-700"
+                  : "border-gray-300 text-gray-600 hover:bg-gray-50"
+              }`}
+              title="Copy public link"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              {copied ? "Copied!" : "Copy Link"}
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <div className="px-6 py-4 overflow-y-auto flex-1">
           <div className="space-y-4">
@@ -261,9 +310,20 @@ function JobDetailsModal({
               )}
             </div>
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
-                {log.job_description || log.job_description_snippet || "No job description available."}
-              </pre>
+              {content ? (
+                viewHtml ? (
+                  <div
+                    className="jd-content"
+                    dangerouslySetInnerHTML={{ __html: content }}
+                  />
+                ) : (
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+                    {content}
+                  </pre>
+                )
+              ) : (
+                <p className="text-sm text-gray-400 italic">No job description available.</p>
+              )}
             </div>
           </div>
         </div>
@@ -597,8 +657,8 @@ function ReasonModal({
   };
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {config.icon}

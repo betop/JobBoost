@@ -119,18 +119,21 @@ query "profiles/{id}" verb=GET {
   
     var $profile_out {
       value = {
-        id             : $p.id
-        full_name      : $p.full_name
-        email          : $p.email
-        phone          : $p.phone_number
-        location       : $p.location
-        linkedin       : $p.linkedin_url
-        github         : $p.github_url
-        job_category   : $p.job_category
-        resume_template: $p.resume_template
-        created_at     : $p.created_at
-        education      : $education_out
-        work_experience: $work_out
+        id                    : $p.id
+        full_name             : $p.full_name
+        email                 : $p.email
+        phone                 : $p.phone_number
+        location              : $p.location
+        linkedin              : $p.linkedin_url
+        github                : $p.github_url
+        job_category          : $p.job_category
+        resume_template       : $p.resume_template
+        created_at            : $p.created_at
+        include_key_projects  : $p.include_key_projects
+        include_certifications: $p.include_certifications
+        include_achievements  : $p.include_achievements
+        education             : $education_out
+        work_experience       : $work_out
       }
     }
   }

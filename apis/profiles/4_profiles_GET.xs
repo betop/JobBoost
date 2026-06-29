@@ -95,18 +95,22 @@ query profiles verb=GET {
       each as $p {
         var $mapped {
           value = {
-            id             : $p.id
-            full_name      : $p.full_name
-            email          : $p.email
-            phone          : $p.phone_number
-            location       : $p.location
-            linkedin       : $p.linkedin_url
-            github         : $p.github_url
-            job_category   : $p.job_category
-            resume_template: $p.resume_template
-            created_at     : $p.created_at
-            education      : []
-            work_experience: []
+            id                    : $p.id
+            full_name             : $p.full_name
+            email                 : $p.email
+            phone                 : $p.phone_number
+            location              : $p.location
+            linkedin              : $p.linkedin_url
+            github                : $p.github_url
+            job_category          : $p.job_category
+            resume_template       : $p.resume_template
+            created_at            : $p.created_at
+            is_approved           : $p.is_approved
+            include_key_projects  : $p.include_key_projects
+            include_certifications: $p.include_certifications
+            include_achievements  : $p.include_achievements
+            education             : []
+            work_experience       : []
           }
         }
       

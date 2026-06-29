@@ -11,6 +11,10 @@ export interface Profile {
   job_category?: string;
   resume_template?: number;
   created_at: string;
+  is_approved: boolean;
+  include_key_projects: boolean;
+  include_certifications: boolean;
+  include_achievements: boolean;
   education: Education[];
   work_experience: WorkExperience[];
 }
@@ -47,6 +51,9 @@ export interface CreateProfileInput {
   resume_template?: number;
   education: Omit<Education, "id">[];
   work_experience: Omit<WorkExperience, "id">[];
+  include_key_projects?: boolean;
+  include_certifications?: boolean;
+  include_achievements?: boolean;
 }
 
 export const profileService = {
@@ -72,5 +79,10 @@ export const profileService = {
 
   delete: async (id: string): Promise<void> => {
     await api.delete(`/profiles/${id}`);
+  },
+
+  approve: async (id: string, is_approved: boolean): Promise<Profile> => {
+    const response = await api.patch(`/profiles/${id}/approve`, { is_approved });
+    return response.data;
   },
 };

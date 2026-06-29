@@ -8,7 +8,8 @@
     "storage",
     "downloads",
     "notifications",
-    "offscreen"
+    "offscreen",
+    "scripting"
   ],
   "host_permissions": [
     "http://localhost/*",

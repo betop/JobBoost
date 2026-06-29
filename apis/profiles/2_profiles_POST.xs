@@ -13,29 +13,45 @@ query profiles verb=POST {
     text job_category?
     json education
     json work_experience
+    bool include_key_projects?
+    bool include_certifications?
+    bool include_achievements?
   }
 
   stack {
+    // Fetch auth user to determine approval status
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $auth_user
+  
+    // Super admins auto-approve; admins require super_admin approval
+    var $auto_approved {
+      value = $auth_user.type == "super_admin"
+    }
+  
     db.add profile {
-      enforce_hidden_fields = false
       data = {
-        created_at  : now
-        full_name   : $input.full_name
-        email       : $input.email
-        phone_number: $input.phone
-        location    : $input.location
-        linkedin_url: $input.linkedin
-        github_url  : $input.github
-        job_category: $input.job_category
-        updated_at  : now
-        created_by  : $auth.id
+        created_at            : now
+        full_name             : $input.full_name
+        email                 : $input.email
+        phone_number          : $input.phone
+        location              : $input.location
+        linkedin_url          : $input.linkedin
+        github_url            : $input.github
+        job_category          : $input.job_category
+        updated_at            : now
+        created_by            : $auth.id
+        is_approved           : $auto_approved
+        include_key_projects  : ($input.include_key_projects|json_encode) != "" ? $input.include_key_projects : true
+        include_certifications: ($input.include_certifications|json_encode) != "" ? $input.include_certifications : true
+        include_achievements  : ($input.include_achievements|json_encode) != "" ? $input.include_achievements : true
       }
     } as $p
   
     foreach ($input.education) {
       each as $e {
         db.add education {
-          enforce_hidden_fields = false
           data = {
             created_at     : now
             profile_id     : $p.id
@@ -54,7 +70,6 @@ query profiles verb=POST {
     foreach ($input.work_experience) {
       each as $w {
         db.add work_experience {
-          enforce_hidden_fields = false
           data = {
             created_at     : now
             profile_id     : $p.id

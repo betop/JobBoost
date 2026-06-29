@@ -43,6 +43,9 @@ const profileSchema = z.object({
   job_category: z.string().optional(),
   education: z.array(educationSchema).min(1, "At least one education entry is required"),
   work_experience: z.array(workExperienceSchema).min(1, "At least one work experience is required"),
+  include_key_projects: z.boolean().optional().default(true),
+  include_certifications: z.boolean().optional().default(true),
+  include_achievements: z.boolean().optional().default(true),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -64,6 +67,9 @@ export default function NewProfilePage() {
     defaultValues: {
       education: [{ degree: "", field_of_study: "", start_date: "" }],
       work_experience: [{ job_title: "", start_date: "", is_current: false }],
+      include_key_projects: true,
+      include_certifications: true,
+      include_achievements: true,
     },
   });
 
@@ -319,6 +325,38 @@ export default function NewProfilePage() {
                   />
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Resume Sections */}
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">Resume Sections</h2>
+          <p className="text-sm text-gray-500 mb-4">Choose which optional sections to include when generating this profile&apos;s resume.</p>
+          <div className="flex flex-col gap-3">
+            {(
+              [
+                { name: "include_key_projects", label: "Key Projects" },
+                { name: "include_certifications", label: "Certifications" },
+                { name: "include_achievements", label: "Awards & Recognition" },
+              ] as const
+            ).map(({ name, label }) => (
+              <Controller
+                key={name}
+                name={name}
+                control={control}
+                render={({ field }) => (
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={field.value ?? false}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    {label}
+                  </label>
+                )}
+              />
             ))}
           </div>
         </div>

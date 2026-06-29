@@ -1,4 +1,5 @@
 // Admin login (users table)
+// Token expiration: max int (effectively unlimited — ~68 years)
 query "auth/login" verb=POST {
   api_group = "auth"
 
@@ -43,7 +44,7 @@ query "auth/login" verb=POST {
     security.create_auth_token {
       table = "users"
       extras = {}
-      expiration = 86400
+      expiration = 2147483647
       id = $user.id
     } as $authToken
   }

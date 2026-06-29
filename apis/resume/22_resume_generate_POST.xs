@@ -1,5 +1,6 @@
 // Generate resume and cover letter for a job description
 // v4.4: table schema fix — content_id is now nullable UUID so db.add works without providing it
+// Blocked if profile is not approved
 query "resume/generate" verb=POST {
   api_group = "resume"
 
@@ -125,6 +126,11 @@ query "resume/generate" verb=POST {
     precondition ($prof != null) {
       error_type = "notfound"
       error = "Profile not found"
+    }
+  
+    precondition ($prof.is_approved) {
+      error_type = "accessdenied"
+      error = "Profile is not approved. Please contact your admin."
     }
   
     db.query work_experience {
@@ -818,6 +824,84 @@ query "resume/generate" verb=POST {
             )
         }
       
+        // Remove optional sections based on profile preferences
+        var $include_key_projects_flag {
+          value = ($prof.include_key_projects|json_encode) != "false"
+        }
+      
+        var $include_certifications_flag {
+          value = ($prof.include_certifications|json_encode) != "false"
+        }
+      
+        var $include_achievements_flag {
+          value = ($prof.include_achievements|json_encode) != "false"
+        }
+      
+        conditional {
+          if (!$include_key_projects_flag) {
+            var.update $resume_schema {
+              value = $resume_schema|remove:"key_projects"
+            }
+          }
+        }
+      
+        conditional {
+          if (!$include_certifications_flag) {
+            var.update $resume_schema {
+              value = $resume_schema|remove:"certifications"
+            }
+          }
+        }
+      
+        conditional {
+          if (!$include_achievements_flag) {
+            var.update $resume_schema {
+              value = $resume_schema|remove:"awards_recognition"
+            }
+          }
+        }
+      
+        // Build omit instruction for the AI prompt
+        var $omit_sections_list {
+          value = []
+        }
+      
+        conditional {
+          if (!$include_key_projects_flag) {
+            array.push $omit_sections_list {
+              value = "key_projects"
+            }
+          }
+        }
+      
+        conditional {
+          if (!$include_certifications_flag) {
+            array.push $omit_sections_list {
+              value = "certifications"
+            }
+          }
+        }
+      
+        conditional {
+          if (!$include_achievements_flag) {
+            array.push $omit_sections_list {
+              value = "awards_recognition"
+            }
+          }
+        }
+      
+        var $omit_instruction {
+          value = ""
+        }
+      
+        conditional {
+          if (($omit_sections_list|count) > 0) {
+            var.update $omit_instruction {
+              value = "\n\nIMPORTANT: Do NOT include these sections in the resume JSON: " ~ ($omit_sections_list|join:", ") ~ ". Leave them out entirely."
+            }
+          }
+        }
+      
         var $result_schema {
           value = {}
             |set:"resume":$resume_schema
@@ -844,7 +928,7 @@ query "resume/generate" verb=POST {
                 |set:"messages":([]
                   |push:({}
                     |set:"role":"user"
-                    |set:"content":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description) ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ ($result_schema|json_encode) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+                    |set:"content":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description) ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ ($result_schema|json_encode) ~ $omit_instruction ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
                   )
                 )
               headers = []
@@ -860,7 +944,6 @@ query "resume/generate" verb=POST {
           
             // Save resume/cover letter content for reference
             db.add resume_content {
-              enforce_hidden_fields = false
               data = {raw_response: $response_text}
             } as $content_record
           
@@ -987,7 +1070,6 @@ query "resume/generate" verb=POST {
         db.edit generation_log {
           field_name = "id"
           field_value = $input.log_id
-          enforce_hidden_fields = false
           data = {
             input_tokens : $input_tokens
             output_tokens: $output_tokens
@@ -999,7 +1081,6 @@ query "resume/generate" verb=POST {
     
       else {
         db.add generation_log {
-          enforce_hidden_fields = false
           data = {
             profile_id           : $input.profile_id
             user_id              : $access.user_id

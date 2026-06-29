@@ -16,6 +16,9 @@ query "profiles/{id}" verb=PUT {
     int resume_template?
     json education?
     json work_experience?
+    bool include_key_projects?
+    bool include_certifications?
+    bool include_achievements?
   }
 
   stack {
@@ -136,6 +139,42 @@ query "profiles/{id}" verb=PUT {
       if ($input.resume_template != null) {
         var.update $payload.resume_template {
           value = $input.resume_template
+        }
+      }
+    }
+  
+    var $include_key_projects_changed {
+      value = $input.include_key_projects|json_encode
+    }
+  
+    conditional {
+      if ($include_key_projects_changed != "") {
+        var.update $payload.include_key_projects {
+          value = $input.include_key_projects
+        }
+      }
+    }
+  
+    var $include_certifications_changed {
+      value = $input.include_certifications|json_encode
+    }
+  
+    conditional {
+      if ($include_certifications_changed != "") {
+        var.update $payload.include_certifications {
+          value = $input.include_certifications
+        }
+      }
+    }
+  
+    var $include_achievements_changed {
+      value = $input.include_achievements|json_encode
+    }
+  
+    conditional {
+      if ($include_achievements_changed != "") {
+        var.update $payload.include_achievements {
+          value = $input.include_achievements
         }
       }
     }
