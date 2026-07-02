@@ -128,11 +128,6 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   const onSubmit = (data: ProfileFormData) => {
     const payload = {
       ...data,
-      linkedin: data.linkedin || undefined,
-      github: data.github || undefined,
-      phone: data.phone || undefined,
-      location: data.location || undefined,
-      job_category: data.job_category || undefined,
       resume_template: data.resume_template ?? 1,
     };
     updateMutation.mutate(payload);

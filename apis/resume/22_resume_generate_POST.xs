@@ -118,6 +118,10 @@ query "resume/generate" verb=POST {
       value = ""
     }
   
+    var $claude_auth {
+      value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
+    }
+  
     db.get profile {
       field_name = "id"
       field_value = $input.profile_id
@@ -174,37 +178,70 @@ query "resume/generate" verb=POST {
               value = ""
             }
           
+            // try_catch {
+            //   try {
+            //     api.request {
+            //       url = "https://api.openai.com/v1/chat/completions"
+            //       method = "POST"
+            //       params = {}
+            //         |set:"model":"gpt-4o-mini"
+            //         |set:"max_tokens":400
+            //         |set:"messages":([]
+            //           |push:({}
+            //             |set:"role":"user"
+            //             |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"either intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"either ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
+            //           )
+            //         )
+            //       headers = []
+            //         |push:"Content-Type: application/json"
+            //         |push:"Authorization: " ~ $openai_auth
+            //     } as $extraction_resp
+          
+            //   var.update $extraction_text {
+            //     value = $extraction_resp.response.result.choices
+            //       |first
+            //       |get:"message"
+            //       |get:"content"
+            //       |trim
+            //   }
+            // }
+          
+            //   catch {
+            //     debug.log {
+            //       value = "OpenAI extraction failed: " ~ $error
+            //     }
+            //   }
+            // }
+          
             try_catch {
               try {
                 api.request {
-                  url = "https://api.openai.com/v1/chat/completions"
+                  url = "https://api.anthropic.com/v1/messages"
                   method = "POST"
                   params = {}
-                    |set:"model":"gpt-4o-mini"
+                    |set:"model":"claude-haiku-4-5"
                     |set:"max_tokens":400
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
-                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"either intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"either ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
+                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
                       )
                     )
                   headers = []
                     |push:"Content-Type: application/json"
-                    |push:"Authorization: " ~ $openai_auth
+                    |push:$claude_auth
+                    |push:"anthropic-version: 2023-06-01"
+                  timeout = 300
                 } as $extraction_resp
               
                 var.update $extraction_text {
-                  value = $extraction_resp.response.result.choices
-                    |first
-                    |get:"message"
-                    |get:"content"
-                    |trim
+                  value = $extraction_resp.response.result.content|first|get:"text"
                 }
               }
             
               catch {
                 debug.log {
-                  value = "OpenAI extraction failed: " ~ $error
+                  value = "AI call failed: " ~ $error
                 }
               }
             }
@@ -906,10 +943,6 @@ query "resume/generate" verb=POST {
           value = {}
             |set:"resume":$resume_schema
             |set:"cover_letter":"<full tailored cover letter as HTML>"
-        }
-      
-        var $claude_auth {
-          value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
         }
       
         var $response_text {

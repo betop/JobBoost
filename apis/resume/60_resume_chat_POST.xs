@@ -114,7 +114,7 @@ query "resume/chat" verb=POST {
   
     // ── Build messages array ──────────────────────────────────────────────
     var $system_content {
-      value = 'You are a professional career coach and resume expert. Human writing help - Provide short, simple, clear, concise, and actionable answers on behalf of the user (The subject of all answers must be "I"). When reviewing documents, be specific and constructive. Keep responses professional yet approachable. No explanations needed, just answer the question based on the provided information.'
+      value = 'You are a professional writing assistant. Provide very short, simple, clear, concise, and actionable answers to the career related questions (in the application submission form) on behalf of the user (The subject of all answers must be "I"). When reviewing documents, be specific and constructive. Keep responses professional yet approachable. No explanations needed, just answer the question based on the provided information. Generate only humanized (American male) answers to the questions.'
     }
   
     conditional {
@@ -125,15 +125,19 @@ query "resume/chat" verb=POST {
       }
     }
   
-    var $system_message {
-      value = {}
-        |set:"role":"system"
-        |set:"content":$system_content
-    }
+    // var $system_message {
+    //   value = {}
+    //     |set:"role":"system"
+    //     |set:"content":$system_content
+    // }
   
     var $messages {
-      value = []|push:$system_message
+      value = []
     }
+  
+    // var.update $messages {
+    //   value = $messages|push:$system_message
+    // }
   
     // Append prior conversation history (each item must have role + content)
     conditional {
@@ -209,46 +213,87 @@ query "resume/chat" verb=POST {
     }
   
     // ── Call OpenAI ───────────────────────────────────────────────────────
-    var $openai_auth {
-      value = "Bearer " ~ $env.OPENAI_API_KEY
-    }
+    // var $openai_auth {
+    //   value = "Bearer " ~ $env.OPENAI_API_KEY
+    // }
   
-    var $openai_body {
-      value = {}
-        |set:"model":"gpt-4o-mini"
-        |set:"max_tokens":1024
-        |set:"temperature":0.5
-        |set:"messages":$messages
+    // var $openai_body {
+    //   value = {}
+    //     |set:"model":"gpt-4o-mini"
+    //     |set:"max_tokens":1024
+    //     |set:"temperature":0.5
+    //     |set:"messages":$messages
+    // }
+  
+    var $claude_auth {
+      value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
     }
   
     var $reply {
       value = ""
     }
   
+    // try_catch {
+    //   try {
+    //     api.request {
+    //       url = "https://api.openai.com/v1/chat/completions"
+    //       method = "POST"
+    //       params = $openai_body
+    //       headers = []
+    //         |push:"Content-Type: application/json"
+    //         |push:"Authorization: " ~ $openai_auth
+    //       timeout = 60
+    //     } as $openai_resp
+  
+    //   var.update $reply {
+    //     value = $openai_resp.response.result.choices
+    //       |first
+    //       |get:"message"
+    //       |get:"content"
+    //       |trim
+    //   }
+    // }
+  
+    // catch {
+    //   debug.log {
+    //     value = "OpenAI request failed: " ~ $error
+    //   }
+  
+    //     var.update $reply {
+    //       value = "Sorry, I couldn't get a response from the AI. Please try again."
+    //     }
+    //   }
+    // }
+  
     try_catch {
       try {
         api.request {
-          url = "https://api.openai.com/v1/chat/completions"
+          url = "https://api.anthropic.com/v1/messages"
           method = "POST"
-          params = $openai_body
+          params = {}
+            |set:"model":"claude-haiku-4-5"
+            |set:"max_tokens":1000
+            |set:"temperature":0.5
+            |set:"system":$system_content
+            |set:"messages":$messages
           headers = []
             |push:"Content-Type: application/json"
-            |push:"Authorization: " ~ $openai_auth
+            |push:$claude_auth
+            |push:"anthropic-version: 2023-06-01"
           timeout = 60
-        } as $openai_resp
+        } as $anthropic_resp
       
         var.update $reply {
-          value = $openai_resp.response.result.choices
+          value = $anthropic_resp.response.result.content
             |first
-            |get:"message"
-            |get:"content"
+            |get:"text"
             |trim
         }
       }
     
       catch {
         debug.log {
-          value = "OpenAI request failed: " ~ $error
+          value = "AI call failed: " ~ $error
         }
       
         var.update $reply {
