@@ -328,7 +328,7 @@ export default function PricingPage() {
       {!data && !loading && (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <p className="text-gray-600">
-            Select filters and click "Calculate" to view AI spend data
+            Select filters and click &quot;Calculate&quot; to view API costs data
           </p>
         </div>
       )}
