@@ -8,7 +8,7 @@ import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import { Edit, Trash2, Eye, Plus, Tags, X, CheckCircle, XCircle } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
@@ -83,14 +83,18 @@ export default function ProfilesPage() {
   });
 
   // Extract unique filter options — expand comma-separated codes into individual entries
-  const jobCategoryCodes = [
+  const jobCategoryCodes = useMemo(() => [
     ...new Set(
       profiles
         .flatMap((p: Profile) => (p.job_category ? p.job_category.split(",").map((c) => c.trim()) : []))
         .filter(Boolean)
     ),
-  ];
-  const locations = [...new Set(profiles.map((p: Profile) => p.location).filter((v): v is string => !!v))];
+  ], [profiles]);
+
+  const locations = useMemo(() =>
+    [...new Set(profiles.map((p: Profile) => p.location).filter((v): v is string => !!v))],
+    [profiles]
+  );
 
   const filteredProfiles = activeTab === "approved"
     ? profiles.filter((p: Profile) => p.is_approved)
@@ -98,7 +102,7 @@ export default function ProfilesPage() {
 
   const pendingCount = profiles.filter((p: Profile) => !p.is_approved).length;
 
-  const columns = [
+  const columns = useMemo(() => [
     { key: "full_name", label: "Full Name", sortable: true },
     { key: "email", label: "Email", sortable: true },
     {
@@ -199,7 +203,7 @@ export default function ProfilesPage() {
         </div>
       ),
     },
-  ];
+  ], [profiles, jobCategoryCodes, locations, adminsByProfile, isSuperAdmin, router]);
 
   return (
     <>

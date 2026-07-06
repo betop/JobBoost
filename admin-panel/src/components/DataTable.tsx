@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
@@ -85,7 +85,7 @@ export default function DataTable<T extends { id: string }>({
   persistToUrl = true,
   defaultPageSize = 10,
   pageSizeOptions = [5, 10, 25, 50],
-  defaultFilters = {},
+  defaultFilters,
 }: DataTableProps<T>) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -95,7 +95,13 @@ export default function DataTable<T extends { id: string }>({
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
-  const [columnFilters, setColumnFilters] = useState<Record<string, string>>(defaultFilters);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>(defaultFilters ?? {});
+
+  // Use refs so the URL-sync effect doesn't re-run just because parent re-rendered
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+  const defaultFiltersRef = useRef(defaultFilters);
+  defaultFiltersRef.current = defaultFilters;
 
   // ── URL persistence ────────────────────────────────────────────
   useEffect(() => {
@@ -105,9 +111,9 @@ export default function DataTable<T extends { id: string }>({
     const size = searchParams.get("size");
     const sort = searchParams.get("sort");
     const dir = searchParams.get("dir");
-    const nextFilters: Record<string, string> = { ...defaultFilters };
+    const nextFilters: Record<string, string> = { ...(defaultFiltersRef.current ?? {}) };
 
-    columns.forEach((column) => {
+    columnsRef.current.forEach((column) => {
       if (!column.filterOptions) return;
       const key = String(column.key);
       const filterValue = searchParams.get(getFilterParamKey(key));
@@ -121,8 +127,14 @@ export default function DataTable<T extends { id: string }>({
     if (size) setPageSize(parseInt(size, 10));
     if (sort) setSortKey(sort);
     if (dir === "asc" || dir === "desc") setSortDir(dir);
-    setColumnFilters(nextFilters);
-  }, [persistToUrl, searchParams, columns, defaultFilters]);
+    // Only update filters if values actually changed to avoid infinite re-renders
+    setColumnFilters(prev => {
+      const same =
+        Object.keys(nextFilters).length === Object.keys(prev).length &&
+        Object.entries(nextFilters).every(([k, v]) => prev[k] === v);
+      return same ? prev : nextFilters;
+    });
+  }, [persistToUrl, searchParams]);
 
   const updateQueryParams = useCallback(
     (updates: Record<string, string | number | undefined>) => {
