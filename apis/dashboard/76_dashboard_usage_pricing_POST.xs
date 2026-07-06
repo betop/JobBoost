@@ -1,0 +1,284 @@
+query "dashboard/usage-pricing" verb=POST {
+  api_group = "dashboard"
+  auth = "users"
+
+  input {
+    timestamp date_from?
+    timestamp date_to?
+    uuid profile_id?
+    uuid user_id?
+  }
+
+  stack {
+    // Fetch auth user
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $user
+  
+    precondition ($user != null && $user.is_active && ($user.is_approved || $user.type == "super_admin")) {
+      error_type = "accessdenied"
+      error = "User not authorized"
+    }
+  
+    // Define token pricing (input/output per 1M tokens)
+    var $anthropic_input_price {
+      value = 0.8
+    }
+  
+    var $anthropic_output_price {
+      value = 2.4
+    }
+  
+    // Build generation log aggregation query
+    var $gen_query {
+      value = "SELECT COUNT(*) as log_count, COALESCE(SUM(input_tokens), 0) as input_total, COALESCE(SUM(output_tokens), 0) as output_total FROM x1_7"
+    }
+  
+    var $gen_has_where {
+      value = false
+    }
+  
+    conditional {
+      if ($input.date_from != null) {
+        var.update $gen_query {
+          value = $gen_query ~ " WHERE created_at >= '" ~ $input.date_from ~ "'"
+        }
+      
+        var.update $gen_has_where {
+          value = true
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.date_to != null) {
+        var $gen_kw1 {
+          value = $gen_has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $gen_query {
+          value = $gen_query ~ $gen_kw1 ~ " created_at <= '" ~ $input.date_to ~ "'"
+        }
+      
+        var.update $gen_has_where {
+          value = true
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.profile_id != null && $input.profile_id != "") {
+        var $gen_kw2 {
+          value = $gen_has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $gen_query {
+          value = $gen_query ~ $gen_kw2 ~ " profile_id = '" ~ $input.profile_id ~ "'"
+        }
+      
+        var.update $gen_has_where {
+          value = true
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.user_id != null && $input.user_id != "") {
+        var $gen_kw3 {
+          value = $gen_has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $gen_query {
+          value = $gen_query ~ $gen_kw3 ~ " user_id = '" ~ $input.user_id ~ "'"
+        }
+      }
+    }
+  
+    db.direct_query {
+      sql = "{{ $gen_query }};"
+      parser = "template_engine"
+      response_type = "single"
+    } as $gen_result
+  
+    // Build chat log aggregation query
+    var $chat_query {
+      value = "SELECT COUNT(*) as log_count, COALESCE(SUM(input_tokens), 0) as input_total, COALESCE(SUM(output_tokens), 0) as output_total FROM x1_14"
+    }
+  
+    var $chat_has_where {
+      value = false
+    }
+  
+    conditional {
+      if ($input.date_from != null) {
+        var.update $chat_query {
+          value = $chat_query ~ " WHERE created_at >= '" ~ $input.date_from ~ "'"
+        }
+      
+        var.update $chat_has_where {
+          value = true
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.date_to != null) {
+        var $chat_kw1 {
+          value = $chat_has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $chat_query {
+          value = $chat_query ~ $chat_kw1 ~ " created_at <= '" ~ $input.date_to ~ "'"
+        }
+      
+        var.update $chat_has_where {
+          value = true
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.user_id != null && $input.user_id != "") {
+        var $chat_kw2 {
+          value = $chat_has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $chat_query {
+          value = $chat_query ~ $chat_kw2 ~ " user_id = '" ~ $input.user_id ~ "'"
+        }
+      }
+    }
+  
+    db.direct_query {
+      sql = "{{ $chat_query }};"
+      parser = "template_engine"
+      response_type = "single"
+    } as $chat_result
+  
+    // Build mail triage log aggregation query
+    var $mail_query {
+      value = "SELECT COUNT(*) as log_count, COALESCE(SUM(input_tokens), 0) as input_total, COALESCE(SUM(output_tokens), 0) as output_total FROM x1_12"
+    }
+  
+    var $mail_has_where {
+      value = false
+    }
+  
+    conditional {
+      if ($input.date_from != null) {
+        var.update $mail_query {
+          value = $mail_query ~ " WHERE created_at >= '" ~ $input.date_from ~ "'"
+        }
+      
+        var.update $mail_has_where {
+          value = true
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.date_to != null) {
+        var $mail_kw1 {
+          value = $mail_has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $mail_query {
+          value = $mail_query ~ $mail_kw1 ~ " created_at <= '" ~ $input.date_to ~ "'"
+        }
+      }
+    }
+  
+    db.direct_query {
+      sql = "{{ $mail_query }};"
+      parser = "template_engine"
+      response_type = "single"
+    } as $mail_result
+  
+    // Calculate costs from aggregated results
+    var $gen_input_total {
+      value = $gen_result.input_total|first_notnull:0
+    }
+  
+    var $gen_output_total {
+      value = $gen_result.output_total|first_notnull:0
+    }
+  
+    var $gen_log_count {
+      value = $gen_result.log_count|first_notnull:0
+    }
+  
+    var $gen_cost {
+      value = (($gen_input_total / 1000000) * $anthropic_input_price) + (($gen_output_total / 1000000) * $anthropic_output_price)
+    }
+  
+    var $chat_input_total {
+      value = $chat_result.input_total|first_notnull:0
+    }
+  
+    var $chat_output_total {
+      value = $chat_result.output_total|first_notnull:0
+    }
+  
+    var $chat_log_count {
+      value = $chat_result.log_count|first_notnull:0
+    }
+  
+    var $chat_cost {
+      value = (($chat_input_total / 1000000) * $anthropic_input_price) + (($chat_output_total / 1000000) * $anthropic_output_price)
+    }
+  
+    var $mail_input_total {
+      value = $mail_result.input_total|first_notnull:0
+    }
+  
+    var $mail_output_total {
+      value = $mail_result.output_total|first_notnull:0
+    }
+  
+    var $mail_log_count {
+      value = $mail_result.log_count|first_notnull:0
+    }
+  
+    var $mail_cost {
+      value = (($mail_input_total / 1000000) * $anthropic_input_price) + (($mail_output_total / 1000000) * $anthropic_output_price)
+    }
+  
+    var $total_cost {
+      value = $gen_cost + $chat_cost + $mail_cost
+    }
+  }
+
+  response = {
+    generation : ```
+      {
+        log_count    : $gen_log_count
+        input_tokens : $gen_input_total
+        output_tokens: $gen_output_total
+        cost         : $gen_cost
+      }
+      ```
+    chat       : ```
+      {
+        log_count    : $chat_log_count
+        input_tokens : $chat_input_total
+        output_tokens: $chat_output_total
+        cost         : $chat_cost
+      }
+      ```
+    mail_triage: ```
+      {
+        log_count    : $mail_log_count
+        input_tokens : $mail_input_total
+        output_tokens: $mail_output_total
+        cost         : $mail_cost
+      }
+      ```
+    summary    : ```
+      {
+        total_cost: $total_cost
+        total_logs: $gen_log_count + $chat_log_count + $mail_log_count
+      }
+      ```
+  }
+}
