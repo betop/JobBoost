@@ -949,8 +949,8 @@ export default function LogsPage() {
 
   // All active users — used for building the user_name lookup map AND filter dropdown
   const { data: allUsers } = useQuery({
-    queryKey: ["users", "bidder"],
-    queryFn: () => userService.getAll("bidder"),
+    queryKey: ["users", "all"],
+    queryFn: () => userService.getAll(undefined),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
