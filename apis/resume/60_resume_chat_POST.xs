@@ -229,6 +229,14 @@ query "resume/chat" verb=POST {
       value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
     }
   
+    var $input_tokens {
+      value = 0
+    }
+  
+    var $output_tokens {
+      value = 0
+    }
+  
     var $reply {
       value = ""
     }
@@ -289,6 +297,18 @@ query "resume/chat" verb=POST {
             |get:"text"
             |trim
         }
+      
+        var.update $input_tokens {
+          value = $anthropic_resp.response.result.usage
+            |get:"input_tokens"
+            |first_notnull:0
+        }
+      
+        var.update $output_tokens {
+          value = $anthropic_resp.response.result.usage
+            |get:"output_tokens"
+            |first_notnull:0
+        }
       }
     
       catch {
@@ -299,6 +319,21 @@ query "resume/chat" verb=POST {
         var.update $reply {
           value = "Sorry, I couldn't get a response from the AI. Please try again."
         }
+      }
+    }
+  
+    conditional {
+      if ($input.log_id != null && ($input.log_id|strlen) > 0) {
+        db.add chat_log {
+          data = {
+            user_id      : $access.user_id
+            log_id       : $input.log_id
+            question     : $input.question
+            answer       : $reply
+            input_tokens : $input_tokens
+            output_tokens: $output_tokens
+          }
+        } as $chat_record
       }
     }
   }

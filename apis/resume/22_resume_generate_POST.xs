@@ -118,6 +118,14 @@ query "resume/generate" verb=POST {
       value = ""
     }
   
+    var $extraction_input_tokens {
+      value = 0
+    }
+  
+    var $extraction_output_tokens {
+      value = 0
+    }
+  
     var $claude_auth {
       value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
     }
@@ -236,6 +244,18 @@ query "resume/generate" verb=POST {
               
                 var.update $extraction_text {
                   value = $extraction_resp.response.result.content|first|get:"text"
+                }
+              
+                var.update $extraction_input_tokens {
+                  value = $extraction_resp.response.result.usage
+                    |get:"input_tokens"
+                    |first_notnull:0
+                }
+              
+                var.update $extraction_output_tokens {
+                  value = $extraction_resp.response.result.usage
+                    |get:"output_tokens"
+                    |first_notnull:0
                 }
               }
             
@@ -1089,11 +1109,19 @@ query "resume/generate" verb=POST {
         }
       
         var.update $input_tokens {
-          value = $ai_resp.response.result.usage|get:"input_tokens"
+          value = ```
+            ($ai_resp.response.result.usage
+                        |get:"input_tokens"
+                        |first_notnull:0) + $extraction_input_tokens
+            ```
         }
       
         var.update $output_tokens {
-          value = $ai_resp.response.result.usage|get:"output_tokens"
+          value = ```
+            ($ai_resp.response.result.usage
+                        |get:"output_tokens"
+                        |first_notnull:0) + $extraction_output_tokens
+            ```
         }
       }
     }

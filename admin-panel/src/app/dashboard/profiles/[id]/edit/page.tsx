@@ -60,6 +60,14 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
 
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/dashboard/profiles");
+  };
+
   // Xano returns dates as "YYYY-MM-DD"; <input type="month"> needs "YYYY-MM"
   const toMonth = (v?: string) => (v ? v.slice(0, 7) : "");
 
@@ -312,7 +320,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
         <Button type="submit" loading={updateMutation.isPending}>
           Save Changes
         </Button>
-        <Button type="button" variant="ghost" onClick={() => router.push(`/dashboard/profiles/${id}`)}>
+        <Button type="button" variant="ghost" onClick={handleBack}>
           Cancel
         </Button>
       </div>
@@ -326,6 +334,14 @@ export default function EditProfilePage() {
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/dashboard/profiles");
+  };
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["profile", id],
@@ -347,7 +363,7 @@ export default function EditProfilePage() {
   return (
     <>
       <div className="mb-6 flex items-center gap-4">
-        <Button variant="ghost" onClick={() => router.push(`/dashboard/profiles/${id}`)}>
+        <Button variant="ghost" onClick={handleBack}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <h1 className="text-3xl font-bold text-gray-900">Edit Profile</h1>

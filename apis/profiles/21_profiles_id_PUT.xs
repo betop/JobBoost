@@ -95,40 +95,60 @@ query "profiles/{id}" verb=PUT {
       }
     }
   
+    var $phone_changed {
+      value = $input.phone|json_encode
+    }
+  
     conditional {
-      if ($input.phone != null) {
+      if ($phone_changed != "") {
         var.update $payload.phone_number {
           value = $input.phone
         }
       }
     }
   
+    var $location_changed {
+      value = $input.location|json_encode
+    }
+  
     conditional {
-      if ($input.location != null) {
+      if ($location_changed != "") {
         var.update $payload.location {
           value = $input.location
         }
       }
     }
   
+    var $linkedin_changed {
+      value = $input.linkedin|json_encode
+    }
+  
     conditional {
-      if ($input.linkedin != null) {
+      if ($linkedin_changed != "") {
         var.update $payload.linkedin_url {
           value = $input.linkedin
         }
       }
     }
   
+    var $github_changed {
+      value = $input.github|json_encode
+    }
+  
     conditional {
-      if ($input.github != null) {
+      if ($github_changed != "") {
         var.update $payload.github_url {
           value = $input.github
         }
       }
     }
   
+    var $job_category_changed {
+      value = $input.job_category|json_encode
+    }
+  
     conditional {
-      if ($input.job_category != null) {
+      if ($job_category_changed != "") {
         var.update $payload.job_category {
           value = $input.job_category
         }

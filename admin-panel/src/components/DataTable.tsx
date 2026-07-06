@@ -44,6 +44,8 @@ interface DataTableProps<T> {
 
 type SortDir = "asc" | "desc" | null;
 
+const getFilterParamKey = (key: string) => `f_${key}`;
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 function getNestedValue(obj: any, path: string): any {
@@ -103,13 +105,24 @@ export default function DataTable<T extends { id: string }>({
     const size = searchParams.get("size");
     const sort = searchParams.get("sort");
     const dir = searchParams.get("dir");
+    const nextFilters: Record<string, string> = { ...defaultFilters };
+
+    columns.forEach((column) => {
+      if (!column.filterOptions) return;
+      const key = String(column.key);
+      const filterValue = searchParams.get(getFilterParamKey(key));
+      if (filterValue !== null) {
+        nextFilters[key] = filterValue;
+      }
+    });
 
     if (page) setCurrentPage(parseInt(page, 10));
     if (search) setSearchQuery(search);
     if (size) setPageSize(parseInt(size, 10));
     if (sort) setSortKey(sort);
     if (dir === "asc" || dir === "desc") setSortDir(dir);
-  }, [persistToUrl]);
+    setColumnFilters(nextFilters);
+  }, [persistToUrl, searchParams, columns, defaultFilters]);
 
   const updateQueryParams = useCallback(
     (updates: Record<string, string | number | undefined>) => {
@@ -224,6 +237,10 @@ export default function DataTable<T extends { id: string }>({
   const handleColumnFilter = (key: string, value: string) => {
     setColumnFilters((prev) => ({ ...prev, [key]: value }));
     setCurrentPage(1);
+    updateQueryParams({
+      [getFilterParamKey(key)]: value || undefined,
+      page: undefined,
+    });
   };
 
   const clearAllFilters = () => {
@@ -232,7 +249,14 @@ export default function DataTable<T extends { id: string }>({
     setSortKey(null);
     setSortDir(null);
     setCurrentPage(1);
-    updateQueryParams({ search: undefined, sort: undefined, dir: undefined, page: undefined });
+
+    const clearFilterParams: Record<string, undefined> = {};
+    columns.forEach((column) => {
+      if (!column.filterOptions) return;
+      clearFilterParams[getFilterParamKey(String(column.key))] = undefined;
+    });
+
+    updateQueryParams({ search: undefined, sort: undefined, dir: undefined, page: undefined, ...clearFilterParams });
   };
 
   const hasActiveFilters =

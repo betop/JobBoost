@@ -86,16 +86,20 @@ query "public/token-profiles" verb=POST {
       
         foreach ($all_profiles) {
           each as $prof {
-            var.update $final_profile_ids {
-              value = $final_profile_ids|push:$prof.id
-            }
-          
-            var.update $profile_names {
-              value = $profile_names|push:$prof.full_name
-            }
-          
-            var.update $resume_templates {
-              value = $resume_templates|push:$prof.resume_template
+            conditional {
+              if ($prof.is_approved) {
+                var.update $final_profile_ids {
+                  value = $final_profile_ids|push:$prof.id
+                }
+              
+                var.update $profile_names {
+                  value = $profile_names|push:$prof.full_name
+                }
+              
+                var.update $resume_templates {
+                  value = $resume_templates|push:$prof.resume_template
+                }
+              }
             }
           }
         }
@@ -116,34 +120,34 @@ query "public/token-profiles" verb=POST {
         // Merge created profile IDs into the assigned list (avoid duplicates)
         foreach ($created_profiles) {
           each as $cp {
-            var $already_included {
-              value = false
-            }
-          
-            foreach ($assigned_ids) {
-              each as $aid {
+            conditional {
+              if ($cp.is_approved) {
+                var $already_included {
+                  value = false
+                }
+              
+                foreach ($assigned_ids) {
+                  each as $aid {
+                    conditional {
+                      if ($aid == $cp.id) {
+                        var.update $already_included {
+                          value = true
+                        }
+                      }
+                    }
+                  }
+                }
+              
                 conditional {
-                  if ($aid == $cp.id) {
-                    var.update $already_included {
-                      value = true
+                  if (!$already_included) {
+                    var.update $assigned_ids {
+                      value = $assigned_ids|push:$cp.id
                     }
                   }
                 }
               }
             }
-          
-            conditional {
-              if (!$already_included) {
-                var.update $assigned_ids {
-                  value = $assigned_ids|push:$cp.id
-                }
-              }
-            }
           }
-        }
-      
-        var.update $final_profile_ids {
-          value = $assigned_ids
         }
       
         foreach ($assigned_ids) {
@@ -154,7 +158,11 @@ query "public/token-profiles" verb=POST {
             } as $prof
           
             conditional {
-              if ($prof != null) {
+              if ($prof != null && $prof.is_approved) {
+                var.update $final_profile_ids {
+                  value = $final_profile_ids|push:$pid
+                }
+              
                 var.update $profile_names {
                   value = $profile_names|push:$prof.full_name
                 }
@@ -167,6 +175,11 @@ query "public/token-profiles" verb=POST {
           }
         }
       }
+    }
+  
+    precondition (($final_profile_ids|count) > 0) {
+      error_type = "accessdenied"
+      error = "No approved profiles assigned to this token"
     }
   
     // Determine if user is admin based on user type
