@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const coverLetterText = message.coverLetterText || "";
       const resumeFilename  = message.resumeFilename  || "Resume.pdf";
       const coverFilename   = message.coverLetterFilename || "Cover_Letter.pdf";
-      const templateId      = message.templateId || 1;
+      const templateId      = message.templateId || 11;
 
       // Normalize rawData: if object, use directly; if string, try to parse
       let resumeObj = null;
@@ -67,7 +67,10 @@ function downloadBlob(dataUri, filename) {
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  const blob = new Blob([bytes], { type: mime });
+  downloadBlobDirect(new Blob([bytes], { type: mime }), filename);
+}
+
+function downloadBlobDirect(blob, filename) {
   const url = URL.createObjectURL(blob);
 
   // Trigger download via hidden <a> tag

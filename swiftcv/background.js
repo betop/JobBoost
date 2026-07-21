@@ -16,7 +16,7 @@ let extensionState = {
   profileIds: [],
   profileNames: [],
   isConfirmed: false,
-  resumeTemplate: 1,
+  resumeTemplate: 11,
   isAdmin: false,
   versionOk: true,
   versionError: "",
@@ -119,7 +119,7 @@ async function fetchTokenProfiles(endpoint = "token-profiles") {
 
 function getTemplateForProfile(profileId, ids, templates) {
   const profileIdx = ids.indexOf(profileId);
-  return profileIdx >= 0 && templates[profileIdx] ? templates[profileIdx] : 1;
+  return profileIdx >= 0 && templates[profileIdx] ? templates[profileIdx] : 11;
 }
 
 async function applyProfilesData(data, { openDialogs = true } = {}) {
@@ -139,7 +139,7 @@ async function applyProfilesData(data, { openDialogs = true } = {}) {
   if (ids.length === 1) {
     extensionState.profileId = ids[0];
     extensionState.profileName = names[0] || "";
-    extensionState.resumeTemplate = templates[0] || 1;
+    extensionState.resumeTemplate = templates[0] || 11;
   } else if (previousSelectionStillValid) {
     extensionState.profileId = previousProfileId;
     extensionState.profileName = names[ids.indexOf(previousProfileId)] || extensionState.profileName || "";
@@ -147,7 +147,7 @@ async function applyProfilesData(data, { openDialogs = true } = {}) {
   } else {
     extensionState.profileId = null;
     extensionState.profileName = null;
-    extensionState.resumeTemplate = 1;
+    extensionState.resumeTemplate = 11;
     extensionState.isConfirmed = false;
   }
 
@@ -597,7 +597,7 @@ async function generateResume(jobDescription, jobUrl = "") {
       coverLetterText: payload.coverLetterText,
       resumeFilename: payload.resumeFilename,
       coverLetterFilename: payload.coverLetterFilename,
-      templateId: extensionState.resumeTemplate || 1,
+      templateId: extensionState.resumeTemplate || 11,
     });
 
     if (!pdfResult?.success) {

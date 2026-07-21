@@ -97,6 +97,7 @@ class PDFGenerator {
       betweenCert:    2.1,
       betweenProject: 2.6,   // 10px
       betweenAward:   2.1,
+      betweenLeadership: 2.1,
       betweenBullets: 0.8,   // 3px
       afterBullets:   2.1,   // 8px before tech stack
       skillsRow:      0.8,   // 3px
@@ -230,13 +231,13 @@ class PDFGenerator {
 
     if (data && (data.name || data.summary)) {
       try {
-        const tid = parseInt(templateId, 10) || 1;
+        const tid = parseInt(templateId, 10) || 11;
         this._applyTemplateTheme(tid);
         const renderFn = this[`_renderTemplate_${tid}`];
         if (renderFn) {
           renderFn.call(this, doc, data);
         } else {
-          this._renderTemplate_1(doc, data); // fallback
+          this._renderTemplate_11(doc, data); // fallback
         }
       } catch (renderErr) {
         console.error("[PDFGen] CRASH in template render:", renderErr.message, "\n", renderErr.stack);
@@ -376,12 +377,10 @@ class PDFGenerator {
   _newDoc() {
     const doc = new this.jsPDF({ unit: "mm", format: [this.pageWidth, this.pageHeight] });
 
-    // Pick the font first so we only embed the 2 weights we actually need
-    const availableFonts = [
-      "Lato", "Roboto", "Inter", "SourceSans3", "Poppins", "Montserrat",
-      "DMSans", "IBMPlexSans", "Outfit", "PlusJakartaSans",
-    ];
-    const chosen = availableFonts[Math.floor(Math.random() * availableFonts.length)];
+    // Lato — a well-regarded, recruiter-friendly resume font (clean, highly legible,
+    // widely recommended in career-advice guidance). Fixed rather than randomized so
+    // regenerating the same resume doesn't change its font each time.
+    const chosen = "Lato";
 
     // Register only the chosen font's 2 weights (regular + bold)
     const fontsLoaded = this._registerFontsOnDocument(doc, chosen);
@@ -573,6 +572,7 @@ class PDFGenerator {
       8:  { accent: [79,  70,  229], dark: [30,  27,  75],  medium: [67,  56,  202], gray: [148,163,184], rule: [199,210,254], sidebar: [30,27,75] },
       9:  { accent: [236, 72,  153], dark: [131, 24,  67],  medium: [219, 39,  119], gray: [156,163,175], rule: [251,207,232], sidebar: null },
       10: { accent: [100, 116, 139], dark: [15,  23,  42],  medium: [71,  85,  105], gray: [148,163,184], rule: [203,213,225], sidebar: null },
+      11: { accent: [0,   0,   0],   dark: [0,   0,   0],   medium: [0,   0,   0],   gray: [82, 82, 91],  rule: [0,  0,  0],   sidebar: null },
     };
     const t = themes[tid] || themes[1];
     this.C = {
@@ -849,12 +849,6 @@ class PDFGenerator {
     this.contentWidth = cw;
     this.currentY = 14;
 
-    if (r.summary) {
-      this._sectionHeader(doc, "PROFILE");
-      const segs = this._parseMarkers(r.summary);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
-      this.currentY = endY + this.LH.base + 1;
-    }
     this._renderCommonSections(doc, r, (d, title) => {
       this.currentY += this.SP.beforeSection;
       this._checkPageBreak(d, 14);
@@ -864,7 +858,7 @@ class PDFGenerator {
       doc.setDrawColor(...this.C.rule); doc.setLineWidth(0.265);
       doc.line(m, this.currentY, this.pageWidth - 12, this.currentY);
       this.currentY += this.SP.afterRule;
-    }, true /* skip summary — already rendered */);
+    });
 
     // Restore margins for subsequent pages
     this.marginH = 18;
@@ -944,36 +938,45 @@ class PDFGenerator {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  Shared section renderer used by templates 2-10
-  //  sectionHeaderFn(doc, title) — called instead of _sectionHeader
-  //  skipSummary — if true, skip summary (used by template 8 sidebar)
+  //  Template 11 — STAR Method Plain (centered, plain black/white, underlined headers)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  _renderCommonSections(doc, r, sectionHeaderFn, skipSummary) {
-    const m  = this.marginH;
-    const cw = this.contentWidth;
-
-    if (!skipSummary && r.summary) {
-      sectionHeaderFn(doc, "SUMMARY");
-      const segs = this._parseMarkers(r.summary);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
-      this.currentY = endY + this.LH.base + 1;
+  _renderTemplate_11(doc, r) {
+    const m = this.marginH;
+    // Centered name
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(15); doc.setTextColor(...this.C.dark);
+    const nameW = doc.getTextWidth((r.name || "").toUpperCase());
+    doc.text((r.name || "").toUpperCase(), (this.pageWidth - nameW) / 2, this.currentY);
+    this.currentY += 6;
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10); doc.setTextColor(...this.C.dark);
+      const tW = doc.getTextWidth(r.title);
+      doc.text(r.title, (this.pageWidth - tW) / 2, this.currentY); this.currentY += 5;
     }
+    this._renderContactLine(doc, r, 9, true); // centered
+    this.currentY += 5;
 
-    if (r.skills && r.skills.length) {
-      sectionHeaderFn(doc, "SKILLS");
-      r.skills.forEach(() => {});
-      r.skills.forEach((row) => {
-        this._checkPageBreak(doc, 10);
-        this._renderSkillsRow(doc, row.category, row.values);
-        this.currentY += this.LH.base + this.SP.skillsRow;
-      });
-      this.currentY += 1;
-    }
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(11); doc.setTextColor(...this.C.dark);
+      doc.text(title.toUpperCase(), m, this.currentY);
+      const tw = doc.getTextWidth(title.toUpperCase());
+      doc.setDrawColor(...this.C.dark); doc.setLineWidth(0.4);
+      doc.line(m, this.currentY + 0.8, m + tw, this.currentY + 0.8);
+      this.currentY += this.SP.afterRule;
+    });
+  }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Shared section renderer used by all templates
+  //  sectionHeaderFn(doc, title) — called instead of _sectionHeader
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderCommonSections(doc, r, sectionHeaderFn) {
     const jobs = r.career_breakdowns || r.experience || [];
     if (jobs.length) {
-      sectionHeaderFn(doc, "EXPERIENCE");
+      sectionHeaderFn(doc, "WORK EXPERIENCE");
       jobs.forEach((job, idx) => {
         this._renderCareerEntry(doc, job);
         if (idx < jobs.length - 1) this.currentY += this.SP.betweenJobs;
@@ -996,21 +999,73 @@ class PDFGenerator {
       });
     }
 
-    if (r.key_projects && r.key_projects.length) {
-      sectionHeaderFn(doc, "KEY PROJECTS");
-      r.key_projects.forEach((proj, idx) => {
+    const projects = r.portfolio_projects || r.key_projects || r.projects || [];
+    if (projects.length) {
+      sectionHeaderFn(doc, "PORTFOLIO PROJECTS");
+      projects.forEach((proj, idx) => {
         this._renderProjectEntry(doc, proj);
-        if (idx < r.key_projects.length - 1) this.currentY += this.SP.betweenProject;
+        if (idx < projects.length - 1) this.currentY += this.SP.betweenProject;
       });
     }
 
-    if (r.awards_recognition && r.awards_recognition.length) {
-      sectionHeaderFn(doc, "AWARDS & RECOGNITION");
-      r.awards_recognition.forEach((award, idx) => {
-        this._renderAwardEntry(doc, award);
-        if (idx < r.awards_recognition.length - 1) this.currentY += this.SP.betweenAward;
+    const leadership = r.leadership_enterpreneurial_experience || r.leadership || [];
+    if (leadership.length) {
+      sectionHeaderFn(doc, "LEADERSHIP/ENTREPRENEURIAL EXPERIENCE");
+      leadership.forEach((role, idx) => {
+        this._renderLeadershipEntry(doc, role);
+        if (idx < leadership.length - 1) this.currentY += this.SP.betweenLeadership;
       });
     }
+
+    const skillGroups = this._getSkillGroups(r);
+    if (skillGroups.length) {
+      sectionHeaderFn(doc, "TECHNICAL SKILLS");
+      skillGroups.forEach((row) => {
+        this._checkPageBreak(doc, 10);
+        this._renderSkillsRow(doc, row.category, row.values);
+        this.currentY += this.LH.base + this.SP.skillsRow;
+      });
+      this.currentY += 1;
+    }
+
+    // Legacy-only — not part of the current schema, renders last when present in older data.
+    const achievements = r.achievement || r.awards_recognition || r.awards || [];
+    if (achievements.length) {
+      sectionHeaderFn(doc, "ACHIEVEMENTS");
+      achievements.forEach((award, idx) => {
+        this._renderAwardEntry(doc, award);
+        if (idx < achievements.length - 1) this.currentY += this.SP.betweenAward;
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  technical_skills / skills normalization
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _getSkillGroups(r) {
+    const labels = {
+      programming: "Programming",
+      softwares: "Software",
+      software: "Software",
+      statistics_and_ml: "Statistics & ML",
+      project_management: "Project Management",
+      languages: "Languages",
+    };
+    const humanize = (key) => labels[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+    if (r.technical_skills && typeof r.technical_skills === "object") {
+      return Object.keys(r.technical_skills)
+        .filter((k) => r.technical_skills[k] != null && String(r.technical_skills[k]).trim() !== "")
+        .map((k) => ({ category: humanize(k), values: String(r.technical_skills[k]) }));
+    }
+    if (r.skills && r.skills.length) {
+      return r.skills.map((row) => {
+        const v = row.values || row.skills || "";
+        return { category: row.category || "", values: Array.isArray(v) ? v.join(", ") : String(v) };
+      });
+    }
+    return [];
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1057,7 +1112,6 @@ class PDFGenerator {
 
   _renderResumeTemplate(doc, r) {
     const m  = this.marginH;
-    const cw = this.contentWidth;
 
     // ── Name ────────────────────────────────────────────────────────────────
     doc.setFont(this._activeFont, "bold");
@@ -1116,70 +1170,7 @@ class PDFGenerator {
     doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
     this.currentY += 3;
 
-    // ── Summary ─────────────────────────────────────────────────
-    if (r.summary) {
-      this._sectionHeader(doc, "SUMMARY");
-      const segs = this._parseMarkers(r.summary);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.dark, this.LH.base);
-      this.currentY = endY + this.LH.base + 1;
-    }
-
-    // ── Skills ───────────────────────────────────────────────────────────────
-    if (r.skills && r.skills.length) {
-      this._sectionHeader(doc, "SKILLS");
-      r.skills.forEach((row) => {
-        this._checkPageBreak(doc, 10);
-        const labelW = this._renderSkillsRow(doc, row.category, row.values);
-        this.currentY += this.LH.base + this.SP.skillsRow;
-      });
-      this.currentY += 1;
-    }
-
-    // ── Experience ─────────────────────────────────────────────────────
-    const jobs = r.career_breakdowns || r.experience || [];
-    if (jobs.length) {
-      this._sectionHeader(doc, "EXPERIENCE");
-      jobs.forEach((job, idx) => {
-        this._renderCareerEntry(doc, job);
-        if (idx < jobs.length - 1) this.currentY += this.SP.betweenJobs;
-      });
-    }
-
-    // ── Education ────────────────────────────────────────────────────────────
-    if (r.education && r.education.length) {
-      this._sectionHeader(doc, "Education");
-      r.education.forEach((edu, idx) => {
-        this._renderEducationEntry(doc, edu);
-        if (idx < r.education.length - 1) this.currentY += this.SP.betweenEdu;
-      });
-    }
-
-    // ── Certifications ───────────────────────────────────────────────────────
-    if (r.certifications && r.certifications.length) {
-      this._sectionHeader(doc, "CERTIFICATIONS");
-      r.certifications.forEach((cert, idx) => {
-        this._renderCertEntry(doc, cert);
-        if (idx < r.certifications.length - 1) this.currentY += this.SP.betweenCert;
-      });
-    }
-
-    // ── Key Projects ─────────────────────────────────────────────────────────
-    if (r.key_projects && r.key_projects.length) {
-      this._sectionHeader(doc, "KEY PROJECTS");
-      r.key_projects.forEach((proj, idx) => {
-        this._renderProjectEntry(doc, proj);
-        if (idx < r.key_projects.length - 1) this.currentY += this.SP.betweenProject;
-      });
-    }
-
-    // ── Awards & Recognition ─────────────────────────────────────────────────
-    if (r.awards_recognition && r.awards_recognition.length) {
-      this._sectionHeader(doc, "AWARDS & RECOGNITION");
-      r.awards_recognition.forEach((award, idx) => {
-        this._renderAwardEntry(doc, award);
-        if (idx < r.awards_recognition.length - 1) this.currentY += this.SP.betweenAward;
-      });
-    }
+    this._renderCommonSections(doc, r, this._sectionHeader.bind(this));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1280,15 +1271,6 @@ class PDFGenerator {
     }
     this.currentY += this.LH.base + 0.5;
 
-    // Company summary — italic gray, parsed for inner **bold**
-    const summary = job.company_summary || job.summary || "";
-    if (summary) {
-      this.currentY += this.SP.companySumTop;
-      const segs = this._parseMarkers(summary);
-      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 9.5, this.C.bodyMuted, this.LH.sm);
-      this.currentY = endY + this.LH.sm + this.SP.companySumBot;
-    }
-
     // Bullets
     const bullets = job.highlights || job.bullets || [];
     bullets.forEach((bullet, bi) => {
@@ -1315,27 +1297,6 @@ class PDFGenerator {
         this.currentY += this.SP.afterBullets - this.SP.betweenBullets;
       }
     });
-
-    // Tech Stack
-    const tech = job.tech_stack || job.tech || [];
-    if (tech.length) {
-      this.currentY += this.SP.techStackTop;
-      this._checkPageBreak(doc, 8);
-      doc.setFont(this._activeFont, "normal");
-      doc.setFontSize(9.5);
-      doc.setTextColor(...this.C.accent);
-      const label = "Tech Stack:  ";
-      doc.text(label, m, this.currentY);
-      const lw = doc.getTextWidth(label);
-
-      doc.setFont(this._activeFont, "normal");
-      doc.setFontSize(9.5);
-      doc.setTextColor(...this.C.gray);
-      const techStr = Array.isArray(tech) ? tech.join(", ") : tech;
-      const techLines = doc.splitTextToSize(techStr, cw - lw);
-      doc.text(techLines, m + lw, this.currentY);
-      this.currentY += (techLines.length - 1) * this.LH.sm + this.LH.sm;
-    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1343,29 +1304,67 @@ class PDFGenerator {
   // ═══════════════════════════════════════════════════════════════════════════
 
   _renderEducationEntry(doc, edu) {
-    const m = this.marginH;
+    const m  = this.marginH;
+    const cw = this.contentWidth;
     this._checkPageBreak(doc, 14);
 
     const year = edu.year || edu.end || "";
+    const degree = edu.degree || edu.degree_name || "";
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...this.C.body);
-    doc.text(edu.degree || edu.degree_name || "", m, this.currentY);
+    doc.text(degree, m, this.currentY);
+    let dx = m + doc.getTextWidth(degree);
 
-    doc.setFont(this._activeFont, "normal");
-    doc.setFontSize(9.5);
-    doc.setTextColor(...this.C.gray);
-    const yw = doc.getTextWidth(year);
-    doc.text(year, this.pageWidth - m - yw, this.currentY);
+    if (edu.major) {
+      const majorTxt = "  ·  " + edu.major;
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...this.C.bodyMuted);
+      doc.text(majorTxt, dx, this.currentY);
+    }
+
+    if (year) {
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...this.C.gray);
+      const yw = doc.getTextWidth(year);
+      doc.text(year, this.pageWidth - m - yw, this.currentY);
+    }
     this.currentY += this.LH.base + 0.5;
 
     const institution = edu.school || edu.institution || "";
-    if (institution) {
+    const subParts = [institution, edu.location].filter(Boolean).join("  ·  ");
+    if (subParts) {
       doc.setFont(this._activeFont, "bold");
       doc.setFontSize(9.5);
       doc.setTextColor(...this.C.bodyMuted);
-      doc.text(institution, m, this.currentY);
+      doc.text(subParts, m, this.currentY);
       this.currentY += this.LH.sm + 0.5;
+    }
+
+    if (edu.highlights) {
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...this.C.bodyMuted);
+      const lines = doc.splitTextToSize(edu.highlights, cw);
+      doc.text(lines, m, this.currentY);
+      this.currentY += (lines.length - 1) * this.LH.sm + this.LH.sm + 0.5;
+    }
+
+    const relevant = edu.Relevant || edu.relevant || "";
+    if (relevant) {
+      const label = "Relevant Coursework: ";
+      doc.setFont(this._activeFont, "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...this.C.bodyMuted);
+      doc.text(label, m, this.currentY);
+      const lw = doc.getTextWidth(label);
+      doc.setFont(this._activeFont, "normal");
+      const lines = doc.splitTextToSize(relevant, cw - lw);
+      doc.text(lines[0], m + lw, this.currentY);
+      if (lines.length > 1) doc.text(lines.slice(1), m, this.currentY + this.LH.sm);
+      this.currentY += (lines.length - 1) * this.LH.sm + this.LH.sm + 0.5;
     }
   }
 
@@ -1378,9 +1377,10 @@ class PDFGenerator {
     const cw = this.contentWidth;
     this._checkPageBreak(doc, 14);
 
-    // Name · Issuer on one line
+    // Name · Issuer on one line, date at right
     const name   = cert.name || cert.cert_name || "";
     const issuer = cert.issuer || "";
+    const date   = cert.date || "";
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...this.C.body);
@@ -1393,6 +1393,14 @@ class PDFGenerator {
       doc.setFontSize(9.5);
       doc.setTextColor(...this.C.bodyMuted);
       doc.text(sep + issuer, m + nw, this.currentY);
+    }
+
+    if (date) {
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...this.C.gray);
+      const dw = doc.getTextWidth(date);
+      doc.text(date, this.pageWidth - m - dw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
 
@@ -1417,9 +1425,9 @@ class PDFGenerator {
     const cw = this.contentWidth;
     this._checkPageBreak(doc, 18);
 
-    // Name (left) + Company | Year (right)
+    // Name (left) + Date/Company | Year (right)
     const name    = proj.name || proj.project_name || "";
-    const context = [proj.company, proj.year].filter(Boolean).join("  |  ");
+    const context = proj.date || [proj.company, proj.year].filter(Boolean).join("  |  ");
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10.5);
     doc.setTextColor(...this.C.dark);
@@ -1494,6 +1502,66 @@ class PDFGenerator {
       const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
       this.currentY = endY + this.LH.base + 0.5;
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Leadership / entrepreneurial experience entry
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderLeadershipEntry(doc, role) {
+    const m  = this.marginH;
+    const cw = this.contentWidth;
+    this._checkPageBreak(doc, 18);
+
+    const name = role.name || role.role_name || "";
+    const dateStr = role.date || role.date_range || [role.start, role.end || "Present"].filter(Boolean).join(" – ");
+    doc.setFont(this._activeFont, "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(...this.C.body);
+    doc.text(name, m, this.currentY);
+
+    if (dateStr) {
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...this.C.gray);
+      const dw = doc.getTextWidth(dateStr);
+      doc.text(dateStr, this.pageWidth - m - dw, this.currentY);
+    }
+    this.currentY += this.LH.base + 0.5;
+
+    if (role.role) {
+      doc.setFont(this._activeFont, "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...this.C.bodyMuted);
+      doc.text(role.role, m, this.currentY);
+      this.currentY += this.LH.sm + 0.5;
+    }
+
+    const desc = role.description || "";
+    if (desc) {
+      const segs = this._parseMarkers(desc);
+      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
+      this.currentY = endY + this.LH.base + 0.5;
+    }
+
+    const bullets = role.highlights || role.bullets || [];
+    bullets.forEach((bullet, bi) => {
+      const bx = m + 3.5;
+      const bw = cw - 3.5;
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(10);
+      const bulletLines = doc.splitTextToSize(String(bullet || "").replace(/\*\*/g, ""), bw);
+      const bulletHeight = bulletLines.length * this.LH.base + this.SP.betweenBullets + 2;
+      this._checkPageBreak(doc, bulletHeight);
+      doc.setTextColor(...this.C.body);
+      doc.text("•", m, this.currentY);
+      const segs = this._parseMarkers(bullet);
+      const endY = this._renderSegments(doc, segs, bx, this.currentY, bw, 10, this.C.body, this.LH.base);
+      this.currentY = endY + this.LH.base + this.SP.betweenBullets;
+      if (bi === bullets.length - 1) {
+        this.currentY += this.SP.afterBullets - this.SP.betweenBullets;
+      }
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

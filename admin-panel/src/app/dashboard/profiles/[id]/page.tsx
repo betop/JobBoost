@@ -20,10 +20,11 @@ const TEMPLATE_META_MAP: Record<number, { name: string; accent: string; dark: st
   8: { name: "Indigo Sidebar", accent: "#4f46e5", dark: "#1e1b4b", medium: "#6366f1" },
   9: { name: "Rose Pink", accent: "#ec4899", dark: "#831843", medium: "#f472b6" },
   10: { name: "Slate Professional", accent: "#64748b", dark: "#1e293b", medium: "#94a3b8" },
+  11: { name: "STAR Method Plain", accent: "#000000", dark: "#000000", medium: "#000000" },
 };
 
 function TemplateMiniPreview({ templateId }: { templateId: number }) {
-  const template = TEMPLATE_META_MAP[templateId] ?? TEMPLATE_META_MAP[1];
+  const template = TEMPLATE_META_MAP[templateId] ?? TEMPLATE_META_MAP[11];
 
   return (
     <div className="w-full max-w-[260px] rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
@@ -243,9 +244,9 @@ export default function ProfileViewPage() {
               <div>
                 <p className="text-sm text-gray-500">Resume Template</p>
                 <p className="text-gray-900 font-medium mb-2">
-                  {TEMPLATE_META_MAP[profile.resume_template ?? 1]?.name ?? `Template ${profile.resume_template ?? 1}`}
+                  {TEMPLATE_META_MAP[profile.resume_template ?? 11]?.name ?? `Template ${profile.resume_template ?? 11}`}
                 </p>
-                <TemplateMiniPreview templateId={profile.resume_template ?? 1} />
+                <TemplateMiniPreview templateId={profile.resume_template ?? 11} />
               </div>
             </div>
           </div>

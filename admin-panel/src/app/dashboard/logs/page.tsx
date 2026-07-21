@@ -8,6 +8,7 @@ import { logsService, LogsFilters, GenerationLog } from "@/services/logsService"
 import * as logCache from "@/services/logCache";
 import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
 import { downloadResumePDF } from "@/utils/pdfDownload";
+import { downloadResumeDocx } from "@/utils/docxDownload";
 import { userService } from "@/services/userService";
 import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/authStore";
@@ -26,6 +27,7 @@ import {
   ChevronsUpDown,
   X,
   FileText,
+  FileType2,
   RefreshCw,
   Download,
   Building2,
@@ -809,6 +811,7 @@ export default function LogsPage() {
   const [jobDetailsLog, setJobDetailsLog]     = useState<GenerationLog | null>(null);
   const [regenerateLog, setRegenerateLog]     = useState<GenerationLog | null>(null);
   const [downloadingLogId, setDownloadingLogId] = useState<string | null>(null);
+  const [downloadingDocxLogId, setDownloadingDocxLogId] = useState<string | null>(null);
   const [reasonLog, setReasonLog]             = useState<GenerationLog | null>(null);
   const [isRefreshing, setIsRefreshing]       = useState(false);
   // const [isRecovering, setIsRecovering]       = useState(false);
@@ -1252,7 +1255,7 @@ export default function LogsPage() {
       {regenerateLog && (
         <RegenerateModal
           log={regenerateLog}
-          resumeTemplate={profiles?.find((p) => p.id === regenerateLog.profile_id)?.resume_template ?? 1}
+          resumeTemplate={profiles?.find((p) => p.id === regenerateLog.profile_id)?.resume_template ?? 11}
           onClose={() => setRegenerateLog(null)}
           onSuccess={async () => {
             // Delta-sync so the new regenerated log appears immediately
@@ -1935,7 +1938,7 @@ export default function LogsPage() {
                               try {
                                 const data = await logsService.getContent(log.content_id);
                                 const filename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || "Resume";
-                                const tpl = profiles?.find((p) => p.id === log.profile_id)?.resume_template ?? 1;
+                                const tpl = profiles?.find((p) => p.id === log.profile_id)?.resume_template ?? 11;
                                 await downloadResumePDF(data.raw_response, filename, tpl);
                               } catch (err) {
                                 console.error("Failed to download resume:", err);
@@ -1956,6 +1959,35 @@ export default function LogsPage() {
                               <LoadingSpinner size="sm" />
                             ) : (
                               <Download className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!log.content_id) return;
+                              setDownloadingDocxLogId(log.id);
+                              try {
+                                const data = await logsService.getContent(log.content_id);
+                                const filename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || "Resume";
+                                await downloadResumeDocx(data.raw_response, filename);
+                              } catch (err) {
+                                console.error("Failed to download resume:", err);
+                                alert("Failed to download resume Word doc.");
+                              } finally {
+                                setDownloadingDocxLogId(null);
+                              }
+                            }}
+                            disabled={!log.content_id || downloadingDocxLogId === log.id}
+                            title={log.content_id ? "Download resume as Word (.docx) — most reliable for ATS parsing" : "No saved resume content"}
+                            className={`p-1.5 rounded-md border transition-colors ${
+                              log.content_id
+                                ? "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 cursor-pointer"
+                                : "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed"
+                            }`}
+                          >
+                            {downloadingDocxLogId === log.id ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <FileType2 className="w-3.5 h-3.5" />
                             )}
                           </button>
                         </div>

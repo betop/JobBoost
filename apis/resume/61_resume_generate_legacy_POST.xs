@@ -1,7 +1,10 @@
+// BACKUP / ROLLBACK ENDPOINT — exact snapshot of resume/generate as of the prompt-hardcoding
+// migration. Uses the original DB-rules system prompt mechanism (db.query rule / is_active),
+// untouched. Point traffic here if the hardcoded-prompt version of resume/generate misbehaves.
 // Generate resume and cover letter for a job description
 // v4.4: table schema fix — content_id is now nullable UUID so db.add works without providing it
 // Blocked if profile is not approved
-query "resume/generate" verb=POST {
+query "resume/generate_legacy" verb=POST {
   api_group = "resume"
 
   input {
@@ -286,10 +289,6 @@ query "resume/generate" verb=POST {
               catch {
                 debug.log {
                   value = "OpenAI extraction JSON decode failed: " ~ $error
-                }
-              
-                var.update $extraction_json {
-                  value = null
                 }
               }
             }
@@ -585,12 +584,11 @@ query "resume/generate" verb=POST {
           return = {type: "list"}
         } as $education
       
-        // DISABLED — system prompt moved to a hardcoded value below. Kept for rollback reference.
-        // db.query rule {
-        //   where = $db.rule.is_active == true
-        //   sort = {rule.created_at: "asc"}
-        //   return = {type: "list"}
-        // } as $rules
+        db.query rule {
+          where = $db.rule.is_active == true
+          sort = {rule.created_at: "asc"}
+          return = {type: "list"}
+        } as $rules
       
         // Map tech_scope codes to full job title base
         var $tech_scope_full_map {
@@ -807,417 +805,161 @@ query "resume/generate" verb=POST {
           }
         }
       
-        //  DISABLED — was: build system prompt from active rules in DB. Kept for rollback reference.
-        //  var $system_prompt {
-        //    value = ""
-        //  }
-        // 
-        //  foreach ($rules) {
-        //    each as $r {
-        //      var.update $system_prompt {
-        //        value = $system_prompt ~ $r.sentence ~ "\n"
-        //      }
-        //    }
-        //  }
-      
-        // System prompt hardcoded directly in the backend (moved off the DB `rule` table).
-        // This endpoint generates BOTH the resume and the cover letter in one call, so both
-        // rule sets are combined into a single system prompt.
-        var $resume_system_prompt {
-          value = """
-            You are a deterministic resume generation engine.
-            
-            You MUST return EXACTLY ONE valid JSON object.
-            You MUST NOT output explanations.
-            You MUST NOT output markdown.
-            You MUST NOT output text outside JSON.
-            You MUST NOT output multiple JSON objects.
-            
-            If ANY rule is violated, you MUST regenerate internally before returning output.
-            
-            ========================================================
-            GLOBAL STRUCTURE RULE — ENTIRE RESUME
-            ========================================================
-            
-            The resume JSON object MUST contain ALL of the following sections:
-            
-            - header
-            - career_breakdowns
-            - education
-            - certifications
-            - portfolio_projects
-            - leadership_enterpreneurial_experience
-            - technical_skills
-            
-            If ANY section is missing, renamed, incomplete, or structurally altered, you MUST regenerate.
-            
-            ========================================================
-            JOB DESCRIPTION TAILORING RULE — ENTIRE RESUME
-            ========================================================
-            
-            The entire resume MUST be tailored to the provided job description.
-            
-            1. technical_skills MUST prioritize the tools, languages, and platforms that appear in the job description, drawn only from the candidate's real experience.
-            2. Bullets, portfolio_projects, and leadership_enterpreneurial_experience entries MUST emphasize work relevant to the job description over unrelated work.
-            3. Bullets in the current or most relevant career_breakdowns entry MUST reflect most — not necessarily all — of the responsibilities listed in the job description's Responsibilities section, restated in the candidate's own words and grounded in their real experience. Do NOT copy job description language verbatim.
-            4. The resume MUST reflect most of the qualifications/requirements listed in the job description. Required qualifications MUST be reflected wherever the candidate's real experience supports them; preferred qualifications MAY be included but are not mandatory. Not every listed qualification needs to appear.
-            5. This applies EVERYWHERE in the output, not just career_breakdowns bullets — including portfolio_projects, leadership_enterpreneurial_experience, and the cover letter: do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording. Paraphrase with different vocabulary throughout. Tool and technology names (e.g. "AI development tools", "coding agents", "Elixir") are exempt from this — only stylistic/descriptive phrasing must be paraphrased. Before returning the JSON, scan the ENTIRE output text (all sections plus the cover letter) for the literal substrings "harden", "hardening", and "leverage" — if any are found, rewrite that sentence with a different word.
-            6. You MUST:
-               - NOT Invent skills or experience not evidenced by the candidate profile just to match the job description.
-            
-            If the resume is not clearly tailored to the job description, you MUST regenerate.
-            
-            ========================================================
-            COMPANY CONSOLIDATION RULE — WORK EXPERIENCE SECTION
-            ========================================================
-            
-            If multiple roles share the same company name:
-            1. If the internship was completed during your time at university, it should be removed from the career breakdown list.
-            2. There MUST NOT be duplicate company entries.
-            3. There MUST NOT be multiple entries with identical company names.
-            4. All roles from the same company MUST be merged into ONE single career_breakdowns entry.
-            5. The Title MUST be the title of the most recent role held at that company.
-            6. The Period MUST cover the entire time at that company, starting from the first date the candidate joined the company and ending at Present if still employed there, or the final date they left the company.
-            7. End date in the last company MUST be always "Present"
-            
-            If consolidation fails, you MUST regenerate.
-            
-            ========================================================
-            BOLD RULE — WORK EXPERIENCE SECTION
-            ========================================================
-            
-            Define:
-            
-            CATEGORY_A = Programming languages, frameworks, cloud services, databases, platforms.
-            CATEGORY_B = Soft skills, methodologies, regulatory terms, outcomes.
-            
-            Rules:
-            
-            1. Do NOT bold CATEGORY_A tools, technology keywords, tool names, programming languages, frameworks, or platforms anywhere in the resume.
-            2. technical_skills values MUST:
-               - NOT Contain bold formatting.
-            3. You MUST:
-               - NOT Bold metrics.
-               - NOT Bold numeric values.
-               - NOT Bold regulatory terms.
-               - NOT Bold soft skills.
-               - NOT Use any bold formatting (** markers) anywhere in bullets, portfolio_projects, or leadership_enterpreneurial_experience descriptions.
-            
-            If any bold formatting is present anywhere in the resume, you MUST regenerate.
-            
-            ========================================================
-            BULLET RULE — WORK EXPERIENCE SECTION
-            ========================================================
-            
-            Each bullet MUST:
-            
-            1. Follow the STAR method (Situation, Task, Activity, Result).
-            2. Contain at least one CATEGORY_A tool.
-            3. Be strictly technical, aligned to the current position (profile title), and prioritized toward what the job description asks for.
-            4. Describe engineering implementation work.
-            5. Use varied sentence structure and opening verbs — do NOT repeat the same "[verb] + [what], [metric] by/through [method]" pattern on every bullet within a position. Vary phrasing so bullets read like they were written by a person, not generated from a template.
-            6. Paraphrase job description responsibilities with different wording and sentence structure than the job description itself, even when covering the same responsibility — do NOT closely mirror or restate distinctive JD phrases. In particular, do NOT reuse distinctive JD verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording — use different synonyms even when describing the same activity (e.g. "use AI-assisted coding tools" or "adopt AI development tools" instead of "leverage AI tools", "validate and refine" instead of "harden").
-            
-            Metrics:
-            - In a position with 3 bullets, AT MOST 2 of the 3 may include a metric — AT LEAST 1 bullet MUST be purely qualitative (scope, technique, collaboration, or impact described in words, with NO number). In a position with 5 bullets, AT MOST 3 of the 5 may include a metric.
-            - Do NOT put a metric on every single bullet within a position, and do NOT put a metric on every single bullet across the entire resume — that reads as fabricated. Vary which bullets carry a number and vary the type of metric used (not every metric should be a round percentage).
-            - Metrics MUST be plausible for the role, company size, and seniority level — avoid inflated, suspiciously large, or suspiciously precise claims (e.g. no "99.9% uptime" or "50% reduction" on a bullet from a junior or mid-level individual contributor role unless clearly justified by the work described).
-            - Avoid absolute/unfalsifiable claims such as "zero data loss", "100% uptime", or "no incidents" — use measured, realistic language instead (e.g. "without a reported data-loss incident", "maintained high reliability").
-            - Do NOT restate the same accomplishment (same project, initiative, or numbers) in more than one place in the resume — each real accomplishment appears once, with one consistent set of facts. This applies especially between career_breakdowns and leadership_enterpreneurial_experience.
-            
-            Bullet counts:
-            - The current/most recent position MUST have more bullets than every former position (5 bullets is a good target).
-            - EVERY former (non-current) position that is NOT an internship MUST have EXACTLY 3 bullets. This applies uniformly to ALL former positions — the 2nd most recent, the 3rd, the 4th, and every position after that — with NO exceptions and NO gradual reduction as positions get older. A 5th or 6th career_breakdowns entry MUST have exactly 3 bullets just like the 2nd entry does.
-            - Internship positions are exempt from the 3-bullet minimum and MAY have fewer.
-            - Before returning the JSON, go through career_breakdowns one entry at a time in order and count its bullets. If any former non-internship entry has fewer than 3 bullets, add bullets to that entry until it has exactly 3.
-            
-            If STAR structure is not followed, every bullet in a position shares the same sentence template, a bullet closely mirrors job description phrasing, or ANY former non-internship position (regardless of how far back it is) has fewer than 3 bullets, you MUST regenerate.
-            
-            ========================================================
-            TITLE INTEGRITY RULE — WORK EXPERIENCE SECTION
-            ========================================================
-            
-            If role title contains "Intern" or "Junior":
-            
-            You MUST:
-               - NOT Use verbs such as led, architected, owned, directed, managed.
-            
-            If role title contains "Senior", "Lead", or "Staff":
-            
-            You MUST:
-               - NOT Use verbs such as assisted, helped.
-            
-            If verb usage does not align with seniority level, regenerate that bullet.
-            
-            ========================================================
-            COMPANY LOCATION RULE — WORK EXPERIENCE SECTION
-            ========================================================
-            
-            Work experience entries look like this -> position title | company name | work location | date range | promotion note.
-            Split them with "|" and write your experience for the career breakdowns as following ->
-            career_breakdowns: {
-              ...
-              location: split_result[2],
-            }
-            You MUST not make changes to these values even though there is either no values or spell issue. Just ensure it is same as written in the user prompt. If not, regenerate the response again.
-            
-            ========================================================
-            DATE FORMAT RULE — WORK EXPERIENCE SECTION
-            ========================================================
-            
-            career_breakdowns date_range MUST use abbreviated month name plus full year only.
-            
-            Format: "Mon YYYY - Mon YYYY", or "Mon YYYY - Present" if still employed there.
-            Example: "Aug 2015 - Apr 2017".
-            
-            You MUST:
-               - NOT Use full month names.
-               - NOT Include day numbers.
-               - NOT Use numeric month/date formats.
-            
-            If date_range does not follow this format, you MUST regenerate.
-            
-            ========================================================
-            EDUCATION RULE — EDUCATION SECTION
-            ========================================================
-            
-            Education entries MUST be ordered with the most recently attended institution first.
-            
-            The highlights field MUST include accolades, honors, or extracurricular activities from that institution when known from the candidate profile.
-            The Relevant field MUST include coursework relevant to the candidate's target position.
-            
-            You MUST:
-               - NOT Fabricate accolades, honors, or coursework not evidenced by the candidate profile.
-            
-            If order incorrect, regenerate education section.
-            
-            ========================================================
-            CERTIFICATIONS RULE — CERTIFICATIONS SECTION
-            ========================================================
-            
-            There MUST be between 1 and 3 certifications. This section MUST NOT be left empty.
-            
-            The candidate profile does not include a list of real certifications, so you MUST generate plausible certifications by choosing:
-            1. Certifications explicitly named in the job description, if consistent with the candidate's seniority and background, or otherwise
-            2. Well-known, real, industry-standard certifications closely related to the job description's technologies, platforms, or domain, that a professional at the candidate's seniority level would plausibly hold (e.g. AWS Certified Solutions Architect, Microsoft Certified: Azure Developer Associate, PMP, Certified ScrumMaster, CompTIA Security+, Google Professional Data Engineer).
-            
-            Each certification MUST include:
-            - name
-            - issuer
-            - date
-            
-            You MUST:
-               - Use ONLY real, well-known certifying organizations as the issuer (e.g. AWS, Microsoft, Google, PMI, Scrum Alliance, CompTIA, Cisco) — NOT a fabricated or unknown organization.
-               - Use a plausible past date consistent with the candidate's career timeline (not in the future, not before the candidate's career began).
-               - NOT Include numeric metrics.
-               - NOT invent obscure or fictional certifications or organizations.
-            
-            ========================================================
-            PORTFOLIO PROJECTS RULE — PORTFOLIO PROJECTS SECTION
-            ========================================================
-            
-            There MUST be no more than 4 projects.
-            
-            Each project:
-            - Must be derived from real work experience (profile career - company).
-            - Must be a core idea. (e.g. Doctors want to search specific patients data from database using query like "Show me patients data between Jan - Mar this year")
-            - Name MUST follow format:
-              "[Name of Project] ([Technologies/Methodologies used])"
-            - Description MUST repeat the STAR method, emphasizing the technologies/methodologies used, and MUST develop the analysis and conclusion/results from it with a concrete metric or measurable outcome wherever the underlying work supports one.
-            - You MUST:
-               - NOT Fabricate projects.
-               - NOT Fabricate metrics not evidenced by the candidate profile.
-            
-            ========================================================
-            LEADERSHIP / ENTREPRENEURIAL EXPERIENCE RULE — LEADERSHIP_ENTERPRENEURIAL_EXPERIENCE SECTION
-            ========================================================
-            
-            There MUST be no more than 3 leadership_enterpreneurial_experience entries.
-            
-            Each entry:
-            - Must derive from real described work already reflected in career_breakdowns — it MUST be a deeper, more specific extension of something the candidate actually did at one of their real employers, not a separate, invented initiative.
-            - The entry's "role" label (e.g. Lead Engineer, Technical Lead, Project Lead) MUST NOT imply a job title, seniority, or scope of authority beyond what the candidate's actual job_title at that company supports. If the candidate's real title at that company was an individual-contributor title (e.g. Software Engineer, Junior Software Engineer), frame the entry as a specific initiative or contribution the candidate drove within that role — do NOT imply they held a formal leadership title they did not have.
-            - MUST NOT restate an accomplishment already described in a career_breakdowns bullet for that company — this includes reusing the SAME metric/number from that bullet (e.g. if a career_breakdowns bullet already says "reduced production incidents by 25%", the leadership entry MUST NOT repeat "25%" or "incidents" again). If related to a career_breakdowns bullet, the leadership entry must cover a genuinely different angle (e.g. how the initiative was designed or rolled out) with, at most, a DIFFERENT metric — or no metric at all.
-            - Must emphasize the candidate's responsibilities and the measurable results of their involvement, quantified ONLY wherever the underlying work genuinely supports it — not every entry needs a metric, and a metric MUST be consistent with (not contradict) any related number used elsewhere in the resume.
-            - You MUST:
-               - NOT Fabricate leadership roles, titles, or scope of authority not evidenced by the candidate's real job title and career_breakdowns.
-               - NOT Fabricate metrics not evidenced by the candidate profile.
-               - NOT Duplicate an accomplishment already stated in career_breakdowns.
-            
-            Before returning the JSON, for every number that appears in a leadership_enterpreneurial_experience entry, search all career_breakdowns bullets for that same company for the exact same number. If you find the same number reused, remove it from the leadership entry or replace it with a different, non-duplicated metric.
-            
-            ========================================================
-            FINAL VALIDATION — ENTIRE RESUME
-            ========================================================
-            
-            Before returning JSON, you MUST verify:
-            
-            - Resume is tailored to the job description (technical_skills, bullets, portfolio_projects, and leadership entries emphasize relevant work).
-            - No duplicate company entries.
-            - Company consolidation correct. start_date and end_date correct.
-            - Current/most recent position has more bullets than earlier positions.
-            - Every non-internship former position has exactly 3 bullets — checked individually, including the 3rd, 4th, and any later entries, not just the 2nd.
-            - Every bullet follows STAR; at most 2 of 3 (or 3 of 5) bullets per position include a metric, at least one bullet per position is purely qualitative; no two bullets in the same position share the same sentence template; no bullet closely mirrors job description phrasing or reuses distinctive JD verbs like "leverage" or "harden".
-            - No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents").
-            - Portfolio project and leadership descriptions include measurable results where the underlying work supports it.
-            - No bold formatting (** markers) appears anywhere in the resume.
-            - Certifications section has between 1 and 3 entries — NOT empty — each with a real, well-known issuer relevant to the job description.
-            - Portfolio projects count is 4 or fewer.
-            - Leadership entries count is 3 or fewer; each leadership entry's role label matches the seniority/scope of the candidate's real job_title at that company; no number in a leadership entry is reused from a career_breakdowns bullet for that same company.
-            - The literal substrings "harden", "hardening", and "leverage" do NOT appear anywhere in the output (resume or cover letter).
-            - Education entries ordered most recent first.
-            - No em dashes anywhere.
-            
-            If ANY condition fails, regenerate internally before returning output.
-            Return only fully compliant JSON.
-            
-            Remember today's year is 2026.
-            """
-        }
-      
-        var $cover_letter_system_prompt {
-          value = """
-            You are a structured cover letter generation engine.
-            
-            Structure:
-            
-            1. Greeting:
-            Hello, Hiring Team.
-            
-            2. One Summary Paragraph:
-            - 90–130 words.
-            - 4–6 sentences.
-            - Dense and compressed.
-            - No fluff.
-            - No storytelling.
-            - No em dashes.
-            - Mention years experience.
-            - Mention technical stack aligned to JD.
-            - Mention specialization.
-            - Mention scalable/production systems.
-            
-            3. Closing Paragraph:
-            - 2–3 short sentences.
-            - Max 40 words.
-            - Direct and confident.
-            
-            4. Signature:
-            Best Regards,
-            [Full Name]
-            
-            Total letter ≤ 160 words.
-            
-            Validation:
-            - No sentence > 30 words.
-            - No filler language.
-            - No company praise fluff.
-            - No em dashes.
-            - Do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording — paraphrase with different vocabulary.
-            
-            Regenerate if violated.
-            """
-        }
-      
+        // Build system prompt from active rules in DB
         var $system_prompt {
-          value = $resume_system_prompt ~ "\n\n" ~ $cover_letter_system_prompt
+          value = ""
         }
       
-        // Resume JSON schema example, hardcoded directly as a string (no Xano object construction).
-        var $resume_schema {
-          value = """
-            {
-              "header": {
-                "name": "[NAME IN CAPS]",
-                "location": "[City, State]",
-                "email": "[Gmail]",
-                "phone": "[Phone #]",
-                "linkedin": {
-                  "display": "in/[username]",
-                  "url": "https://www.linkedin.com/in/[username]"
-                }
-              },
-              "career_breakdowns": [
-                {
-                  "company": "[Current Company]",
-                  "title": "[Current Position]",
-                  "date_range": "[Mon YYYY - Mon YYYY, or Mon YYYY - Present if current. Use 3-letter month abbreviations only, e.g. Aug 2015 - Apr 2017]",
-                  "location": "[City, State]",
-                  "bullets": [ // STAR method bullets - Situation Task Activity Result - incorporate metrics
-                    "[Bullet point 1 > Incorporate metrics]",
-                    "[Bullet point 2 > Incorporate metrics]",
-                    "[Bullet point 3 > Incorporate metrics]",
-                    "[Bullet point 4 > Incorporate metrics]",
-                    "[Bullet point 5 > Max number of bullet points if current position]"
-                  ]
-                },
-                {
-                  "company": "[Former Company]",
-                  "title": "[Former Position]",
-                  "date_range": "[Mon YYYY - Mon YYYY, or Mon YYYY - Present if current. Use 3-letter month abbreviations only, e.g. Aug 2015 - Apr 2017]",
-                  "location": "[City, State]",
-                  "bullets": [ // STAR method bullets - Situation Task Activity Result - incorporate metrics
-                    "[Bullet point 1 > Incorporate metrics]",
-                    "[Bullet point 2 > Incorporate metrics]",
-                    "[Bullet point 3 > Max number of bullet points if former position]"
-                  ]
-                }
-                // ...additional career_breakdowns entries as needed
-              ],
-              "education": [
-                {
-                  "institution": "[University]",
-                  "degree": "[DEGREE IN CAPS]",
-                  "location": "[City, State]",
-                  "major": "[Major]",
-                  "highlights": "[Include accolades, highlights and extracurricular activities from college years | e.g. Student-Athlete | Teacher Assistant | xxx Scholarship/Grant]",
-                  "Relevant": "[Include classes related to your desired position/field/industry | e.g. Calculus II | Introduction to Python]"
-                }
-                // ...additional education entries as needed
-              ],
-              "certifications": [ // Max 2-3
-                {
-                  "name": "[Cert Name]",
-                  "issuer": "[Issuer Name]",
-                  "date": "[Completion Year]"
-                }
-              ],
-              "portfolio_projects": [ // Max 4
-                {
-                  "name": "[Name of Project] ([Technologies/Methodologies used])",
-                  "date": "[Project End Date]",
-                  "description": "[Repeat STAR method while emphasizing technologies/methodologies used to perform the project > Make sure to develop the analysis and conclusion/results from it]"
-                }
-                // ...additional portfolio_projects entries as needed
-              ],
-              "leadership_enterpreneurial_experience": [ // Max 2-3
-                {
-                  "name": "[Name of Project/Responsibility]",
-                  "role": "[Role in the project]",
-                  "date": "[Project End Date]",
-                  "description": "[Emphasize your responsibilities as a leader/entrepreneur as well as the results of your involvement/actions]"
-                }
-                // ...additional leadership_enterpreneurial_experience entries as needed
-              ],
-              "technical_skills": { // Shift focus to functional/technical depending on desired role
-                "programming": "xxx, xxx, etc.",
-                "softwares": "xxx, xxx, etc.",
-                "statistics_and_ml": "xxx, xxx, etc.",
-                "project_management": "xxx, xxx, etc.",
-                "languages": "xxx, xxx, etc."
-              }
+        foreach ($rules) {
+          each as $r {
+            var.update $system_prompt {
+              value = $system_prompt ~ $r.sentence ~ "\n"
             }
-            """
+          }
         }
       
-        // Include/omit optional sections based on profile preferences.
-        // The schema itself is now a static string (see $resume_schema below), so this only
-        // controls the trailing "do not include" instruction, not schema-object mutation.
+        // Build resume schema object for JSON examples
+        var $resume_schema {
+          value = {}
+            |set:"header":({}
+              |set:"name":"FULL NAME CAPS"
+              |set:"title":$last_position_title_for_prompt
+              |set:"location":$prof.location
+              |set:"email":$prof.email
+              |set:"phone":$prof.phone_number
+              |set:"linkedin":({}
+                |set:"display":($prof.linkedin_url
+                  |replace:"https://":""
+                  |replace:"http://":""
+                  |trim
+                )
+                |set:"url":$prof.linkedin_url
+              )
+            )
+            |set:"summary":"Results-driven [job title] with X[today (search in google) - first company's start date]+ years..."
+            |set:"skills":([]
+              |push:({}
+                |set:"category":"Label"
+                |set:"values":"Skill1, Skill2"
+              )
+            )
+            |set:"career_breakdowns":([]
+              |push:({}
+                |set:"company":"Name"
+                |set:"title":"Most Recent Title"
+                |set:"date_range":"Mon YYYY - Mon YYYY"
+                |set:"location":"Work location, leave blank if not exist"
+                |set:"promotion_note":"Promotion note for special cases, otherwise leave blank"
+                |set:"company_summary":"italic company description with bold tools inline."
+                |set:"highlights":([]
+                  |push:"bullet tool action result."
+                )
+                |set:"tech_stack":"Tool1, Tool2"
+              )
+            )
+            |set:"education":([]
+              |push:({}
+                |set:"degree":"Full Degree"
+                |set:"institution":"University"
+                |set:"year":"YYYY"
+              )
+            )
+            |set:"certifications":([]
+              |push:({}
+                |set:"name":"Cert Name"
+                |set:"issuer":"Body"
+                |set:"value_proposition":"Why relevant to this JD."
+              )
+            )
+            |set:"key_projects":([]
+              |push:({}
+                |set:"name":"Name: Subtitle"
+                |set:"context":"Company | Year"
+                |set:"description":"Narrative bold terms."
+                |set:"tech":"Tool1, Tool2"
+              )
+            )
+            |set:"achievement":([]
+              |push:({}
+                |set:"name":"Award: Subtitle"
+                |set:"context":"Company | Year"
+                |set:"description":"One sentence bold impact."
+              )
+            )
+        }
+      
+        // Remove optional sections based on profile preferences
         var $include_key_projects_flag {
           value = ($prof.include_key_projects|json_encode) != "false"
         }
       
         var $include_certifications_flag {
           value = ($prof.include_certifications|json_encode) != "false"
+        }
+      
+        var $include_achievements_flag {
+          value = ($prof.include_achievements|json_encode) != "false"
+        }
+      
+        conditional {
+          if (!$include_key_projects_flag) {
+            var.update $resume_schema {
+              value = $resume_schema|remove:"key_projects"
+            }
+          }
+        }
+      
+        conditional {
+          if (!$include_certifications_flag) {
+            var.update $resume_schema {
+              value = $resume_schema|remove:"certifications"
+            }
+          }
+        }
+      
+        conditional {
+          if (!$include_achievements_flag) {
+            var.update $resume_schema {
+              value = $resume_schema|remove:"achievement"
+            }
+          }
+        }
+      
+        // Remove header contact fields that are empty/missing in the profile
+        conditional {
+          if ($prof.email == null || $prof.email == "") {
+            var.update $resume_schema {
+              value = $resume_schema
+                |set:"header":($resume_schema.header|remove:"email")
+            }
+          }
+        }
+      
+        conditional {
+          if ($prof.phone_number == null || $prof.phone_number == "") {
+            var.update $resume_schema {
+              value = $resume_schema
+                |set:"header":($resume_schema.header|remove:"phone")
+            }
+          }
+        }
+      
+        conditional {
+          if ($prof.location == null || $prof.location == "") {
+            var.update $resume_schema {
+              value = $resume_schema
+                |set:"header":($resume_schema.header|remove:"location")
+            }
+          }
+        }
+      
+        conditional {
+          if ($prof.linkedin_url == null || $prof.linkedin_url == "") {
+            var.update $resume_schema {
+              value = $resume_schema
+                |set:"header":($resume_schema.header|remove:"linkedin")
+            }
+          }
         }
       
         // Build omit instruction for the AI prompt
@@ -1228,7 +970,7 @@ query "resume/generate" verb=POST {
         conditional {
           if (!$include_key_projects_flag) {
             array.push $omit_sections_list {
-              value = "portfolio_projects"
+              value = "key_projects"
             }
           }
         }
@@ -1237,6 +979,14 @@ query "resume/generate" verb=POST {
           if (!$include_certifications_flag) {
             array.push $omit_sections_list {
               value = "certifications"
+            }
+          }
+        }
+      
+        conditional {
+          if (!$include_achievements_flag) {
+            array.push $omit_sections_list {
+              value = "achievement"
             }
           }
         }
@@ -1299,7 +1049,9 @@ query "resume/generate" verb=POST {
         }
       
         var $result_schema {
-          value = "{\n  \"resume\": " ~ $resume_schema ~ ",\n  \"cover_letter\": \"<full tailored cover letter as HTML>\"\n}"
+          value = {}
+            |set:"resume":$resume_schema
+            |set:"cover_letter":"<full tailored cover letter as HTML>"
         }
       
         var $response_text {
@@ -1318,7 +1070,7 @@ query "resume/generate" verb=POST {
                 |set:"messages":([]
                   |push:({}
                     |set:"role":"user"
-                    |set:"content":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ $profile_contact_section ~ " (keep it empty for missing fields )\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description) ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $result_schema ~ $omit_instruction ~ "\n\nReturn only JSON and generate values only defined in the JSON. No explanations. No markdown. No additional text."
+                    |set:"content":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ $profile_contact_section ~ " (keep it empty for missing fields )\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description) ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ ($result_schema|json_encode) ~ $omit_instruction ~ "\n\nReturn only JSON and generate values only defined in the JSON. No explanations. No markdown. No additional text."
                   )
                 )
               headers = []

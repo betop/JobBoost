@@ -43,7 +43,7 @@ const profileSchema = z.object({
   linkedin: z.string().url("Invalid URL").optional().or(z.literal("")),
   github: z.string().url("Invalid URL").optional().or(z.literal("")),
   job_category: z.string().optional(),
-  resume_template: z.number().int().min(1).max(10).optional().default(1),
+  resume_template: z.number().int().min(1).max(11).optional().default(11),
   education: z.array(educationSchema).min(1, "At least one education entry is required"),
   work_experience: z.array(workExperienceSchema).min(1, "At least one work experience is required"),
   include_key_projects: z.boolean().optional().default(true),
@@ -86,7 +86,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       linkedin: profile.linkedin ?? "",
       github: profile.github ?? "",
       job_category: profile.job_category ?? "",
-      resume_template: profile.resume_template ?? 1,
+      resume_template: profile.resume_template ?? 11,
       include_key_projects: profile.include_key_projects ?? false,
       include_certifications: profile.include_certifications ?? false,
       include_achievements: profile.include_achievements ?? false,
@@ -136,7 +136,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   const onSubmit = (data: ProfileFormData) => {
     const payload = {
       ...data,
-      resume_template: data.resume_template ?? 1,
+      resume_template: data.resume_template ?? 11,
     };
     updateMutation.mutate(payload);
   };

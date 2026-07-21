@@ -14,6 +14,7 @@ interface TemplateInfo {
   leftBar?: boolean;   // template 4
   leftSidebar?: boolean; // template 8
   centered?: boolean;  // template 3
+  plain?: boolean;     // template 11
 }
 
 const TEMPLATES: TemplateInfo[] = [
@@ -27,6 +28,7 @@ const TEMPLATES: TemplateInfo[] = [
   { id: 8,  name: "Indigo Sidebar",         style: "Dark left sidebar",            accent: "#4f46e5", dark: "#1e1b4b", medium: "#6366f1", leftSidebar: true, sidebar: "#1e1b4b" },
   { id: 9,  name: "Rose Pink",              style: "Full-width accent header",     accent: "#ec4899", dark: "#831843", medium: "#f472b6", headerBand: true },
   { id: 10, name: "Slate Professional",     style: "Triple-dot separator",         accent: "#64748b", dark: "#1e293b", medium: "#94a3b8" },
+  { id: 11, name: "STAR Method Plain",      style: "Plain serif, underlined headers, no summary", accent: "#000000", dark: "#000000", medium: "#000000", centered: true, plain: true },
 ];
 
 interface TemplatePickerProps {
@@ -116,7 +118,7 @@ function BodyLines({ accent }: { accent: string }) {
   );
 }
 
-export default function TemplatePicker({ value = 1, onChange }: TemplatePickerProps) {
+export default function TemplatePicker({ value = 11, onChange }: TemplatePickerProps) {
   const [previewTpl, setPreviewTpl] = useState<TemplateInfo | null>(null);
 
   return (
