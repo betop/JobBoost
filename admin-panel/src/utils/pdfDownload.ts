@@ -271,7 +271,7 @@ export function buildResumeHtml(r: ResumeData, templateId: number): string {
     .section-tripledot h2::after { content: " \\00B7\\00B7\\00B7"; color: var(--rule); letter-spacing: 2px; }
     .section-centered-rule h2 { display: block; }
     .section-underline h2 {
-      border-bottom: none; text-decoration: underline; text-underline-offset: 2px;
+      border-bottom: 0.75pt solid var(--rule);
       color: var(--body); font-size: 11pt; letter-spacing: 0;
     }
 

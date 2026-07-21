@@ -961,9 +961,8 @@ class PDFGenerator {
       this._checkPageBreak(d, 14);
       doc.setFont(this._activeFont, "bold"); doc.setFontSize(11); doc.setTextColor(...this.C.dark);
       doc.text(title.toUpperCase(), m, this.currentY);
-      const tw = doc.getTextWidth(title.toUpperCase());
       doc.setDrawColor(...this.C.dark); doc.setLineWidth(0.4);
-      doc.line(m, this.currentY + 0.8, m + tw, this.currentY + 0.8);
+      doc.line(m, this.currentY + 0.8, this.pageWidth - m, this.currentY + 0.8);
       this.currentY += this.SP.afterRule;
     });
   }
