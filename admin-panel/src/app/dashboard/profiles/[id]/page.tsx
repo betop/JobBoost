@@ -242,6 +242,19 @@ export default function ProfileViewPage() {
               </div>
 
               <div>
+                <p className="text-sm text-gray-500 mb-2">Generation API</p>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    profile.use_legacy_api
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {profile.use_legacy_api ? "Legacy API" : "Current API"}
+                </span>
+              </div>
+
+              <div>
                 <p className="text-sm text-gray-500">Resume Template</p>
                 <p className="text-gray-900 font-medium mb-2">
                   {TEMPLATE_META_MAP[profile.resume_template ?? 11]?.name ?? `Template ${profile.resume_template ?? 11}`}

@@ -19,6 +19,7 @@ query "profiles/{id}" verb=PUT {
     bool include_key_projects?
     bool include_certifications?
     bool include_achievements?
+    bool use_legacy_api?
   }
 
   stack {
@@ -195,6 +196,18 @@ query "profiles/{id}" verb=PUT {
       if ($include_achievements_changed != "") {
         var.update $payload.include_achievements {
           value = $input.include_achievements
+        }
+      }
+    }
+  
+    var $use_legacy_api_changed {
+      value = $input.use_legacy_api|json_encode
+    }
+  
+    conditional {
+      if ($use_legacy_api_changed != "") {
+        var.update $payload.use_legacy_api {
+          value = $input.use_legacy_api
         }
       }
     }

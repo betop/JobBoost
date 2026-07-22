@@ -21,6 +21,7 @@ table profile {
     bool include_key_projects?=true
     bool include_certifications?=true
     bool include_achievements?=true
+    bool use_legacy_api?
   }
 
   index = [

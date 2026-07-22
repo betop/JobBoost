@@ -16,6 +16,7 @@ query profiles verb=POST {
     bool include_key_projects?
     bool include_certifications?
     bool include_achievements?
+    bool use_legacy_api?
   }
 
   stack {
@@ -46,6 +47,7 @@ query profiles verb=POST {
         include_key_projects  : ($input.include_key_projects|json_encode) != "" ? $input.include_key_projects : true
         include_certifications: ($input.include_certifications|json_encode) != "" ? $input.include_certifications : true
         include_achievements  : ($input.include_achievements|json_encode) != "" ? $input.include_achievements : true
+        use_legacy_api        : ($input.use_legacy_api|json_encode) != "" ? $input.use_legacy_api : false
       }
     } as $p
   

@@ -133,6 +133,7 @@ query "profiles/{id}" verb=GET {
         include_key_projects  : $p.include_key_projects
         include_certifications: $p.include_certifications
         include_achievements  : $p.include_achievements
+        use_legacy_api        : $p.use_legacy_api
         education             : $education_out
         work_experience       : $work_out
       }

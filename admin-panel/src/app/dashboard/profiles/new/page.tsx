@@ -46,6 +46,7 @@ const profileSchema = z.object({
   include_key_projects: z.boolean().optional().default(true),
   include_certifications: z.boolean().optional().default(true),
   include_achievements: z.boolean().optional().default(true),
+  use_legacy_api: z.boolean().optional().default(false),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -70,6 +71,7 @@ export default function NewProfilePage() {
       include_key_projects: true,
       include_certifications: true,
       include_achievements: true,
+      use_legacy_api: false,
     },
   });
 
@@ -359,6 +361,27 @@ export default function NewProfilePage() {
               />
             ))}
           </div>
+        </div>
+
+        {/* API Mode */}
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">Generation API</h2>
+          <p className="text-sm text-gray-500 mb-4">Use the legacy resume generation API for this profile instead of the current one.</p>
+          <Controller
+            name="use_legacy_api"
+            control={control}
+            render={({ field }) => (
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={field.value ?? false}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                Use legacy API
+              </label>
+            )}
+          />
         </div>
 
         <div className="flex gap-4 pt-4">
