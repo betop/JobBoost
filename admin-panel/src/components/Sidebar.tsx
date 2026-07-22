@@ -17,6 +17,7 @@ import {
   BarChart2,
   ChevronsLeft,
   ChevronsRight,
+  Ban,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
@@ -27,6 +28,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, superOnly: false },
   { name: "Overview", href: "/dashboard/overview", icon: BarChart2, superOnly: false },
   { name: "Profiles", href: "/dashboard/profiles", icon: Users, superOnly: false },
+  { name: "Blacklist", href: "/dashboard/blacklist", icon: Ban, superOnly: false },
   { name: "Users", href: "/dashboard/users", icon: UserCheck, superOnly: false },
   { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: false },
   { name: "API Costs", href: "/dashboard/pricing", icon: BarChart2, superOnly: true },

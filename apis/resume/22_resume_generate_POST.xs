@@ -386,69 +386,86 @@ query "resume/generate" verb=POST {
                       value = $extraction_json.tech_scope
                     }
                   
-                    conditional {
-                      if ($position_title == "null") {
-                        var.update $match_status {
-                          value = 2
-                        }
-                      
-                        var.update $error_msg {
-                          value = "Position title could not be extracted from the job description. Please make sure the job description includes a clear position title and try again."
+                    // Company blacklist check — if the extracted company is on the
+                    // blacklist, skip generation (reuses match_status 2, the existing
+                    // "job unfit" status, so no extension changes are needed).
+                    var $is_blacklisted_company {
+                      value = false
+                    }
+                  
+                    db.query blacklisted_company {
+                      return = {type: "list"}
+                    } as $blacklist_list
+                  
+                    foreach ($blacklist_list) {
+                      each as $bl {
+                        conditional {
+                          if (($bl.name|to_lower|trim) == ($company_name|to_lower|trim)) {
+                            var.update $is_blacklisted_company {
+                              value = true
+                            }
+                          }
                         }
                       }
-                    
-                      elseif ($company_name == "null") {
+                    }
+                  
+                    conditional {
+                      if ($is_blacklisted_company) {
                         var.update $match_status {
                           value = 2
                         }
                       
                         var.update $error_msg {
-                          value = "Company name could not be extracted from the job description. Please make sure the job description includes a clear company name and try again."
+                          value = "This company (" ~ $company_name ~ ") is on your blacklist. Skipping this application."
                         }
                       }
                     
                       else {
                         conditional {
-                          if ($extraction_json.is_job_posting == "true") {
+                          if ($position_title == "null") {
+                            var.update $match_status {
+                              value = 2
+                            }
+                          
+                            var.update $error_msg {
+                              value = "Position title could not be extracted from the job description. Please make sure the job description includes a clear position title and try again."
+                            }
+                          }
+                        
+                          elseif ($company_name == "null") {
+                            var.update $match_status {
+                              value = 2
+                            }
+                          
+                            var.update $error_msg {
+                              value = "Company name could not be extracted from the job description. Please make sure the job description includes a clear company name and try again."
+                            }
+                          }
+                        
+                          else {
                             conditional {
-                              if ($extraction_json.is_remote == "true") {
+                              if ($extraction_json.is_job_posting == "true") {
                                 conditional {
-                                  if ($extraction_json.travels_or_relocation_required == "false") {
+                                  if ($extraction_json.is_remote == "true") {
                                     conditional {
-                                      if ($extraction_json.is_similar_to_outlier == "false" && $extraction_json.is_freelancer_marketplace_similar_to_toptal == "false") {
+                                      if ($extraction_json.travels_or_relocation_required == "false") {
                                         conditional {
-                                          if ($extraction_json.clearance_required == "false") {
-                                            var $possible_seniorities {
-                                              value = ["mid", "senior", "lead", "staff"]
-                                            }
-                                          
-                                            var $has_seniority {
-                                              value = false
-                                            }
-                                          
-                                            foreach ($possible_seniorities) {
-                                              each as $s {
-                                                conditional {
-                                                  if ($extraction_json.seniority == $s) {
-                                                    var.update $has_seniority {
-                                                      value = true
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          
+                                          if ($extraction_json.is_similar_to_outlier == "false" && $extraction_json.is_freelancer_marketplace_similar_to_toptal == "false") {
                                             conditional {
-                                              if ($has_seniority) {
-                                                var $has_previous_company {
+                                              if ($extraction_json.clearance_required == "false") {
+                                                var $possible_seniorities {
+                                                  value = ["mid", "senior", "lead", "staff"]
+                                                }
+                                              
+                                                var $has_seniority {
                                                   value = false
                                                 }
                                               
-                                                foreach ($work) {
-                                                  each as $work_item {
+                                                foreach ($possible_seniorities) {
+                                                  each as $s {
                                                     conditional {
-                                                      if (($work_item.company_name|to_lower|trim) == ($extraction_json.company|to_lower|trim)) {
-                                                        var.update $has_previous_company {
+                                                      if ($extraction_json.seniority == $s) {
+                                                        var.update $has_seniority {
                                                           value = true
                                                         }
                                                       }
@@ -457,30 +474,16 @@ query "resume/generate" verb=POST {
                                                 }
                                               
                                                 conditional {
-                                                  if ($has_previous_company) {
-                                                    var.update $match_status {
-                                                      value = 2
-                                                    }
-                                                  
-                                                    var.update $error_msg {
-                                                      value = "The candidate has previously worked at or currently works for this company. Try with another job."
-                                                    }
-                                                  }
-                                                
-                                                  else {
-                                                    var $profile_category {
-                                                      value = $prof.job_category|split:","
-                                                    }
-                                                  
-                                                    var $has_tech_scope {
+                                                  if ($has_seniority) {
+                                                    var $has_previous_company {
                                                       value = false
                                                     }
                                                   
-                                                    foreach ($profile_category) {
-                                                      each as $c {
+                                                    foreach ($work) {
+                                                      each as $work_item {
                                                         conditional {
-                                                          if (($c|trim) == $extraction_json.tech_scope) {
-                                                            var.update $has_tech_scope {
+                                                          if (($work_item.company_name|to_lower|trim) == ($extraction_json.company|to_lower|trim)) {
+                                                            var.update $has_previous_company {
                                                               value = true
                                                             }
                                                           }
@@ -489,46 +492,90 @@ query "resume/generate" verb=POST {
                                                     }
                                                   
                                                     conditional {
-                                                      if ($has_tech_scope) {
-                                                        var $fifteen_days_ago {
-                                                          value = now
-                                                            |transform_timestamp:"-15 days":"UTC"
+                                                      if ($has_previous_company) {
+                                                        var.update $match_status {
+                                                          value = 2
                                                         }
                                                       
-                                                        db.query generation_log {
-                                                          where = $db.generation_log.position_title == $position_title && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched == 1 && $db.generation_log.company_name == $extraction_json.company && $db.generation_log.created_at >= $fifteen_days_ago
-                                                          sort = {generation_log.created_at: "desc"}
-                                                          return = {type: "single"}
-                                                        } as $last_generation_log
+                                                        var.update $error_msg {
+                                                          value = "The candidate has previously worked at or currently works for this company. Try with another job."
+                                                        }
+                                                      }
+                                                    
+                                                      else {
+                                                        var $profile_category {
+                                                          value = $prof.job_category|split:","
+                                                        }
+                                                      
+                                                        var $has_tech_scope {
+                                                          value = false
+                                                        }
+                                                      
+                                                        foreach ($profile_category) {
+                                                          each as $c {
+                                                            conditional {
+                                                              if (($c|trim) == $extraction_json.tech_scope) {
+                                                                var.update $has_tech_scope {
+                                                                  value = true
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
                                                       
                                                         conditional {
-                                                          if ($last_generation_log == null) {
-                                                            var.update $should_generate {
-                                                              value = true
+                                                          if ($has_tech_scope) {
+                                                            var $fifteen_days_ago {
+                                                              value = now
+                                                                |transform_timestamp:"-15 days":"UTC"
+                                                            }
+                                                          
+                                                            db.query generation_log {
+                                                              where = $db.generation_log.position_title == $position_title && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched == 1 && $db.generation_log.company_name == $extraction_json.company && $db.generation_log.created_at >= $fifteen_days_ago
+                                                              sort = {generation_log.created_at: "desc"}
+                                                              return = {type: "single"}
+                                                            } as $last_generation_log
+                                                          
+                                                            conditional {
+                                                              if ($last_generation_log == null) {
+                                                                var.update $should_generate {
+                                                                  value = true
+                                                                }
+                                                              }
+                                                            
+                                                              else {
+                                                                var.update $match_status {
+                                                                  value = 5
+                                                                }
+                                                              
+                                                                var.update $error_msg {
+                                                                  value = "This job is possibly reposted. Try with another job."
+                                                                }
+                                                              }
                                                             }
                                                           }
                                                         
                                                           else {
                                                             var.update $match_status {
-                                                              value = 5
+                                                              value = 0
                                                             }
                                                           
                                                             var.update $error_msg {
-                                                              value = "This job is possibly reposted. Try with another job."
+                                                              value = "This job is not aligned to the candidate profile. Required tech scope: " ~ $extraction_json.tech_scope
                                                             }
                                                           }
                                                         }
                                                       }
-                                                    
-                                                      else {
-                                                        var.update $match_status {
-                                                          value = 0
-                                                        }
-                                                      
-                                                        var.update $error_msg {
-                                                          value = "This job is not aligned to the candidate profile. Required tech scope: " ~ $extraction_json.tech_scope
-                                                        }
-                                                      }
+                                                    }
+                                                  }
+                                                
+                                                  else {
+                                                    var.update $match_status {
+                                                      value = 0
+                                                    }
+                                                  
+                                                    var.update $error_msg {
+                                                      value = "This job's seniority level (" ~ $extraction_json.seniority ~ ") does not match the candidate's profile. Try with another job."
                                                     }
                                                   }
                                                 }
@@ -536,11 +583,11 @@ query "resume/generate" verb=POST {
                                             
                                               else {
                                                 var.update $match_status {
-                                                  value = 0
+                                                  value = 2
                                                 }
                                               
                                                 var.update $error_msg {
-                                                  value = "This job's seniority level (" ~ $extraction_json.seniority ~ ") does not match the candidate's profile. Try with another job."
+                                                  value = "This job requires security clearance. Try with another job."
                                                 }
                                               }
                                             }
@@ -548,11 +595,11 @@ query "resume/generate" verb=POST {
                                         
                                           else {
                                             var.update $match_status {
-                                              value = 2
+                                              value = 0
                                             }
                                           
                                             var.update $error_msg {
-                                              value = "This job requires security clearance. Try with another job."
+                                              value = "This job is not aligned to the candidate profile. It is a freelancer marketplace or an AI training job. Try with another job."
                                             }
                                           }
                                         }
@@ -560,11 +607,11 @@ query "resume/generate" verb=POST {
                                     
                                       else {
                                         var.update $match_status {
-                                          value = 0
+                                          value = 2
                                         }
                                       
                                         var.update $error_msg {
-                                          value = "This job is not aligned to the candidate profile. It is a freelancer marketplace or an AI training job. Try with another job."
+                                          value = "This job requires travel or relocation. Try with another job."
                                         }
                                       }
                                     }
@@ -576,7 +623,7 @@ query "resume/generate" verb=POST {
                                     }
                                   
                                     var.update $error_msg {
-                                      value = "This job requires travel or relocation. Try with another job."
+                                      value = "This is not a remote job. Try with another job."
                                     }
                                   }
                                 }
@@ -584,23 +631,13 @@ query "resume/generate" verb=POST {
                             
                               else {
                                 var.update $match_status {
-                                  value = 2
+                                  value = 3
                                 }
                               
                                 var.update $error_msg {
-                                  value = "This is not a remote job. Try with another job."
+                                  value = "This is not a job posting. Please review your selection and try again."
                                 }
                               }
-                            }
-                          }
-                        
-                          else {
-                            var.update $match_status {
-                              value = 3
-                            }
-                          
-                            var.update $error_msg {
-                              value = "This is not a job posting. Please review your selection and try again."
                             }
                           }
                         }

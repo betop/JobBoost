@@ -16,6 +16,7 @@ const XANO_CANONICALS: Record<string, string> = {
   "extension-versions": "eqIK8vAt",
   "extensions": "eqIK8vAt",
   mail_triage_allowlist: "weyKu-kg",
+  blacklist: "YZl-BhQi",
 };
 
 const XANO_BASES: Record<string, string> = Object.fromEntries(
