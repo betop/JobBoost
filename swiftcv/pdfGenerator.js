@@ -973,6 +973,15 @@ class PDFGenerator {
   // ═══════════════════════════════════════════════════════════════════════════
 
   _renderCommonSections(doc, r, sectionHeaderFn) {
+    if (r.summary) {
+      sectionHeaderFn(doc, "SUMMARY");
+      const m = this.marginH, cw = this.contentWidth;
+      this._checkPageBreak(doc, 14);
+      const segs = this._parseMarkers(r.summary);
+      const endY = this._renderSegments(doc, segs, m, this.currentY, cw, 10, this.C.body, this.LH.base);
+      this.currentY = endY + this.LH.base;
+    }
+
     const jobs = r.career_breakdowns || r.experience || [];
     if (jobs.length) {
       sectionHeaderFn(doc, "WORK EXPERIENCE");

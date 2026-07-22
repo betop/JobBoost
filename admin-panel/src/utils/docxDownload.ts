@@ -88,6 +88,15 @@ export function buildResumeDocument(r: ResumeData): Document {
     children.push(new Paragraph({ spacing: { after: 200 }, children: contactRuns }));
   }
 
+  // ── Summary ─────────────────────────────────────────────────────────────
+  if (r.summary) {
+    children.push(sectionHeading("Summary"));
+    children.push(new Paragraph({
+      spacing: { after: 120 },
+      children: segmentsToRuns(parseMarkers(r.summary), { color: GRAY }),
+    }));
+  }
+
   // ── Experience ──────────────────────────────────────────────────────────
   const jobs: CareerBreakdown[] = r.career_breakdowns ?? r.experience ?? [];
   if (jobs.length) {

@@ -179,6 +179,7 @@ export function buildResumeHtml(r: ResumeData, templateId: number): string {
   // education, certifications, portfolio_projects, leadership_enterpreneurial_experience,
   // technical_skills. Achievements is legacy-only (not part of the current schema) and
   // renders last, only when present in older stored data.
+  if (r.summary) sections.push(sectionHtml("Summary", `<p class="rsummary">${markersToHtml(r.summary)}</p>`));
   const jobs = r.career_breakdowns ?? r.experience ?? [];
   if (jobs.length) sections.push(sectionHtml("Work Experience", jobs.map(jobEntryHtml).join("")));
   if (r.education?.length) sections.push(sectionHtml("Education", r.education.map(eduEntryHtml).join("")));
