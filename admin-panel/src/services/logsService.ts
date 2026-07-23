@@ -156,16 +156,47 @@ export const logsService = {
    * 2. Computes all page offsets.
    * 3. Fires up to CONCURRENT_PAGES requests concurrently; each saves to IndexedDB as
    *    soon as it resolves (no waiting for the rest of the batch).
-   * 4. Repeats for the next group of pages until all are done.
-   * 5. Saves lastSyncAt after all pages succeed.
+   * 4. A page that fails (e.g. 502 from a flaky upstream) is retried with backoff;
+   *    if it still fails, it's skipped and reported — it never aborts the other pages.
+   * 5. Repeats for the next group of pages until all are done.
+   * 6. Saves lastSyncAt after all pages have been attempted.
    * `onBatch` is called after each page is persisted (for UI flush).
+   * Returns the list of offsets that failed even after retries, so the caller can warn the user.
    */
   listAllPages: async (
     onBatch?: () => Promise<void>,
     pageSize = 500,
-  ): Promise<void> => {
+  ): Promise<{ failedOffsets: number[] }> => {
     const CONCURRENT_PAGES = 10;
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAY_MS = 1000;
     const syncStart = new Date().toISOString();
+
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const fetchPage = async (offset: number): Promise<void> => {
+      const params = new URLSearchParams();
+      params.set("limit", String(pageSize));
+      params.set("offset", String(offset));
+      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
+      const items = response.data.items;
+      if (items.length > 0) {
+        await logCache.mergeRecords(items);
+        if (onBatch) await onBatch();
+      }
+    };
+
+    const fetchPageWithRetry = async (offset: number): Promise<void> => {
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          await fetchPage(offset);
+          return;
+        } catch (err) {
+          if (attempt === MAX_ATTEMPTS) throw err;
+          await sleep(RETRY_DELAY_MS * attempt);
+        }
+      }
+    };
 
     // Step 1: get total count
     const countRes = await api.get<{ total: number }>(`/logs/list?count_only=true`);
@@ -173,7 +204,7 @@ export const logsService = {
 
     if (total === 0) {
       await logCache.setLastSyncAt(syncStart);
-      return;
+      return { failedOffsets: [] };
     }
 
     // Step 2: build all offsets
@@ -182,31 +213,28 @@ export const logsService = {
       offsets.push(off);
     }
 
-    // Step 3: process in groups of CONCURRENT_PAGES
+    // Step 3: process in groups of CONCURRENT_PAGES. Promise.allSettled means one
+    // page failing (after retries) never stops the remaining groups from fetching.
+    const failedOffsets: number[] = [];
     for (let i = 0; i < offsets.length; i += CONCURRENT_PAGES) {
       const group = offsets.slice(i, i + CONCURRENT_PAGES);
 
-      // Fire all requests in this group simultaneously; each saves to IDB as it resolves
-      await Promise.all(
-        group.map((offset) => {
-          const params = new URLSearchParams();
-          params.set("limit", String(pageSize));
-          params.set("offset", String(offset));
-          return api
-            .get<LogsListResponse>(`/logs/list?${params.toString()}`)
-            .then(async (response) => {
-              const items = response.data.items;
-              if (items.length > 0) {
-                await logCache.mergeRecords(items);
-                if (onBatch) await onBatch();
-              }
-            });
-        })
-      );
+      const results = await Promise.allSettled(group.map((offset) => fetchPageWithRetry(offset)));
+
+      results.forEach((result, idx) => {
+        if (result.status === "rejected") {
+          console.error(`[logsService] page offset=${group[idx]} failed after ${MAX_ATTEMPTS} attempts`, result.reason);
+          failedOffsets.push(group[idx]);
+        }
+      });
     }
 
-    // Step 4: all pages done — commit sync timestamp
+    // Step 4: all pages attempted — commit sync timestamp regardless, so successfully
+    // fetched pages aren't re-fetched on the next delta sync. Failed offsets are reported
+    // so the caller can prompt the user to retry (e.g. via another hard refresh).
     await logCache.setLastSyncAt(syncStart);
+
+    return { failedOffsets };
   },
 
   /**

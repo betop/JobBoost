@@ -12,6 +12,7 @@ import { downloadResumeDocx } from "@/utils/docxDownload";
 import { userService } from "@/services/userService";
 import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/authStore";
+import { useUIStore } from "@/store/uiStore";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import {
   Activity,
@@ -785,7 +786,8 @@ export default function LogsPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const admin = useAuthStore((state) => state.admin);
-  
+  const showToast = useUIStore((state) => state.showToast);
+
   // Get today's date as YYYY-MM-DD in EST
   const today = todayInEST();
   
@@ -926,8 +928,11 @@ export default function LogsPage() {
         await logsService.listDelta(lastSync);
       } else {
         // Full load: listAllPages handles IndexedDB writes AND setLastSyncAt per batch;
-        // After the first batch, drop the loading spinner so the UI becomes interactive
-        await logsService.listAllPages();
+        // it keeps fetching remaining pages even if some individual pages fail.
+        const { failedOffsets } = await logsService.listAllPages();
+        if (failedOffsets.length > 0) {
+          showToast(`Loaded logs, but ${failedOffsets.length} page(s) failed to fetch. Try Hard Refresh to retry.`, "error");
+        }
       }
 
       await flushCacheToState(effectiveFrom, effectiveTo);
@@ -1008,8 +1013,17 @@ export default function LogsPage() {
     setIsRefreshing(true);
     try {
       await logCache.clearCache();
-      await logsService.listAllPages();
+      const { failedOffsets } = await logsService.listAllPages();
       await flushCacheToState(dateFrom, dateTo);
+      if (failedOffsets.length > 0) {
+        showToast(`Hard refresh finished, but ${failedOffsets.length} page(s) failed to fetch after retries. Try Hard Refresh again to fill the gaps.`, "error");
+      }
+    } catch (err) {
+      console.error("[LogsPage] hard refresh failed", err);
+      // Cache was already cleared — flush whatever partial data made it in before the failure
+      // so the user doesn't see a blank table with no explanation.
+      await flushCacheToState(dateFrom, dateTo);
+      showToast("Hard refresh failed. Please try again.", "error");
     } finally {
       setIsRefreshing(false);
     }
