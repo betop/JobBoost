@@ -55,4 +55,5 @@ query "profiles/{id}/approve" verb=PATCH {
   }
 
   response = $updated
+  guid = "E5Q9VQj6dWlNybpBPrTwQRsizN0"
 }

@@ -60,4 +60,5 @@ query "auth/register" verb=POST {
   response = {
     message: "Your account has been created and is pending approval from a super admin."
   }
+  guid = "lC3n2mnzcP7i4ITC8NgP0Gy9wvM"
 }

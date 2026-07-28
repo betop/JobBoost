@@ -59,4 +59,5 @@ query "auth/change-password" verb=POST {
     success: true
     message: "Password changed successfully"
   }
+  guid = "bSzyjHCw0Ltw96kwODnfAQ6Xxg8"
 }

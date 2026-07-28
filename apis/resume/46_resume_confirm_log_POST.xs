@@ -60,4 +60,5 @@ query "resume/confirm_log" verb=POST {
   }
 
   response = {success: true, log_id: $updated_log.id}
+  guid = "1ed-Sx5DhjwmVmqzPDDQhkpJvqI"
 }

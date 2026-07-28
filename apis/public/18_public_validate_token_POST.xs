@@ -203,4 +203,5 @@ query "public/validate-token" verb=POST {
     resume_templates: $resume_templates
     is_admin        : $is_admin
   }
+  guid = "IPIYhqhyW0CccsFqC4SmK44J-S4"
 }

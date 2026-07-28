@@ -45,4 +45,5 @@ table generation_log {
     {type: "btree", field: [{name: "user_id", op: "asc"}]}
     {type: "btree", field: [{name: "job_url", op: "asc"}]}
   ]
+  guid = "Tz1m3zqYJVFFpH9Xteuz7syCTOE"
 }

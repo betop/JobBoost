@@ -416,4 +416,5 @@ query "resume/regenerate_legacy" verb=POST {
     resume_text    : $resume_text
     resume_filename: $resume_filename
   }
+  guid = "Hg8Nk70dawBqj0phlmMlg-bgWvs"
 }

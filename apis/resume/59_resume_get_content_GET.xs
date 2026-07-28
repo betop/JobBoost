@@ -37,4 +37,5 @@ query "resume/get_content" verb=GET {
   }
 
   response = {id: $content.id, raw_response: $content.raw_response}
+  guid = "9tKUqGo513xn3r8mgY_4dlsmmgM"
 }

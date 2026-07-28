@@ -131,4 +131,5 @@ query "logs/mail-triage-logs" verb=GET {
   }
 
   response = $input.count_only == true ? {total: $count_result.total} : {items: $out}
+  guid = "9SJIGP3wDLnuz6GSJku-anccKHo"
 }

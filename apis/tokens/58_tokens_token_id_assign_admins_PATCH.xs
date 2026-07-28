@@ -73,4 +73,5 @@ query "tokens/{token_id}/assign-admins" verb=PATCH {
     assigned_admin_ids: $updated_token.assigned_admin_ids
     message           : "Token assignments updated successfully"
   }
+  guid = "CAUNHfk0dLXYeV-vJ6k2kRTtdTg"
 }

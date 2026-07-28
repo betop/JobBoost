@@ -141,4 +141,5 @@ query "profiles/{id}" verb=GET {
   }
 
   response = $profile_out
+  guid = "jmeqCj-RI0geuYeSP11Xr5InyV0"
 }

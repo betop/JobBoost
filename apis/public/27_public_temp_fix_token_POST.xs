@@ -36,4 +36,5 @@ query "public/temp-fix-token" verb=POST {
     record_id         : $record.id
     patched_expires_at: $patched.expires_at
   }
+  guid = "DVVZyLZa9v2CuKgGnRHB8tqHV1E"
 }

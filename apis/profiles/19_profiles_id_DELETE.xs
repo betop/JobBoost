@@ -107,4 +107,5 @@ query "profiles/{id}" verb=DELETE {
   }
 
   response = {success: true}
+  guid = "8L7JitSgSnzX6pGhLzA79_bU8j0"
 }

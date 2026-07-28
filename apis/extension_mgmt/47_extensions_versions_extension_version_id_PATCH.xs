@@ -70,4 +70,5 @@ query "extensions/versions/{extension_version_id}" verb=PATCH {
     is_current    : $updated.is_current
     changelog     : $updated.changelog
   }
+  guid = "zZFQv-kOsSUKJXkmwHF82biD7_Y"
 }

@@ -34,4 +34,5 @@ query "extensions/versions/current" verb=GET {
     release_date  : $currentVersion.release_date
     changelog     : $currentVersion.changelog
   }
+  guid = "3YSXoJZoqSWbfJeeL7t7x7zW4kI"
 }

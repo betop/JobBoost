@@ -107,4 +107,5 @@ query "access-control" verb=GET {
   }
 
   response = $out
+  guid = "Iw2NUrqcWvyjxLv7DQRXrFSCekU"
 }

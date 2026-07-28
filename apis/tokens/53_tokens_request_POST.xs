@@ -100,4 +100,5 @@ query "tokens/request" verb=POST {
     admin_notes    : $req.admin_notes
     created_at     : $req.created_at
   }
+  guid = "KB-QCWZqXC_CGnRqU56m7jt0Voc"
 }

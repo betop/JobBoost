@@ -26,4 +26,5 @@ query "tokens/{id}/revoke" verb=PATCH {
   }
 
   response = {success: true}
+  guid = "Ijok1sDApRy3I9Tyl2RDRRIpqkA"
 }

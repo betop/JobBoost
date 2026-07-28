@@ -63,4 +63,5 @@ query "mail_triage_allowlist/{id}" verb=PUT {
   }
 
   response = $updated
+  guid = "PIKWnR2BeKljmDtppUNCg2LS5bQ"
 }

@@ -453,4 +453,5 @@ query "logs/stats" verb=GET {
     all_time_input_tokens : $all_time_input_tokens
     all_time_output_tokens: $all_time_output_tokens
   }
+  guid = "uxTBJvs2GoufaK231ekYr1_K0PA"
 }

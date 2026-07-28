@@ -158,4 +158,5 @@ query profiles verb=POST {
   }
 
   response = $profile_out
+  guid = "Hjh5e43yo7yzrWtXpNsKaSUPsfg"
 }

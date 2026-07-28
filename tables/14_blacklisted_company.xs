@@ -15,4 +15,5 @@ table blacklisted_company {
     {type: "btree|unique", field: [{name: "name"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "cPXBkWXKZw_lNrIATyrYidqcoGU"
 }

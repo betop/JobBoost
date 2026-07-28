@@ -226,4 +226,5 @@ query "public/token-profiles" verb=POST {
     version_ok      : $version_ok
     version_error   : $version_error
   }
+  guid = "Mdo9bZvSBaapyUEYuFuQlXNdSBs"
 }

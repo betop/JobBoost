@@ -134,4 +134,5 @@ query "users/{id}" verb=PUT {
     is_approved  : $b.is_approved
     created_at   : $b.created_at
   }
+  guid = "Pb_h07_Ovc0v0lU1QRMd5_0Xdfg"
 }

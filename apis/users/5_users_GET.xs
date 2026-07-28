@@ -52,4 +52,5 @@ query users verb=GET {
   }
 
   response = $users
+  guid = "Q4l_y1J1NECO-PdHrPWGf-5UcU4"
 }

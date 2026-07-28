@@ -180,4 +180,5 @@ query "dashboard/stats" verb=GET {
     active_tokens : $active_tokens
     active_rules  : $active_rules
   }
+  guid = "t2TArUGHjKH8qX03syR4Q4tnPl0"
 }

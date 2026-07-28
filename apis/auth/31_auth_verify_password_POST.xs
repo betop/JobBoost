@@ -31,4 +31,5 @@ query "auth/verify-password" verb=POST {
   }
 
   response = {verified: true, email: $admin.email}
+  guid = "zsz48hjSYdGzWgKOVjTl1dT-Rp0"
 }

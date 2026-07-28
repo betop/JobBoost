@@ -20,4 +20,5 @@ query "rules/{id}" verb=GET {
   }
 
   response = $r
+  guid = "D6U81rCTv1oDTAW0U060XStYhWE"
 }

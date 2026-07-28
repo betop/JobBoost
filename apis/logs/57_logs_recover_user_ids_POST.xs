@@ -108,4 +108,5 @@ query "logs/recover-user-ids" verb=POST {
     updated_count: $updated_count
     skipped_count: $skipped_count
   }
+  guid = "3CIAvmhq_fg8c9SLkXg6X06owvY"
 }

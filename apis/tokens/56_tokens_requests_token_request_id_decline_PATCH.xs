@@ -57,4 +57,5 @@ query "tokens/requests/{token_request_id}/decline" verb=PATCH {
     reviewed_by: $auth_user.id
     reviewed_at: now
   }
+  guid = "CKSoph3NDrCX4CRfs6Ep1RBetOE"
 }

@@ -14,4 +14,5 @@ query blacklist verb=GET {
   }
 
   response = $entries
+  guid = "8sZLbkm4TVUk22vcH6SNhgmS-RM"
 }

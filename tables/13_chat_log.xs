@@ -17,4 +17,5 @@ table chat_log {
     {type: "btree", field: [{name: "user_id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "Ql-xdU_kLspoGvV4WhQRhN3iI6w"
 }

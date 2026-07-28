@@ -14,4 +14,5 @@ query rules verb=GET {
   }
 
   response = $rules
+  guid = "kxX3-iDsPRjC_5ob4JEhyxSWG_I"
 }

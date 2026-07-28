@@ -53,4 +53,5 @@ query "users/{id}" verb=GET {
     is_approved        : $b.is_approved
     created_at         : $b.created_at
   }
+  guid = "jg38HDpPHunxO2wiRf122jXh2a0"
 }

@@ -26,4 +26,5 @@ query "access-control/{id}/revoke" verb=PATCH {
   }
 
   response = {success: true}
+  guid = "UqVA9PdXPEwXWEn_uCHlaygd28Y"
 }

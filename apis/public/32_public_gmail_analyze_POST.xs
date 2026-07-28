@@ -161,4 +161,5 @@ query "public/gmail-analyze" verb=POST {
   }
 
   response = {ai_response: $clean_response}
+  guid = "fCRNvXFF53bRDiaQzJm8Bj2p6QM"
 }

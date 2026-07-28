@@ -24,4 +24,5 @@ table education {
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "a4kw7-CszLx6Nhsnuv4j7Xg2F2Y"
 }

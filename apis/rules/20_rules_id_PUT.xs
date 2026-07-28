@@ -61,4 +61,5 @@ query "rules/{id}" verb=PUT {
   }
 
   response = $r
+  guid = "7nKz7bamAao7V1pKsKoDsEvkzFI"
 }

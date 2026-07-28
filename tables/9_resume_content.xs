@@ -11,4 +11,5 @@ table resume_content {
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "r7lbZzrT0J7FG-DP_NMLba9P4tE"
 }

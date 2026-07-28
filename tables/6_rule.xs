@@ -21,4 +21,5 @@ table rule {
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "3x2UkdtVIzAS8qqVrjWCphfSIZI"
 }

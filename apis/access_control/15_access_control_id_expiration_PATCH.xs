@@ -27,4 +27,5 @@ query "access-control/{id}/expiration" verb=PATCH {
   }
 
   response = {success: true}
+  guid = "Qkz__kIxPbsWoymcivGRLoQwBbU"
 }

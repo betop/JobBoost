@@ -25,4 +25,5 @@ table work_experience {
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "9HpUwqP6ZuGCJ-5zoEoryvcU6F0"
 }

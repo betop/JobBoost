@@ -99,4 +99,5 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
     reviewed_by: $auth_user.id
     reviewed_at: now
   }
+  guid = "EyrIFrg_MBhlRLHavLqty7Q6mIo"
 }

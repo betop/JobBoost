@@ -14,4 +14,5 @@ query mail_triage_allowlist verb=GET {
   }
 
   response = $entries
+  guid = "RbftTkLT4PdClbRWEeY-V8Y5dsY"
 }

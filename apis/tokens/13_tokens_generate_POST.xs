@@ -80,4 +80,5 @@ query "tokens/generate" verb=POST {
     is_used        : $t.is_used
     is_active      : $t.is_active
   }
+  guid = "w7VfZBOhhYRoqm5u-Yn1Zg3wyEE"
 }

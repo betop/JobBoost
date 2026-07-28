@@ -30,4 +30,5 @@ table access_token {
     {type: "btree", field: [{name: "token_hash"}]}
     {type: "btree", field: [{name: "user_id"}]}
   ]
+  guid = "4CLPLjoi-XqadgajwvBpFXPZ3hw"
 }

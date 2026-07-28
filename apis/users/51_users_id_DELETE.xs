@@ -40,4 +40,5 @@ query "users/{id}" verb=DELETE {
   }
 
   response = {success: true}
+  guid = "k1inZmZ654GWNw1jv8dyCwhdx_E"
 }

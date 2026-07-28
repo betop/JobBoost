@@ -25,4 +25,5 @@ query "blacklist/{id}" verb=DELETE {
   }
 
   response = {success: true}
+  guid = "UE0_TBk6mb7GuIVJUXahao5Bwtk"
 }

@@ -29,4 +29,5 @@ table users {
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "7WA1cgwdPYzkSuSyce8pmFqJkbQ"
 }

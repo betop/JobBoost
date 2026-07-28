@@ -25,4 +25,5 @@ query "tokens/{id}" verb=DELETE {
   }
 
   response = {success: true}
+  guid = "rrNRH-a3gEzbCknPVbrFXsyxyg8"
 }

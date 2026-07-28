@@ -28,4 +28,5 @@ query "tokens/{id}/extend" verb=PATCH {
   }
 
   response = {success: true}
+  guid = "l7G1tTN0amqpRdWs-RCRuBSXCjo"
 }

@@ -57,4 +57,5 @@ query "resume/parse-text" verb=POST {
   }
 
   response = {ai_response: $ai_response}
+  guid = "9Rlh2cyaXDmRGdQnGepZ7Npxd0Q"
 }

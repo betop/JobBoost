@@ -35,4 +35,5 @@ query "public/current-version" verb=GET {
     release_date  : $version.release_date
     changelog     : $version.changelog
   }
+  guid = "wy0b35Dn-fvZxERMHzlcVU9DkEs"
 }

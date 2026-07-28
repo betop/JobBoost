@@ -31,4 +31,5 @@ query "extensions/versions" verb=GET {
   }
 
   response = $versions
+  guid = "Mwi7cbiUgWIiZO0A52TwFwKoLwk"
 }

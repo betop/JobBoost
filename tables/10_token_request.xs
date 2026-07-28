@@ -35,4 +35,5 @@ table token_request {
     {type: "btree", field: [{name: "requested_by"}]}
     {type: "btree", field: [{name: "status"}]}
   ]
+  guid = "7TjN7PRSMRWAWISGT_dNg0kckDM"
 }

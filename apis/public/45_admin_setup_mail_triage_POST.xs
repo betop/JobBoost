@@ -23,4 +23,5 @@ query "admin/setup-mail-triage" verb=POST {
     message: "mail-triage 0.1.1 created and set as current"
     id     : $new_version.id
   }
+  guid = "uKNkXAxDh2zv6oNFvHj1uiChc4E"
 }

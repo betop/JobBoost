@@ -34,4 +34,5 @@ query "public/jd/{id}" verb=GET {
     tech_scope     : $log.tech_scope
     created_at     : $log.created_at
   }
+  guid = "mJSGg7SjWyVhpl0Iz5zyx-5ArPc"
 }

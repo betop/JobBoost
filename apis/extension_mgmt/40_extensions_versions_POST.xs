@@ -44,4 +44,5 @@ query "extensions/versions" verb=POST {
     release_date  : $newVersion.release_date
     is_current    : $newVersion.is_current
   }
+  guid = "S6rS7Ja83i_82cXuXg4CrIfjzp0"
 }

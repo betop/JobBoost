@@ -49,4 +49,5 @@ query "extensions/versions/{id}/set-current" verb=PATCH {
   }
 
   response = {success: true, version: $updated.version}
+  guid = "vjNxBfZkulxnoY8aemeQh-aVNYs"
 }

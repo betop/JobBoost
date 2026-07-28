@@ -351,4 +351,5 @@ query "resume/chat" verb=POST {
   }
 
   response = {answer: $reply}
+  guid = "mLMGp-AJHgo38XC_T-f39ARfjxs"
 }

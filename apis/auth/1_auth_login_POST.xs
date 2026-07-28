@@ -60,4 +60,5 @@ query "auth/login" verb=POST {
       }
       ```
   }
+  guid = "Z22JRJtkF4M_64sRy9XdWqUDtDQ"
 }

@@ -115,4 +115,5 @@ query users verb=POST {
     is_active    : $b.is_active
     created_at   : $b.created_at
   }
+  guid = "AzllEqKyH0AXKz39ncUXcH6uiA4"
 }

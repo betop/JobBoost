@@ -15,4 +15,5 @@ table mail_triage_log {
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "CtBrTm4Nhbx0IykMYH-iubfUuto"
 }

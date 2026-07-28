@@ -125,4 +125,5 @@ query "logs/list" verb=GET {
   }
 
   response = $input.count_only == true ? {total: $count_result.total} : {items: $logs}
+  guid = "AIYv-aZ2F4QwpeGMhvFPE5USbXc"
 }

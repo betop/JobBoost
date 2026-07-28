@@ -19,4 +19,5 @@ table extension_version {
     {type: "btree", field: [{name: "extension_name"}]}
     {type: "btree", field: [{name: "is_current"}]}
   ]
+  guid = "ZKZ8AetQ1NDdxPB_t5J5H8thmuQ"
 }

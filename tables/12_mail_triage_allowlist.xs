@@ -14,4 +14,5 @@ table mail_triage_allowlist {
     {type: "btree|unique", field: [{name: "email"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "-4UUk3p3T50Lbv6Fha_ZJ2U44OI"
 }

@@ -25,4 +25,5 @@ query "mail_triage_allowlist/{id}" verb=DELETE {
   }
 
   response = {success: true}
+  guid = "lV1CgmepNLA78ExNYnD9dJBIPRM"
 }

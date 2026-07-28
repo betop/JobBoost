@@ -36,4 +36,5 @@ query mail_triage_allowlist verb=POST {
   }
 
   response = $entry
+  guid = "_Dx8xumDrRrflKn3Fc-oFCPww9Q"
 }

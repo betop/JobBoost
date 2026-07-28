@@ -25,4 +25,5 @@ query "rules/{id}" verb=DELETE {
   }
 
   response = {success: true}
+  guid = "5ybRpi4B13rQt0B68k34N5KSZT0"
 }

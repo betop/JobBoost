@@ -128,4 +128,5 @@ query blacklist verb=POST {
   }
 
   response = {added: $added, skipped: $skipped}
+  guid = "UITX0vc1d6lE8uGTBtu3D1cdGw0"
 }

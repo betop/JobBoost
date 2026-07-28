@@ -24,4 +24,5 @@ query "auth/me" verb=GET {
     name : $user.full_name
     type : $user.type
   }
+  guid = "MxtWJ7DyUtu5L5PAZwN6f0c9pb8"
 }

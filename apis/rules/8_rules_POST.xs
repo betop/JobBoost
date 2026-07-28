@@ -29,4 +29,5 @@ query rules verb=POST {
   }
 
   response = $r
+  guid = "gPxsOLujxEIqTw8rXaduza_Ubx4"
 }
