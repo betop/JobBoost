@@ -439,7 +439,7 @@ query "resume/generate_legacy" verb=POST {
                                                     foreach ($profile_category) {
                                                       each as $c {
                                                         conditional {
-                                                          if (($c|trim) == $extraction_json.tech_scope) {
+                                                          if (($c|trim) == $extraction_json.tech_scope || ($c|trim) == "all") {
                                                             var.update $has_tech_scope {
                                                               value = true
                                                             }
@@ -1302,4 +1302,5 @@ query "resume/generate_legacy" verb=POST {
     resume_filename      : $resume_filename
     cover_letter_filename: $cover_letter_filename
   }
+  guid = "Go80weUXLYfZIppVVjX2yTqJdlQ"
 }

@@ -514,7 +514,7 @@ query "resume/generate" verb=POST {
                                                         foreach ($profile_category) {
                                                           each as $c {
                                                             conditional {
-                                                              if (($c|trim) == $extraction_json.tech_scope) {
+                                                              if (($c|trim) == $extraction_json.tech_scope || ($c|trim) == "all") {
                                                                 var.update $has_tech_scope {
                                                                   value = true
                                                                 }
@@ -952,12 +952,13 @@ query "resume/generate" verb=POST {
                 
                 The entire resume MUST be tailored to the provided job description.
                 
-                1. technical_skills MUST prioritize the tools, languages, and platforms that appear in the job description, drawn only from the candidate's real experience.
+                1. technical_skills MUST prioritize the tools, languages, platforms, and methodologies that appear in the job description, drawn only from the candidate's real experience, and MUST be comprehensive enough to cover the range of keywords a recruiter or ATS scan would look for on this specific role.
                 2. Bullets, portfolio_projects, and leadership_enterpreneurial_experience entries MUST emphasize work relevant to the job description over unrelated work.
                 3. Bullets in the current or most relevant career_breakdowns entry MUST reflect most — not necessarily all — of the responsibilities listed in the job description's Responsibilities section, restated in the candidate's own words and grounded in their real experience. Do NOT copy job description language verbatim.
                 4. The resume MUST reflect most of the qualifications/requirements listed in the job description. Required qualifications MUST be reflected wherever the candidate's real experience supports them; preferred qualifications MAY be included but are not mandatory. Not every listed qualification needs to appear.
-                5. This applies EVERYWHERE in the output, not just career_breakdowns bullets — including portfolio_projects, leadership_enterpreneurial_experience, and the cover letter: do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording. Paraphrase with different vocabulary throughout. Tool and technology names (e.g. "AI development tools", "coding agents", "Elixir") are exempt from this — only stylistic/descriptive phrasing must be paraphrased. Before returning the JSON, scan the ENTIRE output text (all sections plus the cover letter) for the literal substrings "harden", "hardening", and "leverage" — if any are found, rewrite that sentence with a different word.
-                6. You MUST:
+                5. The header title and the current (and, where the underlying work genuinely supports it, former) position title(s) in career_breakdowns MAY be reworded to align with the terminology of the target role/job description (e.g. "Software Engineer" -> "Backend Software Engineer" for a backend-focused JD) — but MUST NOT claim a higher seniority level (e.g. Junior -> Senior) or a title/role the candidate did not actually hold.
+                6. This applies EVERYWHERE in the output, not just career_breakdowns bullets — including portfolio_projects, leadership_enterpreneurial_experience, and the cover letter: do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording. Paraphrase with different vocabulary throughout. Tool and technology names (e.g. "AI development tools", "coding agents", "Elixir") are exempt from this — only stylistic/descriptive phrasing must be paraphrased. Before returning the JSON, scan the ENTIRE output text (all sections plus the cover letter) for the literal substrings "harden", "hardening", and "leverage" — if any are found, rewrite that sentence with a different word.
+                7. You MUST:
                    - NOT Invent skills or experience not evidenced by the candidate profile just to match the job description.
                 
                 If the resume is not clearly tailored to the job description, you MUST regenerate.
@@ -1004,29 +1005,49 @@ query "resume/generate" verb=POST {
                 BULLET RULE — WORK EXPERIENCE SECTION
                 ========================================================
                 
-                Each bullet MUST:
-                
-                1. Follow the STAR method (Situation, Task, Activity, Result).
+                Each bullet MUST follow this exact three-part formula:
+                1. [Action verb] — a strong, specific verb from the ACTION VERB BANK below, chosen to match what the bullet actually describes — never weak phrasing like "helped," "worked on," "was responsible for," or "assisted with," and never a generic default like "Led" or "Managed" for every bullet.
+                2. [A process] — the specific approach, tool, or method actually used to do the work.
+                3. [A result] — a concrete, measurable outcome: money saved or earned, time saved, percentage improvement, or volume/scale (e.g. requests handled, users served, records processed, tickets resolved) relevant to the role.
+
+                Example: "Developed tracking systems for the Green District project [process], cutting staff allocation time by 30% and expenses by $125,000 [result]."
+
+                EVERY bullet, in every position — current and former, including internships — MUST include a specific, concrete metric grounded in the candidate's real experience. A bullet with no measurable result is incomplete and MUST be rewritten to include one.
+
+                ACTION VERB BANK — pick the category matching what the bullet actually describes, then a specific verb from within it. Do NOT reuse the same verb more than once within a single position.
+                - Led a project start to finish: Administered, Arranged, Chaired, Coordinated, Directed, Executed, Delegated, Headed, Managed, Operated, Orchestrated, Organized, Oversaw, Planned, Produced, Programmed, Spearheaded
+                - Envisioned/built something from scratch: Built, Charted, Created, Designed, Developed, Devised, Founded, Engineered, Established, Formalized, Formed, Formulated, Implemented, Incorporated, Initiated, Instituted, Introduced, Launched, Pioneered, Proposed
+                - Increased efficiency/productivity/revenue/satisfaction (or reduced cost/time): Accelerated, Achieved, Advanced, Amplified, Boosted, Capitalized, Conserved, Consolidated, Decreased, Deducted, Delivered, Enhanced, Expanded, Expedited, Furthered, Gained, Generated, Improved, Increased, Lifted, Maximized, Outpaced, Reconciled, Reduced, Saved, Stimulated, Sustained, Yielded
+                - Changed or improved a system/process: Centralized, Clarified, Converted, Customized, Digitized, Integrated, Merged, Modernized, Modified, Overhauled, Redesigned, Refined, Refocused, Rehabilitated, Remodeled, Reorganized, Replaced, Restructured, Revamped, Revitalized, Simplified, Standardized, Streamlined, Strengthened, Transformed, Updated, Upgraded
+                - Managed/led a team: Aligned, Cultivated, Directed, Enabled, Facilitated, Fostered, Guided, Hired, Mentored, Mobilized, Motivated, Recruited, Shaped, Supervised, Taught, Trained, Unified, United
+                - Brought in partners/funding/clients: Acquired, Closed, Forged, Navigated, Negotiated, Partnered, Pitched, Secured, Signed, Sourced, Upsold
+                - Supported customers: Advised, Advocated, Coached, Consulted, Educated, Fielded, Informed, Recommended, Resolved
+                - Did research/analysis: Analyzed, Assembled, Assessed, Audited, Calculated, Compiled, Discovered, Evaluated, Examined, Explored, Forecasted, Identified, Interpreted, Interviewed, Investigated, Mapped, Measured, Modeled, Projected, Qualified, Quantified, Reported, Surveyed, Tested, Tracked, Visualized
+                - Communicated (wrote/spoke/presented): Authored, Briefed, Campaigned, Coauthored, Composed, Conveyed, Convinced, Corresponded, Counseled, Critiqued, Defined, Documented, Drafted, Edited, Illustrated, Lobbied, Outlined, Persuaded, Presented, Promoted, Publicized, Reviewed, Wrote
+                - Oversaw/regulated/enforced: Adjudicated, Authorized, Blocked, Dispatched, Enforced, Ensured, Inspected, Itemized, Monitored, Screened, Scrutinized, Verified
+                - Achieved a goal/result: Attained, Completed, Demonstrated, Finished, Earned, Exceeded, Outperformed, Overcame, Reached, Showcased, Succeeded, Surpassed, Targeted, Won
+
+                Each bullet MUST also:
                 2. Contain at least one CATEGORY_A tool.
-                3. Be strictly technical, aligned to the current position (profile title), and prioritized toward what the job description asks for.
+                3. Be directly relevant to one or more of the job description's key responsibilities, using the job description's own keywords and terminology (skills, tools, topics) wherever the candidate's real experience supports it — this is about matching KEYWORDS for ATS/recruiter scanning, distinct from copying sentence-level phrasing (see rule 5 below).
                 4. Describe engineering implementation work.
                 5. Use varied sentence structure and opening verbs — do NOT repeat the same "[verb] + [what], [metric] by/through [method]" pattern on every bullet within a position. Vary phrasing so bullets read like they were written by a person, not generated from a template.
                 6. Paraphrase job description responsibilities with different wording and sentence structure than the job description itself, even when covering the same responsibility — do NOT closely mirror or restate distinctive JD phrases. In particular, do NOT reuse distinctive JD verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording — use different synonyms even when describing the same activity (e.g. "use AI-assisted coding tools" or "adopt AI development tools" instead of "leverage AI tools", "validate and refine" instead of "harden").
-                
+
                 Metrics:
-                - In a position with 3 bullets, AT MOST 2 of the 3 may include a metric — AT LEAST 1 bullet MUST be purely qualitative (scope, technique, collaboration, or impact described in words, with NO number). In a position with 5 bullets, AT MOST 3 of the 5 may include a metric.
-                - Do NOT put a metric on every single bullet within a position, and do NOT put a metric on every single bullet across the entire resume — that reads as fabricated. Vary which bullets carry a number and vary the type of metric used (not every metric should be a round percentage).
+                - Metrics MUST be specific and concrete (an exact or clearly-scoped number), not vague words like "significantly" or "greatly".
                 - Metrics MUST be plausible for the role, company size, and seniority level — avoid inflated, suspiciously large, or suspiciously precise claims (e.g. no "99.9% uptime" or "50% reduction" on a bullet from a junior or mid-level individual contributor role unless clearly justified by the work described).
                 - Avoid absolute/unfalsifiable claims such as "zero data loss", "100% uptime", or "no incidents" — use measured, realistic language instead (e.g. "without a reported data-loss incident", "maintained high reliability").
+                - Vary the TYPE of metric used across bullets (money, time, percentage, volume/scale) — not every bullet should use the same round-percentage format.
                 - Do NOT restate the same accomplishment (same project, initiative, or numbers) in more than one place in the resume — each real accomplishment appears once, with one consistent set of facts. This applies especially between career_breakdowns and leadership_enterpreneurial_experience.
-                
+
                 Bullet counts:
                 - The current/most recent position MUST have more bullets than every former position (5 bullets is a good target).
                 - EVERY former (non-current) position that is NOT an internship MUST have EXACTLY 3 bullets. This applies uniformly to ALL former positions — the 2nd most recent, the 3rd, the 4th, and every position after that — with NO exceptions and NO gradual reduction as positions get older. A 5th or 6th career_breakdowns entry MUST have exactly 3 bullets just like the 2nd entry does.
                 - Internship positions are exempt from the 3-bullet minimum and MAY have fewer.
                 - Before returning the JSON, go through career_breakdowns one entry at a time in order and count its bullets. If any former non-internship entry has fewer than 3 bullets, add bullets to that entry until it has exactly 3.
-                
-                If STAR structure is not followed, every bullet in a position shares the same sentence template, a bullet closely mirrors job description phrasing, or ANY former non-internship position (regardless of how far back it is) has fewer than 3 bullets, you MUST regenerate.
+
+                If the three-part formula is not followed, a bullet lacks a specific metric, every bullet in a position shares the same sentence template, a bullet closely mirrors job description phrasing, or ANY former non-internship position (regardless of how far back it is) has fewer than 3 bullets, you MUST regenerate.
                 
                 ========================================================
                 TITLE INTEGRITY RULE — WORK EXPERIENCE SECTION
@@ -1118,7 +1139,8 @@ query "resume/generate" verb=POST {
                 - Must be a core idea. (e.g. Doctors want to search specific patients data from database using query like "Show me patients data between Jan - Mar this year")
                 - Name MUST follow format:
                   "[Name of Project] ([Technologies/Methodologies used])"
-                - Description MUST repeat the STAR method, emphasizing the technologies/methodologies used, and MUST develop the analysis and conclusion/results from it with a concrete metric or measurable outcome wherever the underlying work supports one.
+                - Description MUST follow the same [Action verb] + [process] + [result] formula as the BULLET RULE above: open with a strong, specific verb from the ACTION VERB BANK — never weak phrasing like "helped," "worked on," "was responsible for," or "assisted with" — describe the specific technologies/methodologies used as the process, and close with a concrete metric or measurable outcome wherever the underlying work supports one.
+                - The opening verb MUST NOT be the same verb already used to open a career_breakdowns bullet for that same company.
                 - You MUST:
                    - NOT Fabricate projects.
                    - NOT Fabricate metrics not evidenced by the candidate profile.
@@ -1131,6 +1153,7 @@ query "resume/generate" verb=POST {
                 
                 Each entry:
                 - Must derive from real described work already reflected in career_breakdowns — it MUST be a deeper, more specific extension of something the candidate actually did at one of their real employers, not a separate, invented initiative.
+                - Description MUST open with a strong, specific verb from the ACTION VERB BANK in the BULLET RULE above — never weak phrasing like "helped," "worked on," "was responsible for," or "assisted with" — chosen to match what the entry actually describes, and MUST NOT reuse the same verb already used to open a career_breakdowns bullet for that same company.
                 - The entry's "role" label (e.g. Lead Engineer, Technical Lead, Project Lead) MUST NOT imply a job title, seniority, or scope of authority beyond what the candidate's actual job_title at that company supports. If the candidate's real title at that company was an individual-contributor title (e.g. Software Engineer, Junior Software Engineer), frame the entry as a specific initiative or contribution the candidate drove within that role — do NOT imply they held a formal leadership title they did not have.
                 - MUST NOT restate an accomplishment already described in a career_breakdowns bullet for that company — this includes reusing the SAME metric/number from that bullet (e.g. if a career_breakdowns bullet already says "reduced production incidents by 25%", the leadership entry MUST NOT repeat "25%" or "incidents" again). If related to a career_breakdowns bullet, the leadership entry must cover a genuinely different angle (e.g. how the initiative was designed or rolled out) with, at most, a DIFFERENT metric — or no metric at all.
                 - Must emphasize the candidate's responsibilities and the measurable results of their involvement, quantified ONLY wherever the underlying work genuinely supports it — not every entry needs a metric, and a metric MUST be consistent with (not contradict) any related number used elsewhere in the resume.
@@ -1152,9 +1175,10 @@ query "resume/generate" verb=POST {
                 - Company consolidation correct. start_date and end_date correct.
                 - Current/most recent position has more bullets than earlier positions.
                 - Every non-internship former position has exactly 3 bullets — checked individually, including the 3rd, 4th, and any later entries, not just the 2nd.
-                - Every bullet follows STAR; at most 2 of 3 (or 3 of 5) bullets per position include a metric, at least one bullet per position is purely qualitative; no two bullets in the same position share the same sentence template; no bullet closely mirrors job description phrasing or reuses distinctive JD verbs like "leverage" or "harden".
+                - Every bullet follows the [action verb][process][result] formula and includes a specific, plausible metric — no bullet is missing a metric; no two bullets in the same position share the same sentence template; no bullet closely mirrors job description phrasing or reuses distinctive JD verbs like "leverage" or "harden".
+                - Header title and current position title reflect the target role's terminology where the real work supports it, without inflating seniority.
                 - No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents").
-                - Portfolio project and leadership descriptions include measurable results where the underlying work supports it.
+                - Portfolio project and leadership descriptions each open with a distinct ACTION VERB BANK verb (not reused from that company's career_breakdowns bullets) and include measurable results where the underlying work supports it.
                 - No bold formatting (** markers) appears anywhere in the resume.
                 - Certifications section has between 1 and 3 entries — NOT empty — each with a real, well-known issuer relevant to the job description.
                 - Portfolio projects count is 4 or fewer.
@@ -1237,7 +1261,7 @@ query "resume/generate" verb=POST {
                       "title": "[Current Position]",
                       "date_range": "[Mon YYYY - Mon YYYY, or Mon YYYY - Present if current. Use 3-letter month abbreviations only, e.g. Aug 2015 - Apr 2017]",
                       "location": "[City, State]",
-                      "bullets": [ // STAR method bullets - Situation Task Activity Result - incorporate metrics
+                      "bullets": [ // [Action verb] + [process] + [result] bullets from the ACTION VERB BANK - incorporate metrics
                         "[Bullet point 1 > Incorporate metrics]",
                         "[Bullet point 2 > Incorporate metrics]",
                         "[Bullet point 3 > Incorporate metrics]",
@@ -1250,7 +1274,7 @@ query "resume/generate" verb=POST {
                       "title": "[Former Position]",
                       "date_range": "[Mon YYYY - Mon YYYY, or Mon YYYY - Present if current. Use 3-letter month abbreviations only, e.g. Aug 2015 - Apr 2017]",
                       "location": "[City, State]",
-                      "bullets": [ // STAR method bullets - Situation Task Activity Result - incorporate metrics
+                      "bullets": [ // [Action verb] + [process] + [result] bullets from the ACTION VERB BANK - incorporate metrics
                         "[Bullet point 1 > Incorporate metrics]",
                         "[Bullet point 2 > Incorporate metrics]",
                         "[Bullet point 3 > Max number of bullet points if former position]"
@@ -1280,7 +1304,7 @@ query "resume/generate" verb=POST {
                     {
                       "name": "[Name of Project] ([Technologies/Methodologies used])",
                       "date": "[Project End Date]",
-                      "description": "[Repeat STAR method while emphasizing technologies/methodologies used to perform the project > Make sure to develop the analysis and conclusion/results from it]"
+                      "description": "[Action verb + process + result: open with an ACTION VERB BANK verb, emphasize the technologies/methodologies used as the process, and develop the analysis and conclusion/results from it]"
                     }
                     // ...additional portfolio_projects entries as needed
                   ],
@@ -1610,4 +1634,5 @@ query "resume/generate" verb=POST {
     resume_filename      : $resume_filename
     cover_letter_filename: $cover_letter_filename
   }
+  guid = "vDQ6aTeV9eOCjodRS0WCIQ-l4fc"
 }

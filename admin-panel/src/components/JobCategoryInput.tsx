@@ -3,8 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { X, ChevronDown } from "lucide-react";
 
+// Special code meaning "accept jobs of any category" — exclusive with all other codes
+export const ALL_CATEGORIES_CODE = "all";
+
 // code → display label
 export const CATEGORY_OPTIONS: { code: string; label: string }[] = [
+  { code: ALL_CATEGORIES_CODE,       label: "All Categories (accept any job)" },
   { code: "ai",                      label: "AI Engineering" },
   { code: "ai_product",              label: "AI Product Engineering" },
   { code: "ai_research",             label: "AI Research Engineering" },
@@ -79,9 +83,17 @@ export default function JobCategoryInput({ value, onChange, error }: Props) {
   );
 
   function toggle(code: string) {
-    const next = selected.includes(code)
-      ? selected.filter((c) => c !== code)
-      : [...selected, code];
+    if (code === ALL_CATEGORIES_CODE) {
+      // Selecting "All Categories" clears every other selection; toggling it off just clears
+      onChange(selected.includes(ALL_CATEGORIES_CODE) ? "" : ALL_CATEGORIES_CODE);
+      return;
+    }
+
+    // Picking a specific category while "all" is selected replaces it
+    const withoutAll = selected.filter((c) => c !== ALL_CATEGORIES_CODE);
+    const next = withoutAll.includes(code)
+      ? withoutAll.filter((c) => c !== code)
+      : [...withoutAll, code];
     onChange(next.join(","));
   }
 
@@ -108,7 +120,9 @@ export default function JobCategoryInput({ value, onChange, error }: Props) {
         {selected.map((code) => (
           <span
             key={code}
-            className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium"
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+              code === ALL_CATEGORIES_CODE ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+            }`}
           >
             {labelForCode(code)}
             <button
@@ -144,7 +158,11 @@ export default function JobCategoryInput({ value, onChange, error }: Props) {
             {filtered.map((o) => (
               <li
                 key={o.code}
-                className="px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer"
+                className={`px-3 py-2 text-sm cursor-pointer ${
+                  o.code === ALL_CATEGORIES_CODE
+                    ? "text-amber-800 font-medium border-b border-gray-100 hover:bg-amber-50"
+                    : "text-gray-700 hover:bg-blue-50"
+                }`}
                 onMouseDown={(e) => { e.preventDefault(); toggle(o.code); setSearch(""); }}
               >
                 {o.label}

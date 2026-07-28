@@ -14,8 +14,9 @@ query profiles verb=GET {
       field_value = $auth.id
     } as $auth_user
   
-    // Fetch all profiles
+    // Fetch all profiles (excluding hidden ones)
     db.query profile {
+      where = $db.profile.hide != true
       sort = {profile.created_at: "desc"}
       return = {type: "list"}
     } as $all_profiles
@@ -122,4 +123,5 @@ query profiles verb=GET {
   }
 
   response = $out
+  guid = "lecFnaaw0ujXZlWAqqEh3QiCmTw"
 }

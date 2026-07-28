@@ -22,6 +22,7 @@ table profile {
     bool include_certifications?=true
     bool include_achievements?=true
     bool use_legacy_api?
+    bool hide?
   }
 
   index = [
@@ -29,4 +30,5 @@ table profile {
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
     {type: "btree", field: [{name: "is_approved", op: "asc"}]}
   ]
+  guid = "yqkDMFxCA8-2ZXTyxn_YxrZEvTM"
 }

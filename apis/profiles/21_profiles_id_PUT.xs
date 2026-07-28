@@ -20,6 +20,7 @@ query "profiles/{id}" verb=PUT {
     bool include_certifications?
     bool include_achievements?
     bool use_legacy_api?
+    bool hide?
   }
 
   stack {
@@ -211,7 +212,19 @@ query "profiles/{id}" verb=PUT {
         }
       }
     }
-  
+
+    var $hide_changed {
+      value = $input.hide|json_encode
+    }
+
+    conditional {
+      if ($hide_changed != "") {
+        var.update $payload.hide {
+          value = $input.hide
+        }
+      }
+    }
+
     var.update $payload.updated_at {
       value = now
     }
@@ -363,4 +376,5 @@ query "profiles/{id}" verb=PUT {
     education      : $education_out
     work_experience: $work_out
   }
+  guid = "V6dPtigWDi30Vm3nFfof1ItaJIg"
 }
