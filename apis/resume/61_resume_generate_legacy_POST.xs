@@ -381,11 +381,11 @@ query "resume/generate_legacy" verb=POST {
                                             var $possible_seniorities {
                                               value = ["mid", "senior", "lead", "staff"]
                                             }
-                                          
+
                                             var $has_seniority {
                                               value = false
                                             }
-                                          
+
                                             foreach ($possible_seniorities) {
                                               each as $s {
                                                 conditional {
@@ -397,7 +397,16 @@ query "resume/generate_legacy" verb=POST {
                                                 }
                                               }
                                             }
-                                          
+
+                                            // Per-profile opt-in: reject lead-level jobs if this profile has lead roles blocked
+                                            conditional {
+                                              if ($extraction_json.seniority == "lead" && $prof.block_lead_roles == true) {
+                                                var.update $has_seniority {
+                                                  value = false
+                                                }
+                                              }
+                                            }
+
                                             conditional {
                                               if ($has_seniority) {
                                                 var $has_previous_company {

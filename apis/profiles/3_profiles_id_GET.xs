@@ -134,6 +134,7 @@ query "profiles/{id}" verb=GET {
         include_certifications: $p.include_certifications
         include_achievements  : $p.include_achievements
         use_legacy_api        : $p.use_legacy_api
+        block_lead_roles      : $p.block_lead_roles
         education             : $education_out
         work_experience       : $work_out
       }

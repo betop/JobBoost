@@ -21,6 +21,7 @@ query "profiles/{id}" verb=PUT {
     bool include_achievements?
     bool use_legacy_api?
     bool hide?
+    bool block_lead_roles?
   }
 
   stack {
@@ -221,6 +222,18 @@ query "profiles/{id}" verb=PUT {
       if ($hide_changed != "") {
         var.update $payload.hide {
           value = $input.hide
+        }
+      }
+    }
+
+    var $block_lead_roles_changed {
+      value = $input.block_lead_roles|json_encode
+    }
+
+    conditional {
+      if ($block_lead_roles_changed != "") {
+        var.update $payload.block_lead_roles {
+          value = $input.block_lead_roles
         }
       }
     }

@@ -47,7 +47,7 @@ query "logs/list" verb=GET {
         var $profile_ids {
           value = ""
         }
-      
+
         // $auth_user.profile_ids != null ? (($auth_user.profile_ids|join:",")|sql_esc) : "NULL"
         foreach ($auth_user.profile_ids) {
           each as $id {
@@ -56,17 +56,30 @@ query "logs/list" verb=GET {
             }
           }
         }
-      
+
         var.update $query {
           value = $query ~ " WHERE profile_id IN (" ~ $profile_ids ~ ")"
         }
-      
+
         var.update $has_where {
           value = true
         }
       }
     }
-  
+
+    // Exclude logs belonging to hidden profiles, for all user types
+    var $hide_keyword {
+      value = $has_where ? " AND" : " WHERE"
+    }
+
+    var.update $query {
+      value = $query ~ $hide_keyword ~ " (profile_id IS NULL OR profile_id NOT IN (SELECT id FROM x1_5 WHERE hide = true))"
+    }
+
+    var.update $has_where {
+      value = true
+    }
+
     conditional {
       if ($is_delta) {
         var $delta_keyword {

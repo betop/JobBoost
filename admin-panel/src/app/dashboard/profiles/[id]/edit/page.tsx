@@ -50,6 +50,7 @@ const profileSchema = z.object({
   include_certifications: z.boolean().optional().default(true),
   include_achievements: z.boolean().optional().default(true),
   use_legacy_api: z.boolean().optional().default(false),
+  block_lead_roles: z.boolean().optional().default(false),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -92,6 +93,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       include_certifications: profile.include_certifications ?? false,
       include_achievements: profile.include_achievements ?? false,
       use_legacy_api: profile.use_legacy_api ?? false,
+      block_lead_roles: profile.block_lead_roles ?? false,
       education: profile.education?.length
         ? profile.education.map((e) => ({
             ...e,
@@ -334,6 +336,27 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
                 className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
               Use legacy API
+            </label>
+          )}
+        />
+      </div>
+
+      {/* Job Filtering */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">Job Filtering</h2>
+        <p className="text-sm text-gray-500 mb-4">Control which jobs this profile is allowed to generate a resume for.</p>
+        <Controller
+          name="block_lead_roles"
+          control={control}
+          render={({ field }) => (
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={field.value ?? false}
+                onChange={(e) => field.onChange(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              Block lead-level roles (don&apos;t generate a resume for jobs classified as &quot;lead&quot; seniority)
             </label>
           )}
         />

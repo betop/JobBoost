@@ -17,6 +17,7 @@ query profiles verb=POST {
     bool include_certifications?
     bool include_achievements?
     bool use_legacy_api?
+    bool block_lead_roles?
   }
 
   stack {
@@ -48,6 +49,7 @@ query profiles verb=POST {
         include_certifications: ($input.include_certifications|json_encode) != "" ? $input.include_certifications : true
         include_achievements  : ($input.include_achievements|json_encode) != "" ? $input.include_achievements : true
         use_legacy_api        : ($input.use_legacy_api|json_encode) != "" ? $input.use_legacy_api : false
+        block_lead_roles      : ($input.block_lead_roles|json_encode) != "" ? $input.block_lead_roles : false
       }
     } as $p
   

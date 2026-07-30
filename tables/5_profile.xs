@@ -23,6 +23,7 @@ table profile {
     bool include_achievements?=true
     bool use_legacy_api?
     bool hide?
+    bool block_lead_roles?
   }
 
   index = [

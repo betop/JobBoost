@@ -16,6 +16,7 @@ export interface Profile {
   include_certifications: boolean;
   include_achievements: boolean;
   use_legacy_api: boolean;
+  block_lead_roles: boolean;
   education: Education[];
   work_experience: WorkExperience[];
 }
@@ -56,6 +57,7 @@ export interface CreateProfileInput {
   include_certifications?: boolean;
   include_achievements?: boolean;
   use_legacy_api?: boolean;
+  block_lead_roles?: boolean;
 }
 
 export const profileService = {
