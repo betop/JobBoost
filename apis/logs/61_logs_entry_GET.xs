@@ -56,6 +56,7 @@ query "logs/entry" verb=GET {
     log_id        : $log.id
     position_title: $log.position_title
     company_name  : $log.company_name
+    compensation  : $log.compensation
     created_at    : $log.created_at
   }
   guid = "Wz4k7cEfvdl0Ubq5rv33BwYq0Eo"

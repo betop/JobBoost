@@ -339,12 +339,12 @@ query "resume/generate_legacy" verb=POST {
                     var.update $match_status {
                       value = 2
                     }
-                  
+
                     var.update $error_msg {
                       value = "This company (" ~ $company_name ~ ") is on your blacklist. Skipping this application."
                     }
                   }
-                
+
                   else {
                     conditional {
                       if ($position_title == "null") {

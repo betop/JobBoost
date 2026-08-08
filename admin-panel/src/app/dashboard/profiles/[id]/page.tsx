@@ -255,6 +255,13 @@ export default function ProfileViewPage() {
               </div>
 
               <div>
+                <p className="text-sm text-gray-500 mb-2">Default Compensation</p>
+                <p className="text-gray-900 font-medium">
+                  {profile.default_compensation || "—"}
+                </p>
+              </div>
+
+              <div>
                 <p className="text-sm text-gray-500">Resume Template</p>
                 <p className="text-gray-900 font-medium mb-2">
                   {TEMPLATE_META_MAP[profile.resume_template ?? 11]?.name ?? `Template ${profile.resume_template ?? 11}`}

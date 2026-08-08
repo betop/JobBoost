@@ -113,11 +113,15 @@ query "resume/generate" verb=POST {
     var $seniority_txt {
       value = ""
     }
-  
+
     var $tech_scope_txt {
       value = ""
     }
-  
+
+    var $compensation {
+      value = ""
+    }
+
     var $extraction_input_tokens {
       value = 0
     }
@@ -245,9 +249,13 @@ query "resume/generate" verb=POST {
                 var.update $company_name {
                   value = $potential_duplicate.company_name
                 }
-              
+
                 var.update $position_title {
                   value = $potential_duplicate.position_title
+                }
+
+                var.update $compensation {
+                  value = ($potential_duplicate.compensation != null && $potential_duplicate.compensation != "") ? $potential_duplicate.compensation : $prof.default_compensation
                 }
               }
             
@@ -306,7 +314,7 @@ query "resume/generate" verb=POST {
                         |set:"messages":([]
                           |push:({}
                             |set:"role":"user"
-                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
+                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"compensation\": \"the salary or pay range as stated in the job description (e.g. '$120K - $150K/yr'), or '' if not mentioned\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
                           )
                         )
                       headers = []
@@ -385,7 +393,13 @@ query "resume/generate" verb=POST {
                     var.update $tech_scope_txt {
                       value = $extraction_json.tech_scope
                     }
-                  
+
+                    // Compensation — use the value extracted from the job description if
+                    // present, otherwise fall back to the profile's admin-configured default.
+                    var.update $compensation {
+                      value = ($extraction_json.compensation != null && $extraction_json.compensation != "" && $extraction_json.compensation != "null") ? $extraction_json.compensation : $prof.default_compensation
+                    }
+
                     // Company blacklist check — if the extracted company is on the
                     // blacklist, skip generation (reuses match_status 2, the existing
                     // "job unfit" status, so no extension changes are needed).
@@ -409,17 +423,50 @@ query "resume/generate" verb=POST {
                       }
                     }
                   
+                    // Blocked role-family check — never generate for consultant, architect,
+                    // or manager positions (matched as a case-insensitive substring of the
+                    // extracted position title, e.g. "Solutions Architect", "IT Manager").
+                    var $blocked_title_families {
+                      value = ["consultant", "architect", "manager"]
+                    }
+
+                    var $is_blocked_title {
+                      value = false
+                    }
+
+                    foreach ($blocked_title_families) {
+                      each as $bt {
+                        conditional {
+                          if (($position_title|to_lower)|contains:$bt) {
+                            var.update $is_blocked_title {
+                              value = true
+                            }
+                          }
+                        }
+                      }
+                    }
+
                     conditional {
                       if ($is_blacklisted_company) {
                         var.update $match_status {
                           value = 2
                         }
-                      
+
                         var.update $error_msg {
                           value = "This company (" ~ $company_name ~ ") is on your blacklist. Skipping this application."
                         }
                       }
-                    
+
+                      elseif ($is_blocked_title) {
+                        var.update $match_status {
+                          value = 2
+                        }
+
+                        var.update $error_msg {
+                          value = "This position (" ~ $position_title ~ ") is a consultant, architect, or manager role, which is not supported. Skipping this application."
+                        }
+                      }
+
                       else {
                         conditional {
                           if ($position_title == "null") {
@@ -658,9 +705,13 @@ query "resume/generate" verb=POST {
                     var.update $match_status {
                       value = 6
                     }
-                  
+
                     var.update $error_msg {
                       value = "Could not extract structured information from the job description. Please make sure the job description is clear and try again."
+                    }
+
+                    var.update $compensation {
+                      value = $prof.default_compensation
                     }
                   }
                 }
@@ -1623,6 +1674,7 @@ query "resume/generate" verb=POST {
                 match_reason         : $error_msg
                 seniority            : $seniority_txt
                 tech_scope           : $tech_scope_txt
+                compensation         : $compensation
                 content_id           : $resume_content_id
               }
             } as $log

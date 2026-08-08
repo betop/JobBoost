@@ -32,6 +32,7 @@ table generation_log {
     bool is_applied?
     text seniority?
     text tech_scope?
+    text compensation?
     uuid? content_id? {
       table = "resume_content"
     }

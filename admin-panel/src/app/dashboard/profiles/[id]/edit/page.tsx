@@ -51,6 +51,7 @@ const profileSchema = z.object({
   include_achievements: z.boolean().optional().default(true),
   use_legacy_api: z.boolean().optional().default(false),
   block_lead_roles: z.boolean().optional().default(false),
+  default_compensation: z.string().optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -94,6 +95,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       include_achievements: profile.include_achievements ?? false,
       use_legacy_api: profile.use_legacy_api ?? false,
       block_lead_roles: profile.block_lead_roles ?? false,
+      default_compensation: profile.default_compensation ?? "",
       education: profile.education?.length
         ? profile.education.map((e) => ({
             ...e,
@@ -359,6 +361,18 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
               Block lead-level roles (don&apos;t generate a resume for jobs classified as &quot;lead&quot; seniority)
             </label>
           )}
+        />
+      </div>
+
+      {/* Compensation */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">Compensation</h2>
+        <p className="text-sm text-gray-500 mb-4">Shown in the chat bubble when a job description doesn&apos;t mention a salary or pay range.</p>
+        <Input
+          label="Default compensation"
+          placeholder="e.g. $120K - $150K/yr"
+          error={errors.default_compensation?.message}
+          {...register("default_compensation")}
         />
       </div>
 

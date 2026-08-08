@@ -154,6 +154,21 @@
       left: 0;
     }
 
+    /* ── Compensation banner ── */
+    #swiftcv-comp-banner {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: #eef2ff;
+      border-bottom: 1px solid #e0e7ff;
+      font-size: 12px;
+      font-weight: 600;
+      color: #4338ca;
+      flex-shrink: 0;
+    }
+    #swiftcv-comp-banner svg { flex-shrink: 0; }
+
     /* ── Messages area ── */
     #swiftcv-messages {
       flex: 1;
@@ -420,6 +435,14 @@
         </div>
       </div>
 
+      <!-- Compensation -->
+      <div id="swiftcv-comp-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        <span id="swiftcv-comp-text"></span>
+      </div>
+
       <!-- Messages -->
       <div id="swiftcv-messages">
         <div class="swiftcv-msg swiftcv-msg-assistant" id="swiftcv-welcome-msg">👋 Hi! Attach your resume and cover letter (PDF) and ask me anything about them.</div>
@@ -469,6 +492,19 @@
   const attachBtn   = document.getElementById("swiftcv-attach-btn");
   const fileInput   = document.getElementById("swiftcv-file-input");
   const sendBtn     = document.getElementById("swiftcv-send-btn");
+  const compBanner  = document.getElementById("swiftcv-comp-banner");
+  const compText    = document.getElementById("swiftcv-comp-text");
+
+  function setCompensation(value) {
+    if (!compBanner || !compText) return;
+    if (value) {
+      compText.textContent = value;
+      compBanner.style.display = "flex";
+    } else {
+      compBanner.style.display = "none";
+      compText.textContent = "";
+    }
+  }
 
   // Fetch last log entry from backend and update the welcome message
   async function refreshHeader() {
@@ -481,6 +517,7 @@
 
     if (!stored.token || !stored.lastLogId) {
       welcomeEl.textContent = `👋 ${intro}Attach your resume and cover letter (PDF) and ask me anything — including answers to application form questions!`;
+      setCompensation(null);
       return;
     }
     try {
@@ -490,6 +527,7 @@
       const parts = [data.position_title, data.company_name].filter(Boolean);
       const jobLine = parts.length ? ` for the <strong>${parts.join(" at ")}</strong>${parts.length > 1 ? " company" : ""}` : "";
       welcomeEl.innerHTML = `👋 ${intro}Your last resume was generated${jobLine}. Ask me anything — I can help you craft answers to application form questions for this role!`;
+      setCompensation(data.compensation || null);
     } catch (_) { /* non-critical */ }
   }
 

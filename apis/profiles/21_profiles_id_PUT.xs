@@ -22,6 +22,7 @@ query "profiles/{id}" verb=PUT {
     bool use_legacy_api?
     bool hide?
     bool block_lead_roles?
+    text default_compensation?
   }
 
   stack {
@@ -234,6 +235,18 @@ query "profiles/{id}" verb=PUT {
       if ($block_lead_roles_changed != "") {
         var.update $payload.block_lead_roles {
           value = $input.block_lead_roles
+        }
+      }
+    }
+
+    var $default_compensation_changed {
+      value = $input.default_compensation|json_encode
+    }
+
+    conditional {
+      if ($default_compensation_changed != "") {
+        var.update $payload.default_compensation {
+          value = $input.default_compensation
         }
       }
     }
