@@ -70,6 +70,27 @@
     }
     #swiftcv-bubble:hover .swiftcv-bubble-tip { opacity: 1; }
 
+    /* ── Compensation badge — sits above the bubble, always visible ── */
+    #swiftcv-bubble-comp {
+      position: fixed;
+      bottom: 88px;
+      right: 24px;
+      z-index: 2147483647;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      background: #ffffff;
+      color: #4338ca;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+      white-space: nowrap;
+      border: 1px solid #e0e7ff;
+    }
+    #swiftcv-bubble-comp svg { flex-shrink: 0; }
+
     /* ── Popup ── */
     #swiftcv-popup {
       position: fixed;
@@ -396,6 +417,11 @@
     if (changes.chatBubbleEnabled) {
       root.style.display = changes.chatBubbleEnabled.newValue === false ? "none" : "";
     }
+    // Live-update the compensation badge right after a new resume is
+    // generated (in this tab or another), without needing a page reload.
+    if (changes.lastLogId) {
+      refreshHeader();
+    }
   });
 
   // ── Bubble ──
@@ -406,6 +432,14 @@
       </svg>
       <span class="swiftcv-bubble-tip">Ask SwiftCV AI</span>
     </button>
+
+    <!-- Compensation badge (visible without opening the popup) -->
+    <div id="swiftcv-bubble-comp">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+      <span id="swiftcv-bubble-comp-text"></span>
+    </div>
 
     <!-- Chat Popup -->
     <div id="swiftcv-popup" style="display:none;">
@@ -494,16 +528,36 @@
   const sendBtn     = document.getElementById("swiftcv-send-btn");
   const compBanner  = document.getElementById("swiftcv-comp-banner");
   const compText    = document.getElementById("swiftcv-comp-text");
+  const bubbleComp     = document.getElementById("swiftcv-bubble-comp");
+  const bubbleCompText = document.getElementById("swiftcv-bubble-comp-text");
+
+  // The bubble-badge only shows while the popup is closed (the popup covers
+  // the same corner of the page when open) — cache the value so we can
+  // re-show it on close without a fresh fetch.
+  let lastCompensationValue = null;
+
+  function renderCompensationBadge() {
+    if (!bubbleComp || !bubbleCompText) return;
+    if (lastCompensationValue && !isOpen) {
+      bubbleCompText.textContent = lastCompensationValue;
+      bubbleComp.style.display = "flex";
+    } else {
+      bubbleComp.style.display = "none";
+    }
+  }
 
   function setCompensation(value) {
-    if (!compBanner || !compText) return;
-    if (value) {
-      compText.textContent = value;
-      compBanner.style.display = "flex";
-    } else {
-      compBanner.style.display = "none";
-      compText.textContent = "";
+    lastCompensationValue = value || null;
+    if (compBanner && compText) {
+      if (value) {
+        compText.textContent = value;
+        compBanner.style.display = "flex";
+      } else {
+        compBanner.style.display = "none";
+        compText.textContent = "";
+      }
     }
+    renderCompensationBadge();
   }
 
   // Fetch last log entry from backend and update the welcome message
@@ -538,6 +592,7 @@
     isOpen = true;
     bubble.style.display = "none";
     popup.style.display  = "flex";
+    renderCompensationBadge();
     textarea.focus();
     refreshHeader();
   }
@@ -546,10 +601,15 @@
     isOpen = false;
     popup.style.display  = "none";
     bubble.style.display = "flex";
+    renderCompensationBadge();
   }
 
   bubble.addEventListener("click", openPopup);
   closeBtn.addEventListener("click", closePopup);
+
+  // Populate the compensation badge immediately on page load, without
+  // requiring the user to open the popup first.
+  refreshHeader();
 
   // ─────────────────────────────────────────────────────────────────────────
   // CLEAR CONVERSATION
