@@ -1037,7 +1037,17 @@ query "resume/generate" verb=POST {
                 7. End date in the last company MUST be always "Present"
                 
                 If consolidation fails, you MUST regenerate.
-                
+
+                ========================================================
+                COMPANY CONTEXT RULE — WORK EXPERIENCE, PORTFOLIO PROJECTS, LEADERSHIP
+                ========================================================
+
+                For any company you recognize as a real, identifiable company (not a generic/unknown name), ground the bullets, portfolio_projects entries, and leadership entries for that company in what it actually does — its real product, industry, or core business. Do NOT write purely generic, company-agnostic infrastructure/backend descriptions ("transaction processing," "multi-tenant SaaS infrastructure," "event-driven services") that could describe work at literally any company and never reference what THIS company builds or sells.
+
+                Example: for a healthcare appointment-booking company, bullets should reference the domain the work actually serves — patients, providers, appointments/scheduling, insurance, or healthcare data — not just generic "transactions." For a bank, reference financial/account/compliance context. For a retailer, reference commerce/inventory/customer context. The specific technologies (frameworks, cloud services, languages) stay accurate to what the candidate used, but the PURPOSE of the work described MUST fit the company's real business — do not describe the same generic infrastructure work for every company regardless of what it does.
+
+                If you do not recognize the company as a real, identifiable company, this rule does not apply — do not guess or invent an industry for an unknown/generic company name.
+
                 ========================================================
                 BOLD RULE — WORK EXPERIENCE SECTION
                 ========================================================
@@ -1097,9 +1107,9 @@ query "resume/generate" verb=POST {
                 Metrics:
                 - Metrics MUST be specific and concrete (an exact or clearly-scoped number), not vague words like "significantly" or "greatly".
                 - Metrics MUST be plausible for the role, company size, and seniority level — avoid inflated, suspiciously large, or suspiciously precise claims (e.g. no "99.9% uptime" or "50% reduction" on a bullet from a junior or mid-level individual contributor role unless clearly justified by the work described).
-                - Avoid absolute/unfalsifiable claims such as "zero data loss", "100% uptime", or "no incidents" — use measured, realistic language instead (e.g. "without a reported data-loss incident", "maintained high reliability").
+                - Avoid absolute/unfalsifiable claims such as "zero data loss", "100% uptime", "no incidents", or "no downtime" — use measured, realistic language instead (e.g. "without a reported data-loss incident", "maintained high reliability"). Before returning the JSON, scan the ENTIRE output text for the literal phrases "zero data loss", "100% uptime", "no incidents", and "no downtime" — if any are found, rewrite that sentence with measured language.
                 - Vary the TYPE of metric used across bullets (money, time, percentage, volume/scale) — not every bullet should use the same round-percentage format.
-                - Do NOT restate the same accomplishment (same project, initiative, or numbers) in more than one place in the resume — each real accomplishment appears once, with one consistent set of facts. This applies especially between career_breakdowns and leadership_enterpreneurial_experience.
+                - Do NOT restate the same accomplishment (same project, initiative, or numbers) in more than one place in the resume — each real accomplishment appears once, with one consistent set of facts. This applies especially between career_breakdowns, portfolio_projects, and leadership_enterpreneurial_experience: a portfolio_projects entry or leadership entry MUST NOT reuse a metric/number already used in a career_breakdowns bullet for that company — it must describe a different facet with a different (but plausible) metric, or no metric at all.
 
                 Bullet counts:
                 - The current/most recent position MUST have more bullets than every former position (5 bullets is a good target).
@@ -1201,10 +1211,13 @@ query "resume/generate" verb=POST {
                   "[Name of Project] ([Technologies/Methodologies used])"
                 - Description MUST follow the same [Action verb] + [process] + [result] formula as the BULLET RULE above: open with a strong, specific verb from the ACTION VERB BANK — never weak phrasing like "helped," "worked on," "was responsible for," or "assisted with" — describe the specific technologies/methodologies used as the process, and close with a concrete metric or measurable outcome wherever the underlying work supports one.
                 - The opening verb MUST NOT be the same verb already used to open a career_breakdowns bullet for that same company.
+                - MUST NOT reuse the same metric/number already used in a career_breakdowns bullet for that company (e.g. if a career_breakdowns bullet already says "50,000+ daily requests", the project description MUST NOT repeat "50,000+"). If the project relates to that work, describe a different facet — the design decisions, a specific technical challenge, the tooling — with a different (but plausible) metric, or no metric at all.
                 - You MUST:
                    - NOT Fabricate projects.
                    - NOT Fabricate metrics not evidenced by the candidate profile.
-                
+
+                Before returning the JSON, for every number that appears in a portfolio_projects entry, search all career_breakdowns bullets for that same company for the exact same number. If you find the same number reused, remove it from the project description or replace it with a different, non-duplicated metric.
+
                 ========================================================
                 LEADERSHIP / ENTREPRENEURIAL EXPERIENCE RULE — LEADERSHIP_ENTERPRENEURIAL_EXPERIENCE SECTION
                 ========================================================
@@ -1223,7 +1236,9 @@ query "resume/generate" verb=POST {
                    - NOT Duplicate an accomplishment already stated in career_breakdowns.
                 
                 Before returning the JSON, for every number that appears in a leadership_enterpreneurial_experience entry, search all career_breakdowns bullets for that same company for the exact same number. If you find the same number reused, remove it from the leadership entry or replace it with a different, non-duplicated metric.
-                
+
+                Before returning the JSON, for every leadership_enterpreneurial_experience entry, compare its "role" label against the candidate's real job_title at that company (from career_breakdowns). If the role label contains a seniority/authority word not present in the real title (e.g. "Senior", "Staff", "Principal", "Director", "Head of", "Lead" when the real title has none of these), remove that word or rewrite the label to match the real title's seniority level.
+
                 ========================================================
                 FINAL VALIDATION — ENTIRE RESUME
                 ========================================================
@@ -1237,12 +1252,13 @@ query "resume/generate" verb=POST {
                 - Every non-internship former position has exactly 3 bullets — checked individually, including the 3rd, 4th, and any later entries, not just the 2nd.
                 - Every bullet follows the [action verb][process][result] formula and includes a specific, plausible metric — no bullet is missing a metric; no two bullets in the same position share the same sentence template; no bullet closely mirrors job description phrasing or reuses distinctive JD verbs like "leverage" or "harden".
                 - Header title and current position title reflect the target role's terminology where the real work supports it, without inflating seniority.
-                - No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents").
-                - Portfolio project and leadership descriptions each open with a distinct ACTION VERB BANK verb (not reused from that company's career_breakdowns bullets) and include measurable results where the underlying work supports it.
+                - No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents", "no downtime").
+                - For each real, identifiable company, bullets/portfolio_projects/leadership entries reference that company's actual product or industry — not generic, company-agnostic infrastructure descriptions that could apply to any company.
+                - Portfolio project and leadership descriptions each open with a distinct ACTION VERB BANK verb (not reused from that company's career_breakdowns bullets), include measurable results where the underlying work supports it, and do NOT reuse a metric/number already used in that company's career_breakdowns bullets.
                 - No bold formatting (** markers) appears anywhere in the resume.
                 - Certifications section has between 1 and 3 entries — NOT empty — each with a real, well-known issuer relevant to the job description.
                 - Portfolio projects count is 4 or fewer.
-                - Leadership entries count is 3 or fewer; each leadership entry's role label matches the seniority/scope of the candidate's real job_title at that company; no number in a leadership entry is reused from a career_breakdowns bullet for that same company.
+                - Leadership entries count is 3 or fewer; each leadership entry's role label matches the seniority/scope of the candidate's real job_title at that company (no added "Senior"/"Staff"/"Principal"/"Director"/"Head of"/"Lead" beyond what the real title has); no number in a leadership entry is reused from a career_breakdowns bullet for that same company.
                 - The literal substrings "harden", "hardening", and "leverage" do NOT appear anywhere in the output (resume or cover letter).
                 - Education entries ordered most recent first.
                 - No em dashes anywhere.
