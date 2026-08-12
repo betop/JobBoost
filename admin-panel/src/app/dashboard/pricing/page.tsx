@@ -8,6 +8,7 @@ import { userService, type User } from '@/services/userService';
 import { toStartOfDayEST, toEndOfDayEST } from '@/services/logsService';
 import api from '@/services/api';
 import Button from '@/components/Button';
+import MultiSelect from '@/components/MultiSelect';
 import { useAuthStore } from '@/store/authStore';
 
 interface PricingData {
@@ -23,6 +24,8 @@ interface PricingData {
     log_count: number;
     input_tokens: number;
     output_tokens: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
     cost: number;
   };
   mail_triage: {
@@ -57,26 +60,25 @@ export default function PricingPage() {
   });
 
   const [dateTo, setDateTo] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [profileId, setProfileId] = useState('');
-  const [userId, setUserId] = useState('');
+  const [profileIds, setProfileIds] = useState<string[]>([]);
+  const [userIds, setUserIds] = useState<string[]>([]);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [bidders, setBidders] = useState<User[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
 
   useEffect(() => {
-    loadProfilesAndBidders();
+    loadProfilesAndUsers();
   }, []);
 
-  const loadProfilesAndBidders = async () => {
+  const loadProfilesAndUsers = async () => {
     try {
       const profs = await profileService.getAll();
       setProfiles(profs);
 
       const all = await userService.getAll(undefined);
-      const bidderList = all.filter((u) => u.type === 'bidder');
-      setBidders(bidderList);
+      setUsers(all);
     } catch (err) {
-      console.error('Error loading profiles/bidders:', err);
+      console.error('Error loading profiles/users:', err);
     }
     fetchPricing();
   };
@@ -88,8 +90,8 @@ export default function PricingPage() {
       const params = {
         date_from: dateFrom ? toStartOfDayEST(dateFrom) : null,
         date_to: dateTo ? toEndOfDayEST(dateTo) : null,
-        profile_id: profileId || null,
-        user_id: userId || null,
+        profile_ids: profileIds.length > 0 ? profileIds : null,
+        user_ids: userIds.length > 0 ? userIds : null,
       };
 
       const response = await api.post('/dashboard/usage-pricing', params);
@@ -174,36 +176,27 @@ export default function PricingPage() {
 
           {/* Profile Filter */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Profile</label>
-            <select
-              value={profileId}
-              onChange={(e) => setProfileId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="">All Profiles</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.full_name}
-                </option>
-              ))}
-            </select>
+            <MultiSelect
+              label="Profiles"
+              placeholder="All Profiles"
+              selected={profileIds}
+              onChange={setProfileIds}
+              options={profiles.map((p) => ({ value: p.id, label: p.full_name }))}
+            />
           </div>
 
-          {/* Bidder Filter */}
+          {/* User Filter */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Bidder</label>
-            <select
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="">All Bidders</option>
-              {bidders.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.full_name}
-                </option>
-              ))}
-            </select>
+            <MultiSelect
+              label="Users"
+              placeholder="All Users"
+              selected={userIds}
+              onChange={setUserIds}
+              options={users.map((u) => ({
+                value: u.id,
+                label: `${u.full_name} (${u.type})`,
+              }))}
+            />
           </div>
         </div>
 
@@ -287,6 +280,14 @@ export default function PricingPage() {
               <div>
                 <p className="text-sm text-gray-600">Output Tokens</p>
                 <p className="text-lg font-semibold">{formatTokens(data.chat.output_tokens)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Cache Write Tokens</p>
+                <p className="text-lg font-semibold">{formatTokens(data.chat.cache_creation_tokens)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Cache Read Tokens</p>
+                <p className="text-lg font-semibold text-emerald-600">{formatTokens(data.chat.cache_read_tokens)}</p>
               </div>
               <div className="pt-2 border-t">
                 <p className="text-sm text-gray-600">Cost</p>

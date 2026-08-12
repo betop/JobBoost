@@ -203,11 +203,14 @@ query "resume/chat" verb=POST {
       }
     }
   
-    // Append the text question
+    // Append the text question. Marked cacheable so a follow-up question in the
+    // same thread (same log_id, same history-so-far as prefix) can read this
+    // turn back from cache instead of reprocessing it at full price.
     var $text_block {
       value = {}
         |set:"type":"text"
         |set:"text":$input.question
+        |set:"cache_control":({}|set:"type":"ephemeral")
     }
   
     var.update $user_content {
@@ -244,11 +247,19 @@ query "resume/chat" verb=POST {
     var $input_tokens {
       value = 0
     }
-  
+
     var $output_tokens {
       value = 0
     }
-  
+
+    var $cache_creation_input_tokens {
+      value = 0
+    }
+
+    var $cache_read_input_tokens {
+      value = 0
+    }
+
     var $reply {
       value = ""
     }
@@ -294,7 +305,13 @@ query "resume/chat" verb=POST {
             |set:"model":"claude-haiku-4-5"
             |set:"max_tokens":1000
             |set:"temperature":0.5
-            |set:"system":$system_content
+            |set:"system":([]
+              |push:({}
+                |set:"type":"text"
+                |set:"text":$system_content
+                |set:"cache_control":({}|set:"type":"ephemeral")
+              )
+            )
             |set:"messages":$messages
           headers = []
             |push:"Content-Type: application/json"
@@ -321,6 +338,18 @@ query "resume/chat" verb=POST {
             |get:"output_tokens"
             |first_notnull:0
         }
+
+        var.update $cache_creation_input_tokens {
+          value = $anthropic_resp.response.result.usage
+            |get:"cache_creation_input_tokens"
+            |first_notnull:0
+        }
+
+        var.update $cache_read_input_tokens {
+          value = $anthropic_resp.response.result.usage
+            |get:"cache_read_input_tokens"
+            |first_notnull:0
+        }
       }
     
       catch {
@@ -344,6 +373,8 @@ query "resume/chat" verb=POST {
             answer       : $reply
             input_tokens : $input_tokens
             output_tokens: $output_tokens
+            cache_creation_input_tokens: $cache_creation_input_tokens
+            cache_read_input_tokens     : $cache_read_input_tokens
           }
         } as $chat_record
       }
