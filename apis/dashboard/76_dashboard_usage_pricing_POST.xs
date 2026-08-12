@@ -25,14 +25,24 @@ query "dashboard/usage-pricing" verb=POST {
     var $anthropic_input_price {
       value = 0.8
     }
-  
+
     var $anthropic_output_price {
       value = 2.4
     }
-  
+
+    // Prompt caching multipliers (Anthropic: cache writes cost 1.25x base input,
+    // cache reads cost 0.1x base input)
+    var $cache_write_price {
+      value = $anthropic_input_price * 1.25
+    }
+
+    var $cache_read_price {
+      value = $anthropic_input_price * 0.1
+    }
+
     // Build generation log aggregation query
     var $gen_query {
-      value = "SELECT COUNT(*) as log_count, COALESCE(SUM(input_tokens), 0) as input_total, COALESCE(SUM(output_tokens), 0) as output_total FROM x1_7"
+      value = "SELECT COUNT(*) as log_count, COALESCE(SUM(input_tokens), 0) as input_total, COALESCE(SUM(output_tokens), 0) as output_total, COALESCE(SUM(cache_creation_input_tokens), 0) as cache_creation_total, COALESCE(SUM(cache_read_input_tokens), 0) as cache_read_total FROM x1_7"
     }
   
     var $gen_has_where {
@@ -207,9 +217,17 @@ query "dashboard/usage-pricing" verb=POST {
     var $gen_log_count {
       value = $gen_result.log_count|first_notnull:0
     }
-  
+
+    var $gen_cache_creation_total {
+      value = $gen_result.cache_creation_total|first_notnull:0
+    }
+
+    var $gen_cache_read_total {
+      value = $gen_result.cache_read_total|first_notnull:0
+    }
+
     var $gen_cost {
-      value = (($gen_input_total / 1000000) * $anthropic_input_price) + (($gen_output_total / 1000000) * $anthropic_output_price)
+      value = (($gen_input_total / 1000000) * $anthropic_input_price) + (($gen_output_total / 1000000) * $anthropic_output_price) + (($gen_cache_creation_total / 1000000) * $cache_write_price) + (($gen_cache_read_total / 1000000) * $cache_read_price)
     }
   
     var $chat_input_total {
@@ -252,10 +270,12 @@ query "dashboard/usage-pricing" verb=POST {
   response = {
     generation : ```
       {
-        log_count    : $gen_log_count
-        input_tokens : $gen_input_total
-        output_tokens: $gen_output_total
-        cost         : $gen_cost
+        log_count               : $gen_log_count
+        input_tokens            : $gen_input_total
+        output_tokens           : $gen_output_total
+        cache_creation_tokens   : $gen_cache_creation_total
+        cache_read_tokens       : $gen_cache_read_total
+        cost                    : $gen_cost
       }
       ```
     chat       : ```

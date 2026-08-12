@@ -15,6 +15,8 @@ interface PricingData {
     log_count: number;
     input_tokens: number;
     output_tokens: number;
+    cache_creation_tokens: number;
+    cache_read_tokens: number;
     cost: number;
   };
   chat: {
@@ -255,6 +257,14 @@ export default function PricingPage() {
               <div>
                 <p className="text-sm text-gray-600">Output Tokens</p>
                 <p className="text-lg font-semibold">{formatTokens(data.generation.output_tokens)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Cache Write Tokens</p>
+                <p className="text-lg font-semibold">{formatTokens(data.generation.cache_creation_tokens)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Cache Read Tokens</p>
+                <p className="text-lg font-semibold text-emerald-600">{formatTokens(data.generation.cache_read_tokens)}</p>
               </div>
               <div className="pt-2 border-t">
                 <p className="text-sm text-gray-600">Cost</p>

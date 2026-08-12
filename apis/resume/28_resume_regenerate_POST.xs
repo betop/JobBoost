@@ -43,11 +43,19 @@ query "resume/regenerate" verb=POST {
     var $input_tokens {
       value = 0
     }
-  
+
     var $output_tokens {
       value = 0
     }
-  
+
+    var $cache_creation_input_tokens {
+      value = 0
+    }
+
+    var $cache_read_input_tokens {
+      value = 0
+    }
+
     var $resume_content_id {
       value = null
     }
@@ -568,7 +576,13 @@ query "resume/regenerate" verb=POST {
           params = {}
             |set:"model":"claude-haiku-4-5"
             |set:"max_tokens":6000
-            |set:"system":$system_prompt
+            |set:"system":([]
+              |push:({}
+                |set:"type":"text"
+                |set:"text":$system_prompt
+                |set:"cache_control":({}|set:"type":"ephemeral")
+              )
+            )
             |set:"messages":([]
               |push:({}
                 |set:"role":"user"
@@ -699,7 +713,19 @@ query "resume/regenerate" verb=POST {
     var.update $output_tokens {
       value = $ai_resp.response.result.usage|get:"output_tokens"
     }
-  
+
+    var.update $cache_creation_input_tokens {
+      value = $ai_resp.response.result.usage
+        |get:"cache_creation_input_tokens"
+        |first_notnull:0
+    }
+
+    var.update $cache_read_input_tokens {
+      value = $ai_resp.response.result.usage
+        |get:"cache_read_input_tokens"
+        |first_notnull:0
+    }
+
     db.add generation_log {
       enforce_hidden_fields = false
       data = {
@@ -709,6 +735,8 @@ query "resume/regenerate" verb=POST {
         job_description      : $log.job_description
         input_tokens         : $input_tokens
         output_tokens        : $output_tokens
+        cache_creation_input_tokens: $cache_creation_input_tokens
+        cache_read_input_tokens     : $cache_read_input_tokens
         resume_filename      : $resume_filename
         cover_letter_filename: ""
         position_title       : $log.position_title

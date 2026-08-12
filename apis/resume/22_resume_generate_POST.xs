@@ -723,11 +723,19 @@ query "resume/generate" verb=POST {
         var $input_tokens {
           value = 0
         }
-      
+
         var $output_tokens {
           value = 0
         }
-      
+
+        var $cache_creation_input_tokens {
+          value = 0
+        }
+
+        var $cache_read_input_tokens {
+          value = 0
+        }
+
         var $resume_content_id {
           value = null
         }
@@ -1509,7 +1517,13 @@ query "resume/generate" verb=POST {
                   params = {}
                     |set:"model":"claude-haiku-4-5"
                     |set:"max_tokens":6000
-                    |set:"system":$system_prompt
+                    |set:"system":([]
+                      |push:({}
+                        |set:"type":"text"
+                        |set:"text":$system_prompt
+                        |set:"cache_control":({}|set:"type":"ephemeral")
+                      )
+                    )
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
@@ -1655,6 +1669,18 @@ query "resume/generate" verb=POST {
                             |first_notnull:0) + $extraction_output_tokens
                 ```
             }
+
+            var.update $cache_creation_input_tokens {
+              value = $ai_resp.response.result.usage
+                |get:"cache_creation_input_tokens"
+                |first_notnull:0
+            }
+
+            var.update $cache_read_input_tokens {
+              value = $ai_resp.response.result.usage
+                |get:"cache_read_input_tokens"
+                |first_notnull:0
+            }
           }
         }
       
@@ -1664,8 +1690,10 @@ query "resume/generate" verb=POST {
               field_name = "id"
               field_value = $input.log_id
               data = {
-                input_tokens : $input_tokens
-                output_tokens: $output_tokens
+                input_tokens                : $input_tokens
+                output_tokens                : $output_tokens
+                cache_creation_input_tokens : $cache_creation_input_tokens
+                cache_read_input_tokens      : $cache_read_input_tokens
                 content_id   : $resume_content_id
                 is_applied   : true
               }
@@ -1681,6 +1709,8 @@ query "resume/generate" verb=POST {
                 job_description      : $input.job_description
                 input_tokens         : $input_tokens
                 output_tokens        : $output_tokens
+                cache_creation_input_tokens: $cache_creation_input_tokens
+                cache_read_input_tokens     : $cache_read_input_tokens
                 resume_filename      : $resume_filename
                 cover_letter_filename: $cover_letter_filename
                 position_title       : $position_title
