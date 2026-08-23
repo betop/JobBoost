@@ -18,6 +18,7 @@ let extensionState = {
   isConfirmed: false,
   resumeTemplate: 11,
   isAdmin: false,
+  resumeOnly: false,
   versionOk: true,
   versionError: "",
 };
@@ -61,6 +62,7 @@ async function loadExtensionState() {
       "resumeTemplates",
       "lastProfilesSyncAt",
       "isAdmin",
+      "resumeOnly",
       "versionOk",
       "versionError",
     ]);
@@ -74,6 +76,7 @@ async function loadExtensionState() {
     if (stored.resumeTemplate)   extensionState.resumeTemplate = stored.resumeTemplate;
     if (stored.lastProfilesSyncAt) lastProfilesSyncAt = stored.lastProfilesSyncAt;
     extensionState.isAdmin   = stored.isAdmin === true;
+    extensionState.resumeOnly   = stored.resumeOnly === true;
     extensionState.versionOk    = stored.versionOk !== false;
     extensionState.versionError = stored.versionError || "";
   } catch (error) {
@@ -558,6 +561,7 @@ async function generateResume(jobDescription, jobUrl = "") {
       force_generate: true,
       log_id: logId || undefined,
       extension_version: extensionVersion || undefined,
+      skip_cover_letter: extensionState.isAdmin && extensionState.resumeOnly ? true : undefined,
     };
 
     const forceData = await callGenerateApi(forceBody);
@@ -589,12 +593,14 @@ async function generateResume(jobDescription, jobUrl = "") {
 
     sendProgress("resume");
     await ensureOffscreenDocument();
-    sendProgress("cover");
+
+    const skipCover = extensionState.isAdmin && extensionState.resumeOnly;
+    if (!skipCover) sendProgress("cover");
 
     const pdfResult = await chrome.runtime.sendMessage({
       action: "generateAndDownloadPDFs",
       rawData: rawData,
-      coverLetterText: payload.coverLetterText,
+      coverLetterText: skipCover ? "" : payload.coverLetterText,
       resumeFilename: payload.resumeFilename,
       coverLetterFilename: payload.coverLetterFilename,
       templateId: extensionState.resumeTemplate || 11,
@@ -628,6 +634,10 @@ async function generateResume(jobDescription, jobUrl = "") {
     const extensionVersion = getExtensionVersion();
     const isAdmin = extensionState.isAdmin;
 
+    // Reload resumeOnly from storage so it reflects latest toggle state
+    const { resumeOnly } = await chrome.storage.local.get(["resumeOnly"]);
+    extensionState.resumeOnly = resumeOnly === true;
+
     const generateBody = {
       profile_id: extensionState.profileId,
       job_description: jobDescription,
@@ -635,6 +645,7 @@ async function generateResume(jobDescription, jobUrl = "") {
       ai_provider: "claude",
       job_url: jobUrl,
       extension_version: extensionVersion || undefined,
+      skip_cover_letter: extensionState.isAdmin && extensionState.resumeOnly ? true : undefined,
     };
 
     // ── Initial generate call (loop only for status=6 admin retry) ────────────

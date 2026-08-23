@@ -73,4 +73,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   chatToggle.addEventListener("change", () => {
     chrome.storage.local.set({ chatBubbleEnabled: chatToggle.checked });
   });
+
+  // ── Resume Only toggle (admin only) ──────────────────────────────────────
+  const resumeOnlyRow = document.getElementById("resumeOnlyRow");
+  const resumeOnlyToggle = document.getElementById("resumeOnlyToggle");
+  chrome.storage.local.get(["isAdmin", "resumeOnly"], (result) => {
+    if (result.isAdmin === true) {
+      resumeOnlyRow.style.display = "flex";
+    }
+    resumeOnlyToggle.checked = result.resumeOnly === true;
+  });
+  resumeOnlyToggle.addEventListener("change", () => {
+    chrome.storage.local.set({ resumeOnly: resumeOnlyToggle.checked });
+  });
 });

@@ -354,5 +354,13 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
+// Hide cover step for admins with resumeOnly enabled
+chrome.storage.local.get(["isAdmin", "resumeOnly"], (result) => {
+  if (result.isAdmin === true && result.resumeOnly === true) {
+    const coverEl = document.getElementById("step-cover");
+    if (coverEl) coverEl.style.display = "none";
+  }
+});
+
 // Let background know this window is ready
 chrome.runtime.sendMessage({ action: "progressWindowReady" });
