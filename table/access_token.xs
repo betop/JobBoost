@@ -1,0 +1,35 @@
+table access_token {
+  auth = false
+
+  schema {
+    uuid id
+    timestamp created_at?=now
+    text token?
+    uuid user_id? {
+      table = "users"
+    }
+  
+    uuid created_by_admin_id? {
+      table = "users"
+    }
+  
+    uuid[] assigned_admin_ids? {
+      table = "users"
+    }
+  
+    timestamp issued_at?=now
+    timestamp expires_at?
+    bool is_used?
+    bool is_active?=true
+    text token_hash?
+  }
+
+  index = [
+    {type: "primary", field: [{name: "id"}]}
+    {type: "btree", field: [{name: "created_at", op: "desc"}]}
+    {type: "btree", field: [{name: "token_hash"}]}
+    {type: "btree", field: [{name: "user_id"}]}
+  ]
+
+  guid = "4CLPLjoi-XqadgajwvBpFXPZ3hw"
+}
