@@ -93,15 +93,13 @@ body {
 .jd-content code, .jd-content pre {
   font-family: 'Roboto Mono', 'Fira Code', monospace;
   font-size: 0.8125rem;
-  background: #f5f5f5;
   border-radius: 4px;
   padding: 0.15em 0.4em;
   color: #b71c1c;
 }
 .jd-content pre {
   padding: 0.75em 1em;
-  overflow-x: auto;
-  border: 1px solid #e0e0e0;
+  text-wrap: auto;
 }
 .jd-content table {
   width: 100%;
