@@ -1176,12 +1176,16 @@ There MUST be no more than 4 projects.
 
 Each project:
 - Must be derived from real work experience (profile career - company).
+- Must map to a specific company and period in career_breakdowns (same employer and overlapping dates).
+- Must align with that company's real industry/product/culture context at that time. Example: if the mapped company context is healthcare, the project domain should reference healthcare workflows/data/users — not unrelated domains like edtech.
+- Must NOT mix unrelated domain language that conflicts with the mapped company's business context.
 - Must be a core idea. (e.g. Doctors want to search specific patients data from database using query like "Show me patients data between Jan - Mar this year")
 - Name MUST follow format: "[Name of Project] ([Technologies/Methodologies used])"
 - Description MUST follow the same [Action verb] + [process] + [result] formula as the BULLET RULE above (including ACTION VERB BANK verb constraints and metric requirements). The opening verb MUST NOT be the same verb already used to open a career_breakdowns bullet for that same company. Apply BULLET RULE — Metrics (metric non-reuse) to this entry.
 - You MUST NOT fabricate projects or metrics not evidenced by the candidate profile.
 
 Before returning the JSON, for every number in a portfolio_projects entry, check all career_breakdowns bullets for that same company for the exact same number. If reused, remove or replace it with a different metric.
+Before returning the JSON, for every portfolio project, verify there is at least one matching career_breakdowns company entry whose domain context is consistent with the project domain. If no consistent match exists, rewrite or remove the project.
 
 ========================================================
 LEADERSHIP / ENTREPRENEURIAL EXPERIENCE RULE
@@ -1191,6 +1195,8 @@ There MUST be no more than 3 entries.
 
 Each entry:
 - Must derive from real work already reflected in career_breakdowns — a deeper, more specific extension of something the candidate actually did at a real employer, not a separate invented initiative.
+- Must map to a specific company and period in career_breakdowns (same employer and overlapping dates).
+- Must align with that company's real industry/product/culture context at that time, and MUST NOT introduce a conflicting domain.
 - Description MUST open with a strong, specific verb from the ACTION VERB BANK in the BULLET RULE above. The opening verb MUST NOT be the same verb already used to open a career_breakdowns bullet for that same company. Apply BULLET RULE — Metrics (metric non-reuse) to this entry.
 - The "role" label (e.g. Lead Engineer, Technical Lead, Project Lead) MUST NOT imply seniority or authority beyond what the candidate's actual job_title at that company supports. If the real title was an individual-contributor title (e.g. Software Engineer), frame it as a specific initiative or contribution — do NOT imply a formal leadership title they did not hold.
 - Must emphasize responsibilities and measurable results, quantified ONLY where the work genuinely supports it. Metrics MUST be consistent with (not contradict) related numbers used elsewhere in the resume.
@@ -1200,6 +1206,7 @@ Each entry:
 Before returning the JSON, for every number in a leadership entry, check all career_breakdowns bullets for that same company for the exact same number. If reused, remove or replace it.
 
 Before returning the JSON, for every leadership entry compare its "role" label against the candidate's real job_title at that company. If the role label contains a seniority/authority word not present in the real title (e.g. "Senior", "Staff", "Principal", "Director", "Head of", "Lead"), remove it or rewrite to match the real title's seniority level.
+Before returning the JSON, for every leadership entry, verify there is at least one matching career_breakdowns company entry whose domain context is consistent with the leadership initiative. If no consistent match exists, rewrite or remove the entry.
 
 ========================================================
 FINAL VALIDATION — ENTIRE RESUME
