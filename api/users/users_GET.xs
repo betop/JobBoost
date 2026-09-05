@@ -19,9 +19,26 @@ query users verb=GET {
     // Fetch the candidate pool
     conditional {
       if ($auth_user.type == "super_admin") {
-        db.query users {
-          sort = {users.created_at: "desc"}
-          return = {type: "list"}
+        var $super_admin_query {
+          value = "SELECT * FROM x1_2"
+        }
+      
+        conditional {
+          if ($input.type != null) {
+            var.update $super_admin_query {
+              value = $super_admin_query ~ " WHERE type = '" ~ $input.type ~ "'"
+            }
+          }
+        }
+      
+        var.update $super_admin_query {
+          value = $super_admin_query ~ " ORDER BY created_at DESC"
+        }
+      
+        db.direct_query {
+          sql = "{{ $super_admin_query }};"
+          parser = "template_engine"
+          response_type = "list"
         } as $users
       }
     
