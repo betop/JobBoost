@@ -24,9 +24,9 @@ query users verb=GET {
         }
       
         conditional {
-          if ($input.type != null) {
+          if ($input.type != null && $input.type != "") {
             var.update $super_admin_query {
-              value = $super_admin_query ~ " WHERE type = '" ~ $input.type ~ "'"
+              value = $super_admin_query ~ " WHERE type = '" ~ ($input.type|replace:"'":"") ~ "'"
             }
           }
         }

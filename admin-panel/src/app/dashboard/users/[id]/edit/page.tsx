@@ -47,11 +47,14 @@ export default function EditUserPage() {
   });
 
   // Fetch all bidders — used by super_admin to assign bidders to admins
-  const { data: allBidders = [] } = useQuery({
+  const { data: allBiddersRaw = [] } = useQuery({
     queryKey: ["users", "bidder"],
     queryFn: () => userService.getAll("bidder"),
     enabled: isSuperAdmin,
   });
+
+  // Filter to ensure only bidders (exclude admins as safety check)
+  const allBidders = allBiddersRaw.filter((u) => u.type === "bidder");
 
   const {
     register,
