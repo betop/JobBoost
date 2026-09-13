@@ -51,6 +51,7 @@ const profileSchema = z.object({
   include_achievements: z.boolean().optional().default(true),
   use_legacy_api: z.boolean().optional().default(false),
   block_lead_roles: z.boolean().optional().default(false),
+  tailor_job_title: z.boolean().optional().default(true),
   default_compensation: z.string().optional(),
 });
 
@@ -95,6 +96,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       include_achievements: profile.include_achievements ?? false,
       use_legacy_api: profile.use_legacy_api ?? false,
       block_lead_roles: profile.block_lead_roles ?? false,
+      tailor_job_title: profile.tailor_job_title ?? true,
       default_compensation: profile.default_compensation ?? "",
       education: profile.education?.length
         ? profile.education.map((e) => ({
@@ -359,6 +361,27 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
                 className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
               Block lead-level roles (don&apos;t generate a resume for jobs classified as &quot;lead&quot; seniority)
+            </label>
+          )}
+        />
+      </div>
+
+      {/* Title Tailoring */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">Job Title Tailoring</h2>
+        <p className="text-sm text-gray-500 mb-4">When enabled, the header title and current position title are reworded to match the target job description (e.g. &quot;Backend Engineer&quot; → &quot;Senior Backend Engineer&quot;). Disable to always use the exact title from the profile.</p>
+        <Controller
+          name="tailor_job_title"
+          control={control}
+          render={({ field }) => (
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={field.value ?? true}
+                onChange={(e) => field.onChange(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              Tailor job title to match the job description
             </label>
           )}
         />

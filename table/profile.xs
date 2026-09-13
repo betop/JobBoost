@@ -24,6 +24,7 @@ table profile {
     bool use_legacy_api?
     bool hide?
     bool block_lead_roles?
+    bool tailor_job_title?=true
     text default_compensation?
   }
 

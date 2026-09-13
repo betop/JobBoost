@@ -220,7 +220,7 @@ The entire resume MUST be tailored to the provided job description.
 2. Bullets, portfolio_projects, and leadership_enterpreneurial_experience entries MUST emphasize work relevant to the job description over unrelated work.
 3. Bullets in the current or most relevant career_breakdowns entry MUST reflect most — not necessarily all — of the responsibilities listed in the job description's Responsibilities section, restated in the candidate's own words and grounded in their real experience. Do NOT copy job description language verbatim.
 4. The resume MUST reflect most of the qualifications/requirements listed in the job description. Required qualifications MUST be reflected wherever the candidate's real experience supports them; preferred qualifications MAY be included but are not mandatory. Not every listed qualification needs to appear.
-5. The header title and the current (and, where the underlying work genuinely supports it, former) position title(s) in career_breakdowns MAY be reworded to align with the terminology of the target role/job description (e.g. "Software Engineer" -> "Backend Software Engineer" for a backend-focused JD) — but MUST NOT claim a higher seniority level (e.g. Junior -> Senior) or a title/role the candidate did not actually hold.
+5. __TITLE_TAILORING_RULE__
 6. Applies EVERYWHERE in the output including portfolio_projects, leadership_enterpreneurial_experience, and the cover letter: do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording. Paraphrase with different vocabulary. Tool and technology names (e.g. "AI development tools", "coding agents", "Elixir") are exempt — only stylistic/descriptive phrasing must be paraphrased. Before returning the JSON, scan the ENTIRE output text for the literal substrings "harden", "hardening", and "leverage" — if any are found, rewrite that sentence.
 7. You MUST NOT invent skills or experience not evidenced by the candidate profile just to match the job description.
 
@@ -397,7 +397,7 @@ Before returning JSON, you MUST verify:
 - Current/most recent position has more bullets than every former position.
 - Every non-internship former position has exactly 3 bullets — checked individually for every entry, not just the 2nd.
 - Every bullet follows the [action verb][process][result] formula, includes a specific plausible metric, no two bullets in the same position share the same sentence template, and no bullet reuses distinctive JD verbs like "leverage" or "harden".
-- Header title and current position title reflect the target role's terminology without inflating seniority.
+- __TITLE_TAILORING_VALIDATION__
 - No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents", "no downtime").
 - For each real, identifiable company, bullets/portfolio_projects/leadership entries reference that company's actual product or industry.
 - Portfolio project and leadership descriptions each open with a distinct ACTION VERB BANK verb not reused from that company's career_breakdowns bullets, and do NOT reuse a metric/number already used in that company's career_breakdowns bullets.
@@ -414,6 +414,39 @@ Return only fully compliant JSON.
 
 Remember today's year is 2026.
 """
+    }
+  
+    // Per-profile opt-out: substitute the title-tailoring rule text based on
+    // $prof.tailor_job_title (default true). When disabled, the header title and
+    // career_breakdowns titles MUST stay exactly as written in the candidate profile.
+    var $tailor_job_title_flag {
+      value = ($prof.tailor_job_title|json_encode) != "false"
+    }
+  
+    var $title_tailoring_rule_text {
+      value = "The header title and the current (and, where the underlying work genuinely supports it, former) position title(s) in career_breakdowns MAY be reworded to align with the terminology of the target role/job description (e.g. \"Software Engineer\" -> \"Backend Software Engineer\" for a backend-focused JD) — but MUST NOT claim a higher seniority level (e.g. Junior -> Senior) or a title/role the candidate did not actually hold."
+    }
+  
+    var $title_tailoring_validation_text {
+      value = "Header title and current position title reflect the target role's terminology without inflating seniority."
+    }
+  
+    conditional {
+      if (!$tailor_job_title_flag) {
+        var.update $title_tailoring_rule_text {
+          value = "The header title and EVERY position title in career_breakdowns MUST be used EXACTLY as written in the candidate profile — do NOT reword, retitle, or align them to the job description's terminology in any way, even if the wording differs from the target role."
+        }
+      
+        var.update $title_tailoring_validation_text {
+          value = "Header title and every career_breakdowns position title match the candidate profile exactly, with no rewording toward the job description's terminology."
+        }
+      }
+    }
+  
+    var.update $system_prompt {
+      value = $system_prompt
+        |replace:"__TITLE_TAILORING_RULE__":$title_tailoring_rule_text
+        |replace:"__TITLE_TAILORING_VALIDATION__":$title_tailoring_validation_text
     }
   
     // Build resume schema object for JSON examples

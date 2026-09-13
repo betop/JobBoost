@@ -315,7 +315,7 @@ query "resume/generate" verb=POST {
                         |set:"messages":([]
                           |push:({}
                             |set:"role":"user"
-                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"compensation\": \"the salary or pay range as stated in the job description (e.g. '$120K - $150K/yr'), or '' if not mentioned\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
+                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"compensation\": \"the salary or pay range as stated in the job description (e.g. '$120K - $150K/yr'), or '' if not mentioned\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"requires_in_person_interview\": \"true or false - true only if the job description states the hiring process includes an in-person, onsite, or in-office interview or meeting (e.g. onsite final round, in-person panel, candidate must come to the office to interview); false if the hiring process is fully remote/virtual or the job description does not mention it\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
                           )
                         )
                       headers = []
@@ -447,6 +447,14 @@ query "resume/generate" verb=POST {
                       }
                     }
 
+                    // In-person hiring process check — never generate for jobs whose
+                    // interview process requires an onsite/in-person meeting (reuses
+                    // match_status 2, the existing "job unfit" status). Both the string
+                    // and boolean forms are accepted since the model may return either.
+                    var $requires_in_person_interview {
+                      value = $extraction_json.requires_in_person_interview == "true" || $extraction_json.requires_in_person_interview == true
+                    }
+
                     conditional {
                       if ($is_blacklisted_company) {
                         var.update $match_status {
@@ -465,6 +473,16 @@ query "resume/generate" verb=POST {
 
                         var.update $error_msg {
                           value = "This position (" ~ $position_title ~ ") is a consultant, architect, or manager role, which is not supported. Skipping this application."
+                        }
+                      }
+
+                      elseif ($requires_in_person_interview) {
+                        var.update $match_status {
+                          value = 2
+                        }
+
+                        var.update $error_msg {
+                          value = "This job requires an in-person or onsite interview during the hiring process. Try with another job."
                         }
                       }
 
@@ -498,7 +516,7 @@ query "resume/generate" verb=POST {
                                     conditional {
                                       if ($extraction_json.travels_or_relocation_required == "false") {
                                         conditional {
-                                          if ($extraction_json.is_similar_to_outlier == "false" && $extraction_json.is_freelancer_marketplace_similar_to_toptal == "false") {
+                                          if ($extraction_json.is_freelancer_marketplace_similar_to_toptal == "false") {
                                             conditional {
                                               if ($extraction_json.clearance_required == "false") {
                                                 var $possible_seniorities {
@@ -656,7 +674,7 @@ query "resume/generate" verb=POST {
                                             }
                                           
                                             var.update $error_msg {
-                                              value = "This job is not aligned to the candidate profile. It is a freelancer marketplace or an AI training job. Try with another job."
+                                              value = "This job is not aligned to the candidate profile. It is a freelancer marketplace. Try with another job."
                                             }
                                           }
                                         }
@@ -869,8 +887,14 @@ query "resume/generate" verb=POST {
               value = $profile_job_title
             }
           
+            // Per-profile opt-out: skip job-description-driven title tailoring entirely
+            // and always use the candidate's real profile job title. Default is enabled (true).
+            var $tailor_job_title_flag {
+              value = ($prof.tailor_job_title|json_encode) != "false"
+            }
+          
             conditional {
-              if ($tech_scope_mapped) {
+              if ($tech_scope_mapped && $tailor_job_title_flag) {
                 var.update $last_position_title_for_prompt {
                   value = ($seniority_prefix ~ " " ~ $tech_scope_full)|trim
                 }
@@ -1035,7 +1059,7 @@ The entire resume MUST be tailored to the provided job description.
 2. Bullets, portfolio_projects, and leadership_enterpreneurial_experience entries MUST emphasize work relevant to the job description over unrelated work.
 3. Bullets in the current or most relevant career_breakdowns entry MUST reflect most — not necessarily all — of the responsibilities listed in the job description's Responsibilities section, restated in the candidate's own words and grounded in their real experience. Do NOT copy job description language verbatim.
 4. The resume MUST reflect most of the qualifications/requirements listed in the job description. Required qualifications MUST be reflected wherever the candidate's real experience supports them; preferred qualifications MAY be included but are not mandatory. Not every listed qualification needs to appear.
-5. The header title and the current (and, where the underlying work genuinely supports it, former) position title(s) in career_breakdowns MAY be reworded to align with the terminology of the target role/job description (e.g. "Software Engineer" -> "Backend Software Engineer" for a backend-focused JD) — but MUST NOT claim a higher seniority level (e.g. Junior -> Senior) or a title/role the candidate did not actually hold.
+5. __TITLE_TAILORING_RULE__
 6. Applies EVERYWHERE in the output including portfolio_projects, leadership_enterpreneurial_experience, and the cover letter: do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording. Paraphrase with different vocabulary. Tool and technology names (e.g. "AI development tools", "coding agents", "Elixir") are exempt — only stylistic/descriptive phrasing must be paraphrased. Before returning the JSON, scan the ENTIRE output text for the literal substrings "harden", "hardening", and "leverage" — if any are found, rewrite that sentence.
 7. You MUST NOT invent skills or experience not evidenced by the candidate profile just to match the job description.
 
@@ -1219,7 +1243,7 @@ Before returning JSON, you MUST verify:
 - Current/most recent position has more bullets than every former position.
 - Every non-internship former position has exactly 3 bullets — checked individually for every entry, not just the 2nd.
 - Every bullet follows the [action verb][process][result] formula, includes a specific plausible metric, no two bullets in the same position share the same sentence template, and no bullet reuses distinctive JD verbs like "leverage" or "harden".
-- Header title and current position title reflect the target role's terminology without inflating seniority.
+- __TITLE_TAILORING_VALIDATION__
 - No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents", "no downtime").
 - For each real, identifiable company, bullets/portfolio_projects/leadership entries reference that company's actual product or industry.
 - Portfolio project and leadership descriptions each open with a distinct ACTION VERB BANK verb not reused from that company's career_breakdowns bullets, and do NOT reuse a metric/number already used in that company's career_breakdowns bullets.
@@ -1236,6 +1260,35 @@ Return only fully compliant JSON.
 
 Remember today's year is 2026.
 """
+            }
+          
+            // Per-profile opt-out: substitute the title-tailoring rule text based on
+            // $prof.tailor_job_title (default true). When disabled, the header title and
+            // career_breakdowns titles MUST stay exactly as written in the candidate profile.
+            var $title_tailoring_rule_text {
+              value = "The header title and the current (and, where the underlying work genuinely supports it, former) position title(s) in career_breakdowns MAY be reworded to align with the terminology of the target role/job description (e.g. \"Software Engineer\" -> \"Backend Software Engineer\" for a backend-focused JD) — but MUST NOT claim a higher seniority level (e.g. Junior -> Senior) or a title/role the candidate did not actually hold."
+            }
+          
+            var $title_tailoring_validation_text {
+              value = "Header title and current position title reflect the target role's terminology without inflating seniority."
+            }
+          
+            conditional {
+              if (!$tailor_job_title_flag) {
+                var.update $title_tailoring_rule_text {
+                  value = "The header title and EVERY position title in career_breakdowns MUST be used EXACTLY as written in the candidate profile — do NOT reword, retitle, or align them to the job description's terminology in any way, even if the wording differs from the target role."
+                }
+              
+                var.update $title_tailoring_validation_text {
+                  value = "Header title and every career_breakdowns position title match the candidate profile exactly, with no rewording toward the job description's terminology."
+                }
+              }
+            }
+          
+            var.update $resume_system_prompt {
+              value = $resume_system_prompt
+                |replace:"__TITLE_TAILORING_RULE__":$title_tailoring_rule_text
+                |replace:"__TITLE_TAILORING_VALIDATION__":$title_tailoring_validation_text
             }
           
             var $cover_letter_system_prompt {

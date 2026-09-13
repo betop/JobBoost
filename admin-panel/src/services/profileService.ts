@@ -17,6 +17,7 @@ export interface Profile {
   include_achievements: boolean;
   use_legacy_api: boolean;
   block_lead_roles: boolean;
+  tailor_job_title: boolean;
   default_compensation?: string;
   education: Education[];
   work_experience: WorkExperience[];
@@ -59,6 +60,7 @@ export interface CreateProfileInput {
   include_achievements?: boolean;
   use_legacy_api?: boolean;
   block_lead_roles?: boolean;
+  tailor_job_title?: boolean;
   default_compensation?: string;
 }
 
