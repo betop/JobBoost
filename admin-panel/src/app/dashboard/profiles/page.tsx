@@ -6,7 +6,7 @@ import { profileService, type Profile } from "@/services/profileService";
 import { userService, type User } from "@/services/userService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
-import { Edit, Trash2, Eye, Plus, Tags, X, CheckCircle, XCircle } from "lucide-react";
+import { Edit, Trash2, Eye, Plus, Tags, X, CheckCircle, XCircle, Copy } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useState, useMemo, useCallback } from "react";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -80,6 +80,36 @@ export default function ProfilesPage() {
       );
     },
     onError: () => showToast("Failed to update approval status", "error"),
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const full = await profileService.getById(id);
+      return profileService.create({
+        full_name: `Copy of ${full.full_name}`,
+        email: full.email,
+        phone: full.phone,
+        location: full.location,
+        linkedin: full.linkedin,
+        github: full.github,
+        job_category: full.job_category,
+        resume_template: full.resume_template,
+        education: (full.education ?? []).map(({ id: _id, ...rest }) => rest),
+        work_experience: (full.work_experience ?? []).map(({ id: _id, ...rest }) => rest),
+        include_key_projects: full.include_key_projects,
+        include_certifications: full.include_certifications,
+        include_achievements: full.include_achievements,
+        use_legacy_api: full.use_legacy_api,
+        block_lead_roles: full.block_lead_roles,
+        tailor_job_title: full.tailor_job_title,
+        default_compensation: full.default_compensation,
+      });
+    },
+    onSuccess: () => {
+      showToast("Profile duplicated successfully", "success");
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+    },
+    onError: () => showToast("Failed to duplicate profile", "error"),
   });
 
   // Extract unique filter options — expand comma-separated codes into individual entries
@@ -174,6 +204,14 @@ export default function ProfilesPage() {
           >
             <Edit className="w-4 h-4" />
           </button>
+          <button
+            onClick={() => duplicateMutation.mutate(row.id)}
+            disabled={duplicateMutation.isPending}
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-50"
+            title="Duplicate"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
           {isSuperAdmin && (
             row.is_approved ? (
               <button
@@ -203,7 +241,7 @@ export default function ProfilesPage() {
         </div>
       ),
     },
-  ], [profiles, jobCategoryCodes, locations, adminsByProfile, isSuperAdmin, router]);
+  ], [profiles, jobCategoryCodes, locations, adminsByProfile, isSuperAdmin, router, duplicateMutation]);
 
   return (
     <>
