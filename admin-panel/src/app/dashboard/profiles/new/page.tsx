@@ -8,11 +8,20 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { profileService } from "@/services/profileService";
 import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
+import MultiSelect from "@/components/MultiSelect";
 import Button from "@/components/Button";
 import JobCategoryInput from "@/components/JobCategoryInput";
 import ResumeAutofill from "@/components/ResumeAutofill";
 import type { CreateProfileInput } from "@/services/profileService";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+
+const LANGUAGE_OPTIONS = [
+  "English", "Spanish", "French", "German", "Portuguese", "Italian",
+  "Dutch", "Polish", "Russian", "Ukrainian", "Turkish", "Arabic",
+  "Hindi", "Chinese", "Japanese", "Korean", "Vietnamese", "Thai",
+  "Indonesian", "Swedish", "Norwegian", "Danish", "Finnish", "Greek",
+  "Czech", "Romanian", "Hungarian", "Hebrew",
+].map((l) => ({ value: l, label: l }));
 
 const educationSchema = z.object({
   university: z.string().optional(),
@@ -437,12 +446,18 @@ export default function NewProfilePage() {
         {/* Allowed Languages */}
         <div>
           <h2 className="text-xl font-semibold text-gray-900 mb-1">Allowed Languages</h2>
-          <p className="text-sm text-gray-500 mb-4">Comma-separated list of languages this profile accepts job descriptions in. Jobs written in any other language will be rejected. Default: English.</p>
-          <Input
-            label="Allowed languages"
-            placeholder="e.g. English, Spanish"
-            error={errors.allowed_languages?.message}
-            {...register("allowed_languages")}
+          <p className="text-sm text-gray-500 mb-4">Languages this profile accepts job descriptions in. Jobs written in any other language will be rejected. Default: English.</p>
+          <Controller
+            name="allowed_languages"
+            control={control}
+            render={({ field }) => (
+              <MultiSelect
+                placeholder="Select allowed languages"
+                options={LANGUAGE_OPTIONS}
+                selected={field.value ? field.value.split(",").map((v) => v.trim()).filter(Boolean) : []}
+                onChange={(values) => field.onChange(values.join(", "))}
+              />
+            )}
           />
         </div>
 
