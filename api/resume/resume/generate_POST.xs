@@ -424,11 +424,21 @@ query "resume/generate" verb=POST {
                       }
                     }
                   
-                    // Blocked role-family check — never generate for consultant, architect,
-                    // or manager positions (matched as a case-insensitive substring of the
-                    // extracted position title, e.g. "Solutions Architect", "IT Manager").
+                    // Blocked role-family check — never generate for consultant or
+                    // manager positions (matched as a case-insensitive substring of the
+                    // extracted position title, e.g. "IT Manager"). Architect roles are
+                    // blocked too, but only when this profile has lead-level roles blocked
+                    // (the same admin toggle now covers both lead seniority and architect titles).
                     var $blocked_title_families {
-                      value = ["consultant", "architect", "manager"]
+                      value = ["consultant", "manager"]
+                    }
+
+                    conditional {
+                      if ($prof.block_lead_roles == true) {
+                        array.push $blocked_title_families {
+                          value = "architect"
+                        }
+                      }
                     }
 
                     var $is_blocked_title {
@@ -499,7 +509,7 @@ query "resume/generate" verb=POST {
                         }
 
                         var.update $error_msg {
-                          value = "This position (" ~ $position_title ~ ") is a consultant, architect, or manager role, which is not supported. Skipping this application."
+                          value = "This position (" ~ $position_title ~ ") is a consultant, manager, or architect role, which is not supported. Skipping this application."
                         }
                       }
 

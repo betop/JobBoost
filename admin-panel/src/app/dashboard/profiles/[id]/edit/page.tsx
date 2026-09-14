@@ -371,7 +371,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
                 onChange={(e) => field.onChange(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
-              Block lead-level roles (don&apos;t generate a resume for jobs classified as &quot;lead&quot; seniority)
+              Block lead-level and architect roles (don&apos;t generate a resume for jobs classified as &quot;lead&quot; seniority or with &quot;architect&quot; in the title)
             </label>
           )}
         />
