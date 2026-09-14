@@ -102,6 +102,7 @@ export default function ProfilesPage() {
         use_legacy_api: full.use_legacy_api,
         block_lead_roles: full.block_lead_roles,
         tailor_job_title: full.tailor_job_title,
+        allowed_languages: full.allowed_languages,
         default_compensation: full.default_compensation,
       });
     },

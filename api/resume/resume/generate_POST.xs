@@ -315,7 +315,7 @@ query "resume/generate" verb=POST {
                         |set:"messages":([]
                           |push:({}
                             |set:"role":"user"
-                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"compensation\": \"the salary or pay range as stated in the job description (e.g. '$120K - $150K/yr'), or '' if not mentioned\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"requires_in_person_interview\": \"true or false - true only if the job description states the hiring process includes an in-person, onsite, or in-office interview or meeting (e.g. onsite final round, in-person panel, candidate must come to the office to interview); false if the hiring process is fully remote/virtual or the job description does not mention it\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
+                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"compensation\": \"the salary or pay range as stated in the job description (e.g. '$120K - $150K/yr'), or '' if not mentioned\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"requires_in_person_interview\": \"true or false - true only if the job description states the hiring process includes an in-person, onsite, or in-office interview or meeting (e.g. onsite final round, in-person panel, candidate must come to the office to interview); false if the hiring process is fully remote/virtual or the job description does not mention it\",\n\"primary_language\": \"the primary human language the job description and hiring process are written/conducted in, as a single English word, e.g. English, Spanish, German, French, Portuguese, Italian, Dutch, Polish, Japanese, Chinese\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
                           )
                         )
                       headers = []
@@ -455,6 +455,33 @@ query "resume/generate" verb=POST {
                       value = $extraction_json.requires_in_person_interview == "true" || $extraction_json.requires_in_person_interview == true
                     }
 
+                    // Language check — reject jobs whose primary language is not one of
+                    // the languages allowed for this profile (configured in the admin
+                    // panel, comma-separated, default "English").
+                    var $extracted_language {
+                      value = ($extraction_json.primary_language|first_notnull:"English")|trim
+                    }
+
+                    var $allowed_languages_list {
+                      value = ($prof.allowed_languages|first_notnull:"English")|split:","
+                    }
+
+                    var $is_language_allowed {
+                      value = false
+                    }
+
+                    foreach ($allowed_languages_list) {
+                      each as $al {
+                        conditional {
+                          if (($al|trim|to_lower) == ($extracted_language|to_lower)) {
+                            var.update $is_language_allowed {
+                              value = true
+                            }
+                          }
+                        }
+                      }
+                    }
+
                     conditional {
                       if ($is_blacklisted_company) {
                         var.update $match_status {
@@ -483,6 +510,16 @@ query "resume/generate" verb=POST {
 
                         var.update $error_msg {
                           value = "This job requires an in-person or onsite interview during the hiring process. Try with another job."
+                        }
+                      }
+
+                      elseif (!$is_language_allowed) {
+                        var.update $match_status {
+                          value = 2
+                        }
+
+                        var.update $error_msg {
+                          value = "This job's language (" ~ $extracted_language ~ ") is not in your allowed languages list. Try with another job."
                         }
                       }
 

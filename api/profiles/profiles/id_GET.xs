@@ -135,6 +135,8 @@ query "profiles/{id}" verb=GET {
         include_achievements  : $p.include_achievements
         use_legacy_api        : $p.use_legacy_api
         block_lead_roles      : $p.block_lead_roles
+        tailor_job_title      : $p.tailor_job_title
+        allowed_languages     : $p.allowed_languages
         default_compensation  : $p.default_compensation
         education             : $education_out
         work_experience       : $work_out

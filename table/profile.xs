@@ -25,6 +25,7 @@ table profile {
     bool hide?
     bool block_lead_roles?
     bool tailor_job_title?=true
+    text allowed_languages?="English"
     text default_compensation?
   }
 

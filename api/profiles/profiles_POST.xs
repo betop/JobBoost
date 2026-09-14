@@ -18,6 +18,8 @@ query profiles verb=POST {
     bool include_achievements?
     bool use_legacy_api?
     bool block_lead_roles?
+    bool tailor_job_title?
+    text allowed_languages?
     text default_compensation?
   }
 
@@ -51,6 +53,8 @@ query profiles verb=POST {
         include_achievements  : ($input.include_achievements|json_encode) != "" ? $input.include_achievements : true
         use_legacy_api        : ($input.use_legacy_api|json_encode) != "" ? $input.use_legacy_api : false
         block_lead_roles      : ($input.block_lead_roles|json_encode) != "" ? $input.block_lead_roles : false
+        tailor_job_title      : ($input.tailor_job_title|json_encode) != "" ? $input.tailor_job_title : true
+        allowed_languages     : ($input.allowed_languages != null && $input.allowed_languages != "") ? $input.allowed_languages : "English"
         default_compensation  : $input.default_compensation
       }
     } as $p

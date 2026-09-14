@@ -52,6 +52,7 @@ const profileSchema = z.object({
   use_legacy_api: z.boolean().optional().default(false),
   block_lead_roles: z.boolean().optional().default(false),
   tailor_job_title: z.boolean().optional().default(true),
+  allowed_languages: z.string().optional().default("English"),
   default_compensation: z.string().optional(),
 });
 
@@ -97,6 +98,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       use_legacy_api: profile.use_legacy_api ?? false,
       block_lead_roles: profile.block_lead_roles ?? false,
       tailor_job_title: profile.tailor_job_title ?? true,
+      allowed_languages: profile.allowed_languages ?? "English",
       default_compensation: profile.default_compensation ?? "",
       education: profile.education?.length
         ? profile.education.map((e) => ({
@@ -384,6 +386,18 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
               Tailor job title to match the job description
             </label>
           )}
+        />
+      </div>
+
+      {/* Allowed Languages */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">Allowed Languages</h2>
+        <p className="text-sm text-gray-500 mb-4">Comma-separated list of languages this profile accepts job descriptions in. Jobs written in any other language will be rejected. Default: English.</p>
+        <Input
+          label="Allowed languages"
+          placeholder="e.g. English, Spanish"
+          error={errors.allowed_languages?.message}
+          {...register("allowed_languages")}
         />
       </div>
 

@@ -18,6 +18,7 @@ export interface Profile {
   use_legacy_api: boolean;
   block_lead_roles: boolean;
   tailor_job_title: boolean;
+  allowed_languages: string;
   default_compensation?: string;
   education: Education[];
   work_experience: WorkExperience[];
@@ -61,6 +62,7 @@ export interface CreateProfileInput {
   use_legacy_api?: boolean;
   block_lead_roles?: boolean;
   tailor_job_title?: boolean;
+  allowed_languages?: string;
   default_compensation?: string;
 }
 

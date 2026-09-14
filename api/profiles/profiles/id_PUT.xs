@@ -22,6 +22,8 @@ query "profiles/{id}" verb=PUT {
     bool use_legacy_api?
     bool hide?
     bool block_lead_roles?
+    bool tailor_job_title?
+    text allowed_languages?
     text default_compensation?
   }
 
@@ -235,6 +237,26 @@ query "profiles/{id}" verb=PUT {
       if ($block_lead_roles_changed != "") {
         var.update $payload.block_lead_roles {
           value = $input.block_lead_roles
+        }
+      }
+    }
+  
+    var $tailor_job_title_changed {
+      value = $input.tailor_job_title|json_encode
+    }
+  
+    conditional {
+      if ($tailor_job_title_changed != "") {
+        var.update $payload.tailor_job_title {
+          value = $input.tailor_job_title
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.allowed_languages != null) {
+        var.update $payload.allowed_languages {
+          value = $input.allowed_languages
         }
       }
     }
