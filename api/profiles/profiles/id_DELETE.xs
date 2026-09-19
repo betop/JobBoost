@@ -62,14 +62,98 @@ query "profiles/{id}" verb=DELETE {
       }
     }
   
+    // Count bidder assignments using users.profile_ids (array)
     db.query users {
-      where = $db.users.profile_id == $p.id
-      return = {type: "count"}
-    } as $bidder_count
-  
+      return = {type: "list"}
+    } as $users_list
+
+    var $bidder_count {
+      value = 0
+    }
+
+    foreach ($users_list) {
+      each as $u {
+        conditional {
+          if ($u.type == "bidder" && $u.profile_ids != null) {
+            var $bidder_has_profile {
+              value = false
+            }
+
+            foreach ($u.profile_ids) {
+              each as $pid {
+                conditional {
+                  if ($pid == $p.id) {
+                    var.update $bidder_has_profile {
+                      value = true
+                    }
+                  }
+                }
+              }
+            }
+
+            conditional {
+              if ($bidder_has_profile) {
+                var.update $bidder_count {
+                  value = $bidder_count + 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     precondition ($bidder_count == 0) {
       error_type = "accessdenied"
       error = "Profile is assigned to a bidder"
+    }
+
+    // Remove this profile from users.profile_ids (e.g. admins/super_admins)
+    // before deleting the profile row, so FK array references are cleaned up.
+    foreach ($users_list) {
+      each as $u {
+        conditional {
+          if ($u.profile_ids != null) {
+            var $new_profile_ids {
+              value = []
+            }
+
+            var $has_profile_ref {
+              value = false
+            }
+
+            foreach ($u.profile_ids) {
+              each as $pid {
+                conditional {
+                  if ($pid == $p.id) {
+                    var.update $has_profile_ref {
+                      value = true
+                    }
+                  }
+
+                  else {
+                    array.push $new_profile_ids {
+                      value = $pid
+                    }
+                  }
+                }
+              }
+            }
+
+            conditional {
+              if ($has_profile_ref) {
+                db.patch users {
+                  field_name = "id"
+                  field_value = $u.id
+                  data = {
+                    profile_ids: $new_profile_ids
+                  }
+                } as $_updated_user
+              }
+            }
+          }
+        }
+      }
     }
   
     db.query education {
