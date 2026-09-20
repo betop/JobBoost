@@ -65,8 +65,13 @@ export default function ProfilesPage() {
       await profileService.delete(id);
       showToast("Profile deleted successfully", "success");
       refetch();
-    } catch (error) {
-      showToast("Failed to delete profile", "error");
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.payload ||
+        error?.message ||
+        "Failed to delete profile";
+      showToast(typeof message === "string" ? message : "Failed to delete profile", "error");
     }
   };
 

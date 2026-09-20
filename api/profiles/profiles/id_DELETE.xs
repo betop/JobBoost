@@ -184,6 +184,23 @@ query "profiles/{id}" verb=DELETE {
       }
     }
   
+    // generation_log.profile_id is an FK to profile — null it out so history
+    // is preserved but the profile row can be deleted.
+    db.query generation_log {
+      where = $db.generation_log.profile_id == $p.id
+      return = {type: "list"}
+    } as $log_list
+
+    foreach ($log_list) {
+      each as $log {
+        db.patch generation_log {
+          field_name = "id"
+          field_value = $log.id
+          data = {profile_id: null}
+        } as $_updated_log
+      }
+    }
+  
     db.del profile {
       field_name = "id"
       field_value = $p.id
