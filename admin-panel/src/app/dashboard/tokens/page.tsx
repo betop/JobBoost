@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useUIStore } from "@/store/uiStore";
+import { useSessionState } from "@/utils/sessionState";
 import { useAuthStore } from "@/store/authStore";
 import { useForm } from "react-hook-form";
 
@@ -165,8 +166,8 @@ export default function TokensPage() {
   const [hiddenTokens, setHiddenTokens] = useState<Set<string>>(new Set());
   const [reviewModalRequest, setReviewModalRequest] = useState<TokenRequest | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
-  const [requestTab, setRequestTab] = useState<"pending" | "all">("pending");
-  const [activeTab, setActiveTab] = useState<"keys" | "requests">("keys");
+  const [requestTab, setRequestTab] = useSessionState<"pending" | "all">("tokens.requestTab", "pending");
+  const [activeTab, setActiveTab] = useSessionState<"keys" | "requests">("tokens.tab", "keys");
   const [assignModalToken, setAssignModalToken] = useState<Token | null>(null);
   const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>([]);
 
@@ -771,6 +772,8 @@ export default function TokensPage() {
             <div className="p-6">
               {activeTab === "keys" && (
                 <DataTable
+                  persistKey="tokens:keys"
+                  persistToUrl={false}
                   data={tokens}
                   columns={tokenColumns}
                   searchable
@@ -804,6 +807,8 @@ export default function TokensPage() {
                     </button>
                   </div>
                   <DataTable
+                    persistKey={`tokens:requests:${requestTab}`}
+                    persistToUrl={false}
                     data={requestTab === "pending" ? pendingRequests : requests}
                     columns={requestColumns}
                     searchable

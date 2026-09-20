@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
   ArrowUpDown,
   X,
 } from "lucide-react";
+import { readSessionState, writeSessionState } from "@/utils/sessionState";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ interface DataTableProps<T> {
   onSearch?: (query: string) => void;
   loading?: boolean;
   persistToUrl?: boolean;
+  /** Override sessionStorage key (defaults to current pathname) */
+  persistKey?: string;
   /** Default page size (default: 10) */
   defaultPageSize?: number;
   /** Available page sizes (default: [5, 10, 25, 50]) */
@@ -43,6 +46,15 @@ interface DataTableProps<T> {
 }
 
 type SortDir = "asc" | "desc" | null;
+
+type StoredTableState = {
+  page?: number;
+  search?: string;
+  size?: number;
+  sort?: string | null;
+  dir?: SortDir;
+  filters?: Record<string, string>;
+};
 
 const getFilterParamKey = (key: string) => `f_${key}`;
 
@@ -83,12 +95,15 @@ export default function DataTable<T extends { id: string }>({
   onSearch,
   loading = false,
   persistToUrl = true,
+  persistKey,
   defaultPageSize = 10,
   pageSizeOptions = [5, 10, 25, 50],
   defaultFilters,
 }: DataTableProps<T>) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const storageKey = persistKey || pathname || "table";
 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,6 +111,8 @@ export default function DataTable<T extends { id: string }>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>(defaultFilters ?? {});
+  const [hydrated, setHydrated] = useState(false);
+  const didInit = useRef(false);
 
   // Use refs so the URL-sync effect doesn't re-run just because parent re-rendered
   const columnsRef = useRef(columns);
@@ -103,15 +120,36 @@ export default function DataTable<T extends { id: string }>({
   const defaultFiltersRef = useRef(defaultFilters);
   defaultFiltersRef.current = defaultFilters;
 
-  // ── URL persistence ────────────────────────────────────────────
+  // ── URL + session persistence ──────────────────────────────────
   useEffect(() => {
-    if (!persistToUrl) return;
+    if (!persistToUrl) {
+      if (!didInit.current) {
+        const stored = readSessionState<StoredTableState>(storageKey);
+        if (stored) {
+          if (stored.page) setCurrentPage(stored.page);
+          if (stored.search) setSearchQuery(stored.search);
+          if (stored.size) setPageSize(stored.size);
+          if (stored.sort) setSortKey(stored.sort);
+          if (stored.dir === "asc" || stored.dir === "desc" || stored.dir === null) {
+            setSortDir(stored.dir ?? null);
+          }
+          if (stored.filters !== undefined) {
+            setColumnFilters(stored.filters);
+          }
+        }
+      }
+      didInit.current = true;
+      setHydrated(true);
+      return;
+    }
+
     const page = searchParams.get("page");
     const search = searchParams.get("search");
     const size = searchParams.get("size");
     const sort = searchParams.get("sort");
     const dir = searchParams.get("dir");
     const nextFilters: Record<string, string> = { ...(defaultFiltersRef.current ?? {}) };
+    let hasUrlFilters = false;
 
     columnsRef.current.forEach((column) => {
       if (!column.filterOptions) return;
@@ -119,22 +157,55 @@ export default function DataTable<T extends { id: string }>({
       const filterValue = searchParams.get(getFilterParamKey(key));
       if (filterValue !== null) {
         nextFilters[key] = filterValue;
+        hasUrlFilters = true;
       }
     });
 
-    if (page) setCurrentPage(parseInt(page, 10));
-    if (search) setSearchQuery(search);
-    if (size) setPageSize(parseInt(size, 10));
-    if (sort) setSortKey(sort);
-    if (dir === "asc" || dir === "desc") setSortDir(dir);
-    // Only update filters if values actually changed to avoid infinite re-renders
-    setColumnFilters(prev => {
-      const same =
-        Object.keys(nextFilters).length === Object.keys(prev).length &&
-        Object.entries(nextFilters).every(([k, v]) => prev[k] === v);
-      return same ? prev : nextFilters;
+    const hasUrlState = !!(page || search || size || sort || dir || hasUrlFilters);
+
+    if (hasUrlState) {
+      if (page) setCurrentPage(parseInt(page, 10));
+      if (search) setSearchQuery(search);
+      if (size) setPageSize(parseInt(size, 10));
+      if (sort) setSortKey(sort);
+      if (dir === "asc" || dir === "desc") setSortDir(dir);
+      setColumnFilters((prev) => {
+        const same =
+          Object.keys(nextFilters).length === Object.keys(prev).length &&
+          Object.entries(nextFilters).every(([k, v]) => prev[k] === v);
+        return same ? prev : nextFilters;
+      });
+    } else if (!didInit.current) {
+      const stored = readSessionState<StoredTableState>(storageKey);
+      if (stored) {
+        if (stored.page) setCurrentPage(stored.page);
+        if (stored.search) setSearchQuery(stored.search);
+        if (stored.size) setPageSize(stored.size);
+        if (stored.sort) setSortKey(stored.sort);
+        if (stored.dir === "asc" || stored.dir === "desc" || stored.dir === null) {
+          setSortDir(stored.dir ?? null);
+        }
+        if (stored.filters !== undefined) {
+          setColumnFilters(stored.filters);
+        }
+      }
+    }
+
+    didInit.current = true;
+    setHydrated(true);
+  }, [persistToUrl, searchParams, storageKey]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    writeSessionState<StoredTableState>(storageKey, {
+      page: currentPage,
+      search: searchQuery,
+      size: pageSize,
+      sort: sortKey,
+      dir: sortDir,
+      filters: columnFilters,
     });
-  }, [persistToUrl, searchParams]);
+  }, [hydrated, storageKey, currentPage, searchQuery, pageSize, sortKey, sortDir, columnFilters]);
 
   const updateQueryParams = useCallback(
     (updates: Record<string, string | number | undefined>) => {

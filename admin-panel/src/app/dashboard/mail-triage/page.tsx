@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { Mail } from "lucide-react";
 import LogsTab from "./_components/LogsTab";
 import TestTab from "./_components/TestTab";
 import AllowlistTab from "./_components/AllowlistTab";
+import { useSessionState } from "@/utils/sessionState";
 
 type Tab = "logs" | "test" | "allowlist";
 
@@ -15,7 +15,7 @@ const TABS: { label: string; value: Tab }[] = [
 ];
 
 export default function MailTriagePage() {
-  const [activeTab, setActiveTab] = useState<Tab>("logs");
+  const [activeTab, setActiveTab] = useSessionState<Tab>("mail-triage.tab", "logs");
 
   return (
     <>

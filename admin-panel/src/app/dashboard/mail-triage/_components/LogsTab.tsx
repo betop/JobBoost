@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { toZonedTime } from "date-fns-tz";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -21,6 +21,7 @@ import {
   ChevronUp as ChevronUpIcon,
   ChevronDown as ChevronDownIcon2,
 } from "lucide-react";
+import { useSessionState } from "@/utils/sessionState";
 
 type Period = "today" | "week" | "month" | "all" | "custom";
 type SortField = "created_at" | "gmail_email" | "profile_name" | "email_count" | "cost";
@@ -101,13 +102,13 @@ const PERIOD_OPTIONS: { label: string; value: Period }[] = [
 const PAGE_SIZE = 50;
 
 export default function LogsTab() {
-  const [period, setPeriod] = useState<Period>("month");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [search, setSearch] = useState("");
-  const [sortField, setSortField] = useState<SortField>("created_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [page, setPage] = useState(0);
+  const [period, setPeriod] = useSessionState<Period>("mail-triage.logs.period", "month");
+  const [customFrom, setCustomFrom] = useSessionState("mail-triage.logs.customFrom", "");
+  const [customTo, setCustomTo] = useSessionState("mail-triage.logs.customTo", "");
+  const [search, setSearch] = useSessionState("mail-triage.logs.search", "");
+  const [sortField, setSortField] = useSessionState<SortField>("mail-triage.logs.sortField", "created_at");
+  const [sortDir, setSortDir] = useSessionState<SortDir>("mail-triage.logs.sortDir", "desc");
+  const [page, setPage] = useSessionState("mail-triage.logs.page", 0);
 
   const dateRange = getDateRange(period, customFrom, customTo);
   const queryKey = ["mail-triage-logs", period, customFrom, customTo];

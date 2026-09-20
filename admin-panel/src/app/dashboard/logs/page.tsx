@@ -14,6 +14,7 @@ import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { readSessionState, writeSessionState } from "@/utils/sessionState";
 import {
   Activity,
   ExternalLink,
@@ -46,6 +47,15 @@ import {
 type SortField = "created_at" | "user_name" | "profile_name" | "position_title" | "company_name";
 type SortDir = "asc" | "desc";
 type LogsPeriod = "today" | "week" | "month" | "all" | "custom";
+
+type StoredLogsTableState = {
+  search?: string;
+  sortField?: SortField;
+  sortDir?: SortDir;
+  page?: number;
+  pageSize?: number;
+  filters?: LogsFilters;
+};
 
 // ── Reusable checkbox-dropdown component ──
 interface CheckboxOption { value: string; label: string; }
@@ -823,12 +833,18 @@ export default function LogsPage() {
   // Load state from URL on mount, falling back to IndexedDB-persisted filter
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
+    const stored = readSessionState<StoredLogsTableState>("logs");
     
     if (params.get("search")) setSearch(params.get("search") || "");
+    else if (stored?.search) setSearch(stored.search);
     if (params.get("sortField")) setSortField((params.get("sortField") as SortField) || "created_at");
+    else if (stored?.sortField) setSortField(stored.sortField);
     if (params.get("sortDir")) setSortDir((params.get("sortDir") as SortDir) || "desc");
+    else if (stored?.sortDir) setSortDir(stored.sortDir);
     if (params.get("page")) setPage(Number(params.get("page")) || 1);
+    else if (stored?.page) setPage(stored.page);
     if (params.get("pageSize")) setPageSize(Number(params.get("pageSize")) || 25);
+    else if (stored?.pageSize) setPageSize(stored.pageSize);
     
     const urlPeriod = params.get("statsPeriod") as LogsPeriod | null;
 
@@ -846,7 +862,11 @@ export default function LogsPage() {
     if (regeneratedParam) {
       filterObj.is_regenerated = (regeneratedParam.split(",") as any) as ("0"|"1")[];
     }
-    setFilters(filterObj);
+    if (Object.keys(filterObj).length > 0) {
+      setFilters(filterObj);
+    } else if (stored?.filters) {
+      setFilters(stored.filters);
+    }
 
     if (urlPeriod) {
       // URL has an explicit period — use it
@@ -881,6 +901,23 @@ export default function LogsPage() {
       });
     }
   }, []);
+
+  const [tableHydrated, setTableHydrated] = useState(false);
+  useEffect(() => {
+    setTableHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!tableHydrated) return;
+    writeSessionState<StoredLogsTableState>("logs", {
+      search,
+      sortField,
+      sortDir,
+      page,
+      pageSize,
+      filters,
+    });
+  }, [tableHydrated, search, sortField, sortDir, page, pageSize, filters]);
 
   // Update URL when state changes
   const updateQueryParams = (updates: Record<string, string | number | undefined>) => {

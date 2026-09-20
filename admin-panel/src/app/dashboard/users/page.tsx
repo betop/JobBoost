@@ -12,6 +12,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
 import { Edit, Trash2, UserX, UserCheck, Plus, Shield, User as UserIcon, CheckCircle, Tags, X } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
+import { useSessionState } from "@/utils/sessionState";
 
 // Tabs only shown to super_admin
 const SUPER_ADMIN_TABS: { label: string; value: UserType | "all" }[] = [
@@ -32,7 +33,7 @@ export default function UsersPage() {
   const admin = useAuthStore((state) => state.admin);
   const isSuperAdmin = admin?.type === "super_admin";
 
-  const [activeTab, setActiveTab] = useState<UserType | "all">("bidder");
+  const [activeTab, setActiveTab] = useSessionState<UserType | "all">("users.tab", "bidder");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
   const [activateId, setActivateId] = useState<string | null>(null);
@@ -275,6 +276,8 @@ export default function UsersPage() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <DataTable
           key={activeTab}
+          persistKey={`users:${activeTab}`}
+          persistToUrl={false}
           data={users}
           columns={columns}
           searchable

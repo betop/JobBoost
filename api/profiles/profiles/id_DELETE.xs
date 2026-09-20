@@ -156,51 +156,20 @@ query "profiles/{id}" verb=DELETE {
       }
     }
   
-    db.query education {
+    db.bulk.delete education {
       where = $db.education.profile_id == $p.id
-      return = {type: "list"}
-    } as $edu_list
-  
-    foreach ($edu_list) {
-      each as $e {
-        db.del education {
-          field_name = "id"
-          field_value = $e.id
-        }
-      }
-    }
-  
-    db.query work_experience {
-      where = $db.work_experience.profile_id == $p.id
-      return = {type: "list"}
-    } as $work_list
-  
-    foreach ($work_list) {
-      each as $w {
-        db.del work_experience {
-          field_name = "id"
-          field_value = $w.id
-        }
-      }
-    }
-  
-    // generation_log.profile_id is an FK to profile — null it out so history
-    // is preserved but the profile row can be deleted.
-    db.query generation_log {
-      where = $db.generation_log.profile_id == $p.id
-      return = {type: "list"}
-    } as $log_list
+    } as $_deleted_edu
 
-    foreach ($log_list) {
-      each as $log {
-        db.patch generation_log {
-          field_name = "id"
-          field_value = $log.id
-          data = {profile_id: null}
-        } as $_updated_log
-      }
-    }
-  
+    db.bulk.delete work_experience {
+      where = $db.work_experience.profile_id == $p.id
+    } as $_deleted_work
+
+    // generation_log.profile_id is a non-nullable UUID FK. Patching it to null
+    // becomes "" and raises 22P02. Delete the logs so the profile row can go.
+    db.bulk.delete generation_log {
+      where = $db.generation_log.profile_id == $p.id
+    } as $_deleted_logs
+
     db.del profile {
       field_name = "id"
       field_value = $p.id

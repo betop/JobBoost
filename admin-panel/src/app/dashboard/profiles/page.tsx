@@ -13,6 +13,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import { labelForCode } from "@/components/JobCategoryInput";
+import { useSessionState } from "@/utils/sessionState";
 
 export default function ProfilesPage() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function ProfilesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [approveId, setApproveId] = useState<{ id: string; approve: boolean } | null>(null);
   const [categoryModal, setCategoryModal] = useState<{ name: string; categories: string[] } | null>(null);
-  const [activeTab, setActiveTab] = useState<"pending" | "approved">("approved");
+  const [activeTab, setActiveTab] = useSessionState<"pending" | "approved">("profiles.tab", "approved");
 
   const queryClient = useQueryClient();
 
@@ -288,6 +289,8 @@ export default function ProfilesPage() {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <DataTable
           key={activeTab}
+          persistKey={`profiles:${activeTab}`}
+          persistToUrl={false}
           data={filteredProfiles}
           columns={columns}
           searchable
