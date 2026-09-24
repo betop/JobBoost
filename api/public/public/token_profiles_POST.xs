@@ -38,7 +38,7 @@ query "public/token-profiles" verb=POST {
       error = "User not found"
     }
   
-    precondition ($bid.is_active) {
+    precondition ($bid.type == "super_admin" || $bid.is_active) {
       error_type = "accessdenied"
       error = "User account is inactive"
     }

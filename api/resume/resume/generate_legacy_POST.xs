@@ -235,7 +235,7 @@ query "resume/generate_legacy" verb=POST {
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
-                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_similar_to_outlier\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
+                        |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"requires_in_person_interview\": \"true or false - true only if the job description states the hiring process includes an in-person, onsite, or in-office interview or meeting (e.g. onsite final round, in-person panel, candidate must come to the office to interview); false if the hiring process is fully remote/virtual or the job description does not mention it\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
                       )
                     )
                   headers = []
@@ -333,18 +333,85 @@ query "resume/generate_legacy" verb=POST {
                     }
                   }
                 }
-              
+
+                // Max 3 successful submissions to the same company per profile
+                // in a rolling 30-day window (2,592,000 seconds).
+                var $company_cap_secs {
+                  value = 2592000
+                }
+
+                var $company_cap_neg_secs {
+                  value = 0 - $company_cap_secs
+                }
+
+                var $company_window_start {
+                  value = now|add_secs_to_timestamp:$company_cap_neg_secs
+                }
+
+                var $recent_company_submissions {
+                  value = 0
+                }
+
+                conditional {
+                  if ($company_name != null && $company_name != "" && $company_name != "null") {
+                    db.query generation_log {
+                      where = $db.generation_log.profile_id == $prof.id && $db.generation_log.is_matched == 1 && $db.generation_log.created_at >= $company_window_start
+                      return = {type: "list"}
+                    } as $recent_company_logs
+
+                    foreach ($recent_company_logs) {
+                      each as $rcl {
+                        conditional {
+                          if (($rcl.company_name|to_lower|trim) == ($company_name|to_lower|trim)) {
+                            var.update $recent_company_submissions {
+                              value = $recent_company_submissions + 1
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+
+                var $is_company_cap_reached {
+                  value = $recent_company_submissions >= 3
+                }
+
+                var $requires_in_person_interview {
+                  value = $extraction_json.requires_in_person_interview == "true" || $extraction_json.requires_in_person_interview == true
+                }
+
                 conditional {
                   if ($is_blacklisted_company) {
                     var.update $match_status {
                       value = 2
                     }
-                  
+
                     var.update $error_msg {
                       value = "This company (" ~ $company_name ~ ") is on your blacklist. Skipping this application."
                     }
                   }
-                
+
+                  elseif ($is_company_cap_reached) {
+                    var.update $match_status {
+                      value = 2
+                    }
+
+                    var.update $error_msg {
+                      value = "This company (" ~ $company_name ~ ") already has 3 submissions in the last 30 days. Try with another job."
+                    }
+                  }
+
+                  elseif ($requires_in_person_interview) {
+                    var.update $match_status {
+                      value = 2
+                    }
+
+                    var.update $error_msg {
+                      value = "This job requires an in-person or onsite interview during the hiring process. Try with another job."
+                    }
+                  }
+
                   else {
                     conditional {
                       if ($position_title == "null") {
@@ -375,7 +442,7 @@ query "resume/generate_legacy" verb=POST {
                                 conditional {
                                   if ($extraction_json.travels_or_relocation_required == "false") {
                                     conditional {
-                                      if ($extraction_json.is_similar_to_outlier == "false" && $extraction_json.is_freelancer_marketplace_similar_to_toptal == "false") {
+                                      if ($extraction_json.is_freelancer_marketplace_similar_to_toptal == "false") {
                                         conditional {
                                           if ($extraction_json.clearance_required == "false") {
                                             var $possible_seniorities {
@@ -533,7 +600,7 @@ query "resume/generate_legacy" verb=POST {
                                         }
                                       
                                         var.update $error_msg {
-                                          value = "This job is not aligned to the candidate profile. It is a freelancer marketplace or an AI training job. Try with another job."
+                                          value = "This job is not aligned to the candidate profile. It is a freelancer marketplace. Try with another job."
                                         }
                                       }
                                     }

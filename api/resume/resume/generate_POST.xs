@@ -492,6 +492,49 @@ query "resume/generate" verb=POST {
                       }
                     }
 
+                    // Max 3 successful submissions to the same company per profile
+                    // in a rolling 30-day window (2,592,000 seconds).
+                    var $company_cap_secs {
+                      value = 2592000
+                    }
+
+                    var $company_cap_neg_secs {
+                      value = 0 - $company_cap_secs
+                    }
+
+                    var $company_window_start {
+                      value = now|add_secs_to_timestamp:$company_cap_neg_secs
+                    }
+
+                    var $recent_company_submissions {
+                      value = 0
+                    }
+
+                    conditional {
+                      if ($company_name != null && $company_name != "" && $company_name != "null") {
+                        db.query generation_log {
+                          where = $db.generation_log.profile_id == $prof.id && $db.generation_log.is_matched == 1 && $db.generation_log.created_at >= $company_window_start
+                          return = {type: "list"}
+                        } as $recent_company_logs
+
+                        foreach ($recent_company_logs) {
+                          each as $rcl {
+                            conditional {
+                              if (($rcl.company_name|to_lower|trim) == ($company_name|to_lower|trim)) {
+                                var.update $recent_company_submissions {
+                                  value = $recent_company_submissions + 1
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+
+                    var $is_company_cap_reached {
+                      value = $recent_company_submissions >= 3
+                    }
+
                     conditional {
                       if ($is_blacklisted_company) {
                         var.update $match_status {
@@ -500,6 +543,16 @@ query "resume/generate" verb=POST {
 
                         var.update $error_msg {
                           value = "This company (" ~ $company_name ~ ") is on your blacklist. Skipping this application."
+                        }
+                      }
+
+                      elseif ($is_company_cap_reached) {
+                        var.update $match_status {
+                          value = 2
+                        }
+
+                        var.update $error_msg {
+                          value = "This company (" ~ $company_name ~ ") already has 3 submissions in the last 30 days. Try with another job."
                         }
                       }
 
@@ -1204,7 +1257,7 @@ Metrics:
 - Do NOT restate the same accomplishment in more than one place in the resume. This applies across career_breakdowns, portfolio_projects, and leadership_enterpreneurial_experience — each real accomplishment appears once with one consistent set of facts.
 
 Bullet counts:
-- The current/most recent position MUST have more bullets than every former position (5 bullets is a good target).
+- The current/most recent position MUST have more bullets than every former position.
 - EVERY former (non-current) position that is NOT an internship MUST have EXACTLY 3 bullets — uniformly, with no exceptions and no gradual reduction as positions get older.
 - Internship positions MAY have fewer than 3 bullets.
 - Before returning the JSON, go through career_breakdowns one entry at a time and count bullets. If any former non-internship entry has fewer than 3, add bullets until it has exactly 3.
