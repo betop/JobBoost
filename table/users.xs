@@ -25,6 +25,7 @@ table users {
     }
   
     text assigned_ip?
+    decimal credit_balance?=0
   }
 
   index = [

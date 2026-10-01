@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Users,
@@ -18,10 +19,12 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Ban,
+  Wallet,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import { authService } from "@/services/authService";
+import { creditsService } from "@/services/creditsService";
 import { cn } from "@/utils/cn";
 
 const navigation = [
@@ -31,6 +34,7 @@ const navigation = [
   { name: "Blacklist", href: "/dashboard/blacklist", icon: Ban, superOnly: false },
   { name: "Users", href: "/dashboard/users", icon: UserCheck, superOnly: false },
   { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: false },
+  { name: "Credits", href: "/dashboard/credits", icon: Wallet, superOnly: false, adminOnly: true },
   { name: "API Costs", href: "/dashboard/pricing", icon: BarChart2, superOnly: true },
   { name: "Rules", href: "/dashboard/rules", icon: FileText, superOnly: true },
   { name: "Extensions", href: "/dashboard/versions", icon: Package, superOnly: true },
@@ -53,7 +57,23 @@ export default function Sidebar() {
   };
 
   const isSuperAdmin = admin?.type === "super_admin";
-  const visibleNav = navigation.filter((item) => !item.superOnly || isSuperAdmin);
+  const visibleNav = navigation.filter((item) => {
+    if (item.superOnly && !isSuperAdmin) return false;
+    if ((item as { adminOnly?: boolean }).adminOnly && !isSuperAdmin && admin?.type !== "admin") return false;
+    return true;
+  });
+
+  const { data: balanceData } = useQuery({
+    queryKey: ["sidebar-credits-balance"],
+    queryFn: () => creditsService.getBalance(),
+    enabled: admin?.type === "admin",
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
+  const balance = balanceData?.credit_balance;
+  const isLowBalance = typeof balance === "number" && balance < 10;
+  const isNegativeBalance = typeof balance === "number" && balance < 0;
 
   return (
     <>
@@ -117,6 +137,7 @@ export default function Sidebar() {
                 item.href === "/dashboard"
                   ? pathname === "/dashboard"
                   : pathname === item.href || pathname.startsWith(item.href + "/");
+              const showBalanceBadge = item.href === "/dashboard/credits" && admin?.type === "admin" && typeof balance === "number";
 
               return (
                 <Link
@@ -131,7 +152,22 @@ export default function Sidebar() {
                   )}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
-                  <span className={cn("text-sm font-medium", sidebarCollapsed && "lg:hidden")}>{item.name}</span>
+                  <span className={cn("text-sm font-medium flex-1", sidebarCollapsed && "lg:hidden")}>{item.name}</span>
+                  {showBalanceBadge && (
+                    <span
+                      className={cn(
+                        "text-xs font-semibold px-2 py-0.5 rounded-full",
+                        sidebarCollapsed && "lg:hidden",
+                        isNegativeBalance
+                          ? "bg-red-500 text-white"
+                          : isLowBalance
+                          ? "bg-yellow-500 text-gray-900"
+                          : "bg-gray-700 text-gray-200"
+                      )}
+                    >
+                      ${balance!.toFixed(0)}
+                    </span>
+                  )}
                 </Link>
               );
             })}

@@ -40,6 +40,17 @@ query "resume/regenerate" verb=POST {
       error = "Profile is not approved. Please contact your admin."
     }
   
+    // Pay-as-you-go credit check — super_admins are exempt; bidders are billed
+    // through the admin that created them
+    function.run "credits/check_sufficient_balance" {
+      input = {user_id: $auth.id}
+    } as $billing_check
+  
+    precondition (!$billing_check.is_billable || $billing_check.has_sufficient_balance) {
+      error_type = "accessdenied"
+      error = "Insufficient credit balance. Please ask your admin to deposit USDT to continue generating."
+    }
+  
     var $input_tokens {
       value = 0
     }
@@ -652,6 +663,25 @@ Remember today's year is 2026.
         content_id           : $resume_content_id
       }
     } as $log
+
+    // Charge the billing admin for this AI usage (1.5x raw provider cost)
+    conditional {
+      if ($billing_check.is_billable) {
+        var $gen_raw_cost {
+          value = ((($input_tokens|first_notnull:0) / 1000000) * 0.8) + ((($output_tokens|first_notnull:0) / 1000000) * 2.4) + ((($cache_creation_input_tokens|first_notnull:0) / 1000000) * 1.0) + ((($cache_read_input_tokens|first_notnull:0) / 1000000) * 0.08)
+        }
+
+        function.run "credits/credit_charge_usage" {
+          input = {
+            admin_id        : $billing_check.billing_admin_id
+            raw_cost_usd     : $gen_raw_cost
+            related_log_table: "generation_log"
+            related_log_id   : $log.id
+            allow_negative    : true
+          }
+        } as $_
+      }
+    }
   }
 
   response = {

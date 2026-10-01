@@ -45,7 +45,18 @@ query "resume/chat" verb=POST {
       error = "User not found or inactive"
     }
   
-    // ── Fetch log context (JD + resume content) if log_id provided ────────
+    // Pay-as-you-go credit check — super_admins are exempt; bidders are billed
+    // through the admin that created them
+    function.run "credits/check_sufficient_balance" {
+      input = {user_id: $user.id}
+    } as $billing_check
+  
+    precondition (!$billing_check.is_billable || $billing_check.has_sufficient_balance) {
+      error_type = "accessdenied"
+      error = "Insufficient credit balance. Please ask your admin to deposit USDT to continue using the assistant."
+    }
+  
+    // ── Fetch log context (JD + resume content) if log_id provided ────────────────
     var $context_block {
       value = ""
     }
@@ -377,6 +388,24 @@ No explanations needed, just answer the question based on the provided informati
             cache_read_input_tokens     : $cache_read_input_tokens
           }
         } as $chat_record
+      }
+    }
+
+    // Charge the billing admin for this AI usage (1.5x raw provider cost)
+    conditional {
+      if ($billing_check.is_billable) {
+        var $chat_raw_cost {
+          value = ((($input_tokens|first_notnull:0) / 1000000) * 0.8) + ((($output_tokens|first_notnull:0) / 1000000) * 2.4) + ((($cache_creation_input_tokens|first_notnull:0) / 1000000) * 1.0) + ((($cache_read_input_tokens|first_notnull:0) / 1000000) * 0.08)
+        }
+
+        function.run "credits/credit_charge_usage" {
+          input = {
+            admin_id        : $billing_check.billing_admin_id
+            raw_cost_usd     : $chat_raw_cost
+            related_log_table: "chat_log"
+            allow_negative    : true
+          }
+        } as $_
       }
     }
   }

@@ -2,11 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { dashboardService } from "@/services/dashboardService";
+import { creditsService } from "@/services/creditsService";
 import * as logCache from "@/services/logCache";
 import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
-import { Users, UserCheck, Key, FileText, Activity, Cpu } from "lucide-react";
+import { Users, UserCheck, Key, FileText, Activity, Cpu, AlertTriangle, Wallet } from "lucide-react";
 import Link from "next/link";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { useAuthStore } from "@/store/authStore";
 
 /** Returns YYYY-MM-DD 30 days ago in local time */
 function thirtyDaysAgo(): string {
@@ -16,9 +18,18 @@ function thirtyDaysAgo(): string {
 }
 
 export default function DashboardPage() {
+  const admin = useAuthStore((state) => state.admin);
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: dashboardService.getStats,
+  });
+
+  const { data: balanceData } = useQuery({
+    queryKey: ["dashboard-credits-balance"],
+    queryFn: () => creditsService.getBalance(),
+    enabled: admin?.type === "admin",
+    staleTime: 30_000,
   });
 
   const { data: logStats } = useQuery({
@@ -80,6 +91,21 @@ export default function DashboardPage() {
     },
   ];
 
+  if (admin?.type === "admin") {
+    widgets.push({
+      title: "Credit Balance",
+      value: `$${(balanceData?.credit_balance ?? 0).toFixed(2)}`,
+      icon: Wallet,
+      color:
+        (balanceData?.credit_balance ?? 0) < 0
+          ? "bg-red-500"
+          : (balanceData?.credit_balance ?? 0) < 10
+          ? "bg-yellow-500"
+          : "bg-emerald-500",
+      href: "/dashboard/credits",
+    });
+  }
+
   return (
     <div>
       <div className="mb-8">
@@ -88,6 +114,38 @@ export default function DashboardPage() {
           Welcome to HHQ
         </p>
       </div>
+
+      {admin?.type === "admin" && typeof balanceData?.credit_balance === "number" && balanceData.credit_balance < 10 && (
+        <Link
+          href="/dashboard/credits"
+          className={`mb-6 flex items-center gap-3 rounded-lg border p-4 transition-colors ${
+            balanceData.credit_balance < 0
+              ? "bg-red-50 border-red-200 hover:bg-red-100"
+              : "bg-yellow-50 border-yellow-200 hover:bg-yellow-100"
+          }`}
+        >
+          <AlertTriangle
+            className={`w-5 h-5 flex-shrink-0 ${
+              balanceData.credit_balance < 0 ? "text-red-600" : "text-yellow-600"
+            }`}
+          />
+          <div className="flex-1">
+            <p
+              className={`text-sm font-medium ${
+                balanceData.credit_balance < 0 ? "text-red-800" : "text-yellow-800"
+              }`}
+            >
+              {balanceData.credit_balance < 0
+                ? `Your credit balance is negative ($${balanceData.credit_balance.toFixed(2)}). Resume generation will be blocked until you deposit.`
+                : `Low credit balance ($${balanceData.credit_balance.toFixed(2)}). Deposit USDT to avoid interruptions.`}
+            </p>
+          </div>
+          <span className="flex items-center gap-1 text-sm font-semibold text-primary-600">
+            <Wallet className="w-4 h-4" />
+            Deposit now →
+          </span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         {widgets.map((widget) => {
