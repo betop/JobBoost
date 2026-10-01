@@ -21,6 +21,15 @@ const TEMPLATE_META_MAP: Record<number, { name: string; accent: string; dark: st
   9: { name: "Rose Pink", accent: "#ec4899", dark: "#831843", medium: "#f472b6" },
   10: { name: "Slate Professional", accent: "#64748b", dark: "#1e293b", medium: "#94a3b8" },
   11: { name: "STAR Method Plain", accent: "#000000", dark: "#000000", medium: "#000000" },
+  12: { name: "Forest Executive", accent: "#16a34a", dark: "#14532d", medium: "#4ade80" },
+  13: { name: "Navy Command", accent: "#1e40af", dark: "#1e3a8a", medium: "#3b82f6" },
+  14: { name: "Charcoal Tech", accent: "#334155", dark: "#0f172a", medium: "#64748b" },
+  15: { name: "Copper Editorial", accent: "#9a3412", dark: "#431407", medium: "#c2410c" },
+  16: { name: "Ocean Split", accent: "#0891b2", dark: "#155e75", medium: "#22d3ee" },
+  17: { name: "Graphite Compact", accent: "#475569", dark: "#1e293b", medium: "#94a3b8" },
+  18: { name: "Midnight Gold", accent: "#d4a017", dark: "#111827", medium: "#f59e0b" },
+  19: { name: "Violet Frame", accent: "#8b5cf6", dark: "#312e81", medium: "#a78bfa" },
+  20: { name: "Cobalt Edge", accent: "#2563eb", dark: "#1e3a8a", medium: "#60a5fa" },
 };
 
 function TemplateMiniPreview({ templateId }: { templateId: number }) {

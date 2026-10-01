@@ -573,6 +573,15 @@ class PDFGenerator {
       9:  { accent: [236, 72,  153], dark: [131, 24,  67],  medium: [219, 39,  119], gray: [156,163,175], rule: [251,207,232], sidebar: null },
       10: { accent: [100, 116, 139], dark: [15,  23,  42],  medium: [71,  85,  105], gray: [148,163,184], rule: [203,213,225], sidebar: null },
       11: { accent: [0,   0,   0],   dark: [0,   0,   0],   medium: [0,   0,   0],   gray: [82, 82, 91],  rule: [0,  0,  0],   sidebar: null },
+      12: { accent: [22,  163, 74],  dark: [20,  83,  45],  medium: [34,  197, 94],  gray: [107,114,128], rule: [187,247,208], sidebar: null },
+      13: { accent: [30,  64,  175], dark: [30,  58,  138], medium: [59,  130,246],  gray: [100,116,139], rule: [191,219,254], sidebar: null },
+      14: { accent: [51,  65,  85],  dark: [15,  23,  42],  medium: [71,  85, 105],  gray: [100,116,139], rule: [203,213,225], sidebar: null },
+      15: { accent: [154, 52,  18],  dark: [67,  20,  7],   medium: [194, 65,  12],  gray: [120,113,108], rule: [254,215,170], sidebar: null },
+      16: { accent: [8,   145, 178], dark: [21,  94,  117], medium: [6,   182,212],  gray: [100,116,139], rule: [165,243,252], sidebar: null },
+      17: { accent: [71,  85,  105], dark: [30,  41,  59],  medium: [100,116,139],  gray: [100,116,139], rule: [226,232,240], sidebar: null },
+      18: { accent: [212, 160, 23],  dark: [17,  24,  39],  medium: [245,158,11],   gray: [120,113,108], rule: [253,230,138], sidebar: null },
+      19: { accent: [139, 92,  246], dark: [49,  46,  129], medium: [167,139,250],  gray: [107,114,128], rule: [221,214,254], sidebar: null },
+      20: { accent: [37,  99,  235], dark: [30,  58,  138], medium: [96, 165,250],  gray: [100,116,139], rule: [191,219,254], sidebar: null },
     };
     const t = themes[tid] || themes[1];
     this.C = {
@@ -968,6 +977,305 @@ class PDFGenerator {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 12 — Forest Executive (split header: name left, contact right)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_12(doc, r) {
+    const m = this.marginH;
+    const nameY = this.currentY;
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(...this.C.dark);
+    doc.text((r.name || "").toUpperCase(), m, nameY);
+    this.currentY += 8;
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(11); doc.setTextColor(...this.C.accent);
+      doc.text(r.title, m, this.currentY); this.currentY += 5;
+    }
+    const contactY = nameY;
+    const savedY = this.currentY;
+    this.currentY = contactY;
+    this._renderContactLine(doc, r, 8, false, { alignRight: true });
+    this.currentY = Math.max(savedY, this.currentY + 1);
+    doc.setDrawColor(...this.C.accent); doc.setLineWidth(1.1);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 6;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(9); doc.setTextColor(...this.C.accent);
+      doc.text(title.toUpperCase(), m, this.currentY);
+      this.currentY += 2;
+      doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.7);
+      doc.line(m, this.currentY, m + 22, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 13 — Navy Command (thick top bar, strong navy rules)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_13(doc, r) {
+    const m = this.marginH;
+    doc.setFillColor(...this.C.dark);
+    doc.rect(0, 0, this.pageWidth, 5, "F");
+    this.currentY = 16;
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(23); doc.setTextColor(...this.C.dark);
+    doc.text((r.name || "").toUpperCase(), m, this.currentY); this.currentY += 8;
+    if (r.title) {
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(11); doc.setTextColor(...this.C.accent);
+      doc.text(r.title.toUpperCase(), m, this.currentY); this.currentY += 6;
+    }
+    this._renderContactLine(doc, r, 9);
+    this.currentY += 1;
+    doc.setDrawColor(...this.C.dark); doc.setLineWidth(1.4);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 1.4;
+    doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.4);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 6;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(9); doc.setTextColor(...this.C.dark);
+      doc.text(title.toUpperCase(), m, this.currentY);
+      this.currentY += 1.8;
+      doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.6);
+      doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 14 — Charcoal Tech (boxed filled section headers)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_14(doc, r) {
+    const m = this.marginH;
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(20); doc.setTextColor(...this.C.dark);
+    doc.text((r.name || "").toUpperCase(), m, this.currentY); this.currentY += 7.5;
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10.5); doc.setTextColor(...this.C.medium);
+      doc.text(r.title, m, this.currentY); this.currentY += 5.5;
+    }
+    this._renderContactLine(doc, r, 8.5);
+    this.currentY += 2;
+    doc.setFillColor(...this.C.dark);
+    doc.rect(m, this.currentY, this.pageWidth - m * 2, 1.2, "F");
+    this.currentY += 7;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      const label = title.toUpperCase();
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(8);
+      const tw = doc.getTextWidth(label) + 6;
+      doc.setFillColor(...this.C.dark);
+      doc.rect(m, this.currentY - 3.6, tw, 5.8, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.text(label, m + 3, this.currentY);
+      this.currentY += this.SP.afterRule + 1;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 15 — Copper Editorial (right-aligned header, serif feel)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_15(doc, r) {
+    const m = this.marginH;
+    const name = (r.name || "").toUpperCase();
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(...this.C.dark);
+    const nameW = doc.getTextWidth(name);
+    doc.text(name, this.pageWidth - m - nameW, this.currentY);
+    this.currentY += 8;
+    if (r.title) {
+      doc.setFont(this._activeFont, "italic"); doc.setFontSize(11); doc.setTextColor(...this.C.accent);
+      const tW = doc.getTextWidth(r.title);
+      doc.text(r.title, this.pageWidth - m - tW, this.currentY); this.currentY += 5.5;
+    }
+    this._renderContactLine(doc, r, 8.5, false, { alignRight: true });
+    this.currentY += 1;
+    doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.35);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 6;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(10); doc.setTextColor(...this.C.accent);
+      doc.text(title, m, this.currentY);
+      this.currentY += 1.6;
+      doc.setDrawColor(...this.C.rule); doc.setLineWidth(0.25);
+      doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 16 — Ocean Split (two-tone header band)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_16(doc, r) {
+    const m = this.marginH;
+    const hh = r.title ? 32 : 26;
+    const mid = this.pageWidth * 0.62;
+    doc.setFillColor(...this.C.dark);
+    doc.rect(0, 0, mid, hh, "F");
+    doc.setFillColor(...this.C.accent);
+    doc.rect(mid, 0, this.pageWidth - mid, hh, "F");
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(20); doc.setTextColor(255, 255, 255);
+    doc.text((r.name || "").toUpperCase(), m, 14);
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10); doc.setTextColor(255, 255, 255);
+      doc.text(r.title, m, 22);
+    }
+    this.currentY = hh + 7;
+    this._renderContactLine(doc, r, 8.5);
+    this.currentY += 2;
+    doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.5);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 6;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(9); doc.setTextColor(...this.C.dark);
+      doc.text(title.toUpperCase(), m, this.currentY);
+      this.currentY += 1.8;
+      doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.5);
+      doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 17 — Graphite Compact (small-caps name, short graphite rules)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_17(doc, r) {
+    const m = this.marginH;
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(16); doc.setTextColor(...this.C.dark);
+    doc.text((r.name || "").toUpperCase(), m, this.currentY); this.currentY += 6;
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(9.5); doc.setTextColor(...this.C.medium);
+      doc.text(r.title, m, this.currentY); this.currentY += 5;
+    }
+    this._renderContactLine(doc, r, 8);
+    this.currentY += 1.5;
+    doc.setDrawColor(...this.C.medium); doc.setLineWidth(0.3);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 5;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection - 1;
+      this._checkPageBreak(d, 12);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(8); doc.setTextColor(...this.C.medium);
+      doc.text(title.toUpperCase(), m, this.currentY);
+      this.currentY += 1.5;
+      doc.setDrawColor(...this.C.rule); doc.setLineWidth(0.2);
+      doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 18 — Midnight Gold (dark header with warm accent)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_18(doc, r) {
+    const m = this.marginH;
+    const hh = r.title ? 31 : 25;
+    doc.setFillColor(...this.C.dark);
+    doc.rect(0, 0, this.pageWidth, hh, "F");
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(255, 255, 255);
+    doc.text((r.name || "").toUpperCase(), m, 14);
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10.5); doc.setTextColor(...this.C.accent);
+      doc.text(r.title, m, 22);
+    }
+    this.currentY = hh + 6;
+    this._renderContactLine(doc, r, 8.5);
+    this.currentY += 2;
+    doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.7);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 6;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(9); doc.setTextColor(...this.C.accent);
+      doc.text(title.toUpperCase(), m, this.currentY);
+      this.currentY += 1.6;
+      doc.setDrawColor(...this.C.rule); doc.setLineWidth(0.3);
+      doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 19 — Violet Frame (centered header with frame lines)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_19(doc, r) {
+    const m = this.marginH;
+    doc.setDrawColor(...this.C.accent); doc.setLineWidth(0.6);
+    doc.rect(m, this.currentY - 5, this.pageWidth - m * 2, 22);
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(20); doc.setTextColor(...this.C.dark);
+    const name = (r.name || "").toUpperCase();
+    doc.text(name, (this.pageWidth - doc.getTextWidth(name)) / 2, this.currentY + 3);
+    this.currentY += 9;
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10); doc.setTextColor(...this.C.accent);
+      doc.text(r.title, (this.pageWidth - doc.getTextWidth(r.title)) / 2, this.currentY + 1);
+      this.currentY += 5;
+    }
+    this._renderContactLine(doc, r, 8.5, true);
+    this.currentY += 4;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(9); doc.setTextColor(...this.C.accent);
+      const tw = doc.getTextWidth(title.toUpperCase());
+      const tx = (this.pageWidth - tw) / 2;
+      doc.text(title.toUpperCase(), tx, this.currentY);
+      this.currentY += 1.8;
+      doc.setDrawColor(...this.C.rule); doc.setLineWidth(0.25);
+      doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Template 20 — Cobalt Edge (sharp markers + strong top bar)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _renderTemplate_20(doc, r) {
+    const m = this.marginH;
+    doc.setFillColor(...this.C.dark);
+    doc.rect(0, 0, this.pageWidth, 7, "F");
+    this.currentY = 17;
+    doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(...this.C.dark);
+    doc.text((r.name || "").toUpperCase(), m, this.currentY);
+    this.currentY += 8;
+    if (r.title) {
+      doc.setFont(this._activeFont, "normal"); doc.setFontSize(10.5); doc.setTextColor(...this.C.accent);
+      doc.text(r.title, m, this.currentY);
+      this.currentY += 5.5;
+    }
+    this._renderContactLine(doc, r, 8.5);
+    this.currentY += 2;
+    doc.setDrawColor(...this.C.rule); doc.setLineWidth(0.4);
+    doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+    this.currentY += 6;
+    this._renderCommonSections(doc, r, (d, title) => {
+      this.currentY += this.SP.beforeSection;
+      this._checkPageBreak(d, 14);
+      doc.setFillColor(...this.C.accent);
+      doc.triangle(m, this.currentY - 3.2, m + 2.8, this.currentY - 1.6, m, this.currentY, "F");
+      doc.setFont(this._activeFont, "bold"); doc.setFontSize(9); doc.setTextColor(...this.C.dark);
+      doc.text(title.toUpperCase(), m + 5, this.currentY);
+      this.currentY += 1.8;
+      doc.setDrawColor(...this.C.rule); doc.setLineWidth(0.25);
+      doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
+      this.currentY += this.SP.afterRule;
+    });
+  }
+
   //  Shared section renderer used by all templates
   //  sectionHeaderFn(doc, title) — called instead of _sectionHeader
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1100,6 +1408,9 @@ class PDFGenerator {
     const sep = " \u00B7 ";
     const totalW = contactParts.reduce((acc, p, i) => acc + doc.getTextWidth(p.text) + (i > 0 ? doc.getTextWidth(sep) : 0), 0);
     let cx = centered ? (this.pageWidth - totalW) / 2 : m;
+    if (opts && opts.alignRight) {
+      cx = this.pageWidth - m - totalW;
+    }
     contactParts.forEach((part, i) => {
       if (i > 0) { doc.text(sep, cx, this.currentY); cx += doc.getTextWidth(sep); }
       if (part.url) {
@@ -1715,6 +2026,7 @@ class PDFGenerator {
     }
   }
 }
+
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = PDFGenerator;

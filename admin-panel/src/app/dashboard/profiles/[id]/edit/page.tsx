@@ -6,7 +6,9 @@ import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { profileService, type Profile } from "@/services/profileService";
+import { templateVisibilityService } from "@/services/templateVisibilityService";
 import { useUIStore } from "@/store/uiStore";
+import { useAuthStore } from "@/store/authStore";
 import Input from "@/components/Input";
 import MultiSelect from "@/components/MultiSelect";
 import Button from "@/components/Button";
@@ -52,7 +54,7 @@ const profileSchema = z.object({
   linkedin: z.string().url("Invalid URL").optional().or(z.literal("")),
   github: z.string().url("Invalid URL").optional().or(z.literal("")),
   job_category: z.string().optional(),
-  resume_template: z.number().int().min(1).max(11).optional().default(11),
+  resume_template: z.number().int().min(1).max(20).optional().default(11),
   education: z.array(educationSchema).min(1, "At least one education entry is required"),
   work_experience: z.array(workExperienceSchema).min(1, "At least one work experience is required"),
   include_key_projects: z.boolean().optional().default(true),
@@ -73,6 +75,16 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
+  const admin = useAuthStore((state) => state.admin);
+  const isSuperAdmin = admin?.type === "super_admin";
+
+  const { data: templateVisibility } = useQuery({
+    queryKey: ["template-visibility"],
+    queryFn: templateVisibilityService.get,
+    staleTime: 60_000,
+  });
+
+  const allowedTemplateIds = isSuperAdmin ? undefined : templateVisibility?.admin_visible_template_ids;
 
   const handleBack = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -298,7 +310,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
           name="resume_template"
           control={control}
           render={({ field }) => (
-            <TemplatePicker value={field.value ?? 1} onChange={field.onChange} />
+            <TemplatePicker value={field.value ?? 1} onChange={field.onChange} allowedTemplateIds={allowedTemplateIds} />
           )}
         />
       </div>

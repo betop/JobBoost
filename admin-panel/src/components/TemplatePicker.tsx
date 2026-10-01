@@ -15,6 +15,10 @@ interface TemplateInfo {
   leftSidebar?: boolean; // template 8
   centered?: boolean;  // template 3
   plain?: boolean;     // template 11
+  splitHeader?: boolean;
+  topBar?: boolean;
+  rightAlign?: boolean;
+  twoTone?: boolean;
 }
 
 const TEMPLATES: TemplateInfo[] = [
@@ -29,11 +33,21 @@ const TEMPLATES: TemplateInfo[] = [
   { id: 9,  name: "Rose Pink",              style: "Full-width accent header",     accent: "#ec4899", dark: "#831843", medium: "#f472b6", headerBand: true },
   { id: 10, name: "Slate Professional",     style: "Triple-dot separator",         accent: "#64748b", dark: "#1e293b", medium: "#94a3b8" },
   { id: 11, name: "STAR Method Plain",      style: "Plain serif, underlined headers, no summary", accent: "#000000", dark: "#000000", medium: "#000000", centered: true, plain: true },
+  { id: 12, name: "Forest Executive",       style: "Split header, short rules",    accent: "#16a34a", dark: "#14532d", medium: "#4ade80", splitHeader: true },
+  { id: 13, name: "Navy Command",           style: "Thick top bar, navy rules",    accent: "#1e40af", dark: "#1e3a8a", medium: "#3b82f6", topBar: true },
+  { id: 14, name: "Charcoal Tech",          style: "Boxed section headers",        accent: "#334155", dark: "#0f172a", medium: "#64748b" },
+  { id: 15, name: "Copper Editorial",       style: "Right-aligned serif header",   accent: "#9a3412", dark: "#431407", medium: "#c2410c", rightAlign: true },
+  { id: 16, name: "Ocean Split",            style: "Two-tone header band",         accent: "#0891b2", dark: "#155e75", medium: "#22d3ee", twoTone: true },
+  { id: 17, name: "Graphite Compact",       style: "Small-caps, tight spacing",    accent: "#475569", dark: "#1e293b", medium: "#94a3b8" },
+  { id: 18, name: "Midnight Gold",          style: "Dark band with gold accents",   accent: "#d4a017", dark: "#111827", medium: "#f59e0b", headerBand: true },
+  { id: 19, name: "Violet Frame",           style: "Framed header and centered rules", accent: "#8b5cf6", dark: "#312e81", medium: "#a78bfa", centered: true },
+  { id: 20, name: "Cobalt Edge",            style: "Top bar + sharp section markers", accent: "#2563eb", dark: "#1e3a8a", medium: "#60a5fa", topBar: true },
 ];
 
 interface TemplatePickerProps {
   value?: number;
   onChange: (templateId: number) => void;
+  allowedTemplateIds?: number[];
 }
 
 function TemplatePreview({ tpl }: { tpl: TemplateInfo }) {
@@ -72,6 +86,44 @@ function TemplatePreview({ tpl }: { tpl: TemplateInfo }) {
             <div className="h-1 rounded-sm mb-2" style={{ background: tpl.medium, width: "40%" }} />
             <BodyLines accent={tpl.accent} />
           </div>
+        </div>
+      ) : tpl.twoTone ? (
+        <div>
+          <div className="w-full flex" style={{ height: "28%" }}>
+            <div className="flex-1 px-2 pt-2" style={{ background: tpl.dark, width: "62%" }}>
+              <div className="h-2 rounded-sm mb-1" style={{ background: "rgba(255,255,255,0.9)", width: "70%" }} />
+              <div className="h-1 rounded-sm" style={{ background: "rgba(255,255,255,0.6)", width: "45%" }} />
+            </div>
+            <div className="flex-none" style={{ background: tpl.accent, width: "38%" }} />
+          </div>
+          <div className="p-1">
+            <BodyLines accent={tpl.accent} />
+          </div>
+        </div>
+      ) : tpl.topBar ? (
+        <div>
+          <div className="w-full" style={{ background: tpl.dark, height: "6px" }} />
+          <div className="p-1.5 pt-2">
+            <div className="h-2 rounded-sm mb-1" style={{ background: tpl.dark, width: "55%" }} />
+            <div className="h-1 rounded-sm mb-2" style={{ background: tpl.accent, width: "40%" }} />
+            <BodyLines accent={tpl.accent} />
+          </div>
+        </div>
+      ) : tpl.splitHeader ? (
+        <div className="p-1.5 pt-2">
+          <div className="flex justify-between mb-1">
+            <div className="h-2 rounded-sm" style={{ background: tpl.dark, width: "45%" }} />
+            <div className="h-1 rounded-sm mt-0.5" style={{ background: tpl.medium, width: "28%" }} />
+          </div>
+          <div className="h-px mb-2" style={{ background: tpl.accent }} />
+          <BodyLines accent={tpl.accent} />
+        </div>
+      ) : tpl.rightAlign ? (
+        <div className="p-1.5 pt-2 text-right">
+          <div className="ml-auto h-2 rounded-sm mb-0.5" style={{ background: tpl.dark, width: "50%" }} />
+          <div className="ml-auto h-1 rounded-sm mb-1" style={{ background: tpl.medium, width: "35%" }} />
+          <div className="h-px mb-2" style={{ background: tpl.accent }} />
+          <BodyLines accent={tpl.accent} />
         </div>
       ) : tpl.centered ? (
         <div className="p-1.5 pt-2 text-center">
@@ -118,13 +170,19 @@ function BodyLines({ accent }: { accent: string }) {
   );
 }
 
-export default function TemplatePicker({ value = 11, onChange }: TemplatePickerProps) {
+export default function TemplatePicker({ value = 11, onChange, allowedTemplateIds }: TemplatePickerProps) {
   const [previewTpl, setPreviewTpl] = useState<TemplateInfo | null>(null);
+  const visibleTemplates = Array.isArray(allowedTemplateIds) && allowedTemplateIds.length > 0
+    ? TEMPLATES.filter((tpl) => allowedTemplateIds.includes(tpl.id))
+    : TEMPLATES;
 
   return (
     <div>
+      {visibleTemplates.length === 0 && (
+        <p className="text-sm text-gray-500 mb-3">No templates are currently visible for your role.</p>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {TEMPLATES.map((tpl) => {
+        {visibleTemplates.map((tpl) => {
           const isSelected = value === tpl.id;
           return (
             <div

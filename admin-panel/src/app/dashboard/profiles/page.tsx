@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { profileService, type Profile } from "@/services/profileService";
 import { userService, type User } from "@/services/userService";
+import { templateVisibilityService } from "@/services/templateVisibilityService";
 import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import { Edit, Trash2, Eye, Plus, Tags, X, CheckCircle, XCircle, Copy } from "lucide-react";
@@ -24,6 +25,31 @@ export default function ProfilesPage() {
   const [approveId, setApproveId] = useState<{ id: string; approve: boolean } | null>(null);
   const [categoryModal, setCategoryModal] = useState<{ name: string; categories: string[] } | null>(null);
   const [activeTab, setActiveTab] = useSessionState<"pending" | "approved">("profiles.tab", "approved");
+  const ALL_TEMPLATE_IDS = useMemo(() => Array.from({ length: 20 }, (_, idx) => idx + 1), []);
+
+  const { data: templateVisibility } = useQuery({
+    queryKey: ["template-visibility"],
+    queryFn: templateVisibilityService.get,
+    enabled: isSuperAdmin,
+  });
+
+  const [selectedVisibleTemplates, setSelectedVisibleTemplates] = useState<number[]>([]);
+
+  const saveTemplateVisibilityMutation = useMutation({
+    mutationFn: (ids: number[]) => templateVisibilityService.update(ids),
+    onSuccess: () => {
+      showToast("Template visibility updated", "success");
+      queryClient.invalidateQueries({ queryKey: ["template-visibility"] });
+    },
+    onError: () => showToast("Failed to update template visibility", "error"),
+  });
+
+  const effectiveVisibleTemplates = useMemo(() => {
+    if (!isSuperAdmin) return [] as number[];
+    if (selectedVisibleTemplates.length > 0) return selectedVisibleTemplates;
+    const fromApi = templateVisibility?.admin_visible_template_ids ?? [];
+    return fromApi.length > 0 ? fromApi : ALL_TEMPLATE_IDS;
+  }, [isSuperAdmin, selectedVisibleTemplates, templateVisibility, ALL_TEMPLATE_IDS]);
 
   const queryClient = useQueryClient();
 
@@ -138,6 +164,15 @@ export default function ProfilesPage() {
     : profiles.filter((p: Profile) => !p.is_approved);
 
   const pendingCount = profiles.filter((p: Profile) => !p.is_approved).length;
+
+  const toggleTemplateVisibility = useCallback((templateId: number) => {
+    setSelectedVisibleTemplates((prev) => {
+      const base = prev.length > 0 ? prev : (templateVisibility?.admin_visible_template_ids?.length ? templateVisibility.admin_visible_template_ids : ALL_TEMPLATE_IDS);
+      const exists = base.includes(templateId);
+      const next = exists ? base.filter((id) => id !== templateId) : [...base, templateId];
+      return next.sort((a, b) => a - b);
+    });
+  }, [templateVisibility, ALL_TEMPLATE_IDS]);
 
   const columns = useMemo(() => [
     { key: "full_name", label: "Full Name", sortable: true },
@@ -262,6 +297,43 @@ export default function ProfilesPage() {
           Create Profile
         </Button>
       </div>
+
+      {isSuperAdmin && (
+        <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Admin Template Visibility</h2>
+              <p className="text-sm text-gray-500">Hide or show templates for admin users (super admin always sees all).</p>
+            </div>
+            <Button
+              onClick={() => saveTemplateVisibilityMutation.mutate(effectiveVisibleTemplates)}
+              loading={saveTemplateVisibilityMutation.isPending}
+              disabled={effectiveVisibleTemplates.length === 0}
+            >
+              Save Visibility
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+            {ALL_TEMPLATE_IDS.map((templateId) => {
+              const checked = effectiveVisibleTemplates.includes(templateId);
+              return (
+                <label key={templateId} className="flex items-center gap-2 text-sm text-gray-700 border border-gray-200 rounded px-2 py-1.5 cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleTemplateVisibility(templateId)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>{`Template ${templateId}`}</span>
+                </label>
+              );
+            })}
+          </div>
+          {effectiveVisibleTemplates.length === 0 && (
+            <p className="text-sm text-red-600 mt-2">At least one template must stay visible for admins.</p>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-1 mb-6 border-b border-gray-200">
         {(["approved", "pending"] as const).map((tab) => (

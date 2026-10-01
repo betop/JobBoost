@@ -23,6 +23,8 @@ table users {
     uuid[] assigned_bidder_ids? {
       table = "users"
     }
+  
+    text assigned_ip?
   }
 
   index = [

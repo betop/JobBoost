@@ -163,6 +163,40 @@ query "profiles/{id}" verb=PUT {
   
     conditional {
       if ($input.resume_template != null) {
+        conditional {
+          if ($auth_user.type != "super_admin") {
+            db.get template_visibility {
+              field_name = "id"
+              field_value = 1
+            } as $cfg
+
+            conditional {
+              if ($cfg != null && $cfg.admin_visible_template_ids != null && $cfg.admin_visible_template_ids != "") {
+                var $template_allowed {
+                  value = false
+                }
+
+                foreach (($cfg.admin_visible_template_ids|split:",")) {
+                  each as $tid {
+                    conditional {
+                      if (($tid|trim) != "" && $input.resume_template == ($tid|trim|to_int)) {
+                        var.update $template_allowed {
+                          value = true
+                        }
+                      }
+                    }
+                  }
+                }
+
+                precondition ($template_allowed) {
+                  error_type = "accessdenied"
+                  error = "Selected template is hidden by super admin"
+                }
+              }
+            }
+          }
+        }
+
         var.update $payload.resume_template {
           value = $input.resume_template
         }

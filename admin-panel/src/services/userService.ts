@@ -11,6 +11,7 @@ export interface User {
   assigned_bidder_ids?: string[];
   is_active: boolean;
   is_approved: boolean;
+  assigned_ip?: string;
   created_at: string;
 }
 
@@ -22,6 +23,7 @@ export interface CreateUserInput {
   profile_ids?: string[];
   assigned_bidder_ids?: string[];
   is_active: boolean;
+  assigned_ip?: string;
 }
 
 export const userService = {

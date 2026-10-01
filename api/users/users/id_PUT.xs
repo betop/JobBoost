@@ -13,6 +13,7 @@ query "users/{id}" verb=PUT {
     uuid[] assigned_bidder_ids?
     bool is_active?
     bool is_approved?
+    text assigned_ip?
   }
 
   stack {
@@ -90,6 +91,14 @@ query "users/{id}" verb=PUT {
       }
     }
   
+    conditional {
+      if ($input.assigned_ip != null) {
+        var.update $payload.assigned_ip {
+          value = $input.assigned_ip
+        }
+      }
+    }
+  
     var.update $payload.updated_at {
       value = now
     }
@@ -132,6 +141,7 @@ query "users/{id}" verb=PUT {
     profile_names: $profile_names
     is_active    : $b.is_active
     is_approved  : $b.is_approved
+    assigned_ip  : $b.assigned_ip
     created_at   : $b.created_at
   }
 

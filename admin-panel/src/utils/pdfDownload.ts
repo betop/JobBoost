@@ -43,8 +43,8 @@ function markersToHtml(raw: string | undefined): string {
 
 // ─── Template themes ────────────────────────────────────────────────────────
 
-type HeaderStyle = "classic" | "band" | "centered" | "leftbar" | "plain-centered";
-type SectionStyle = "rule" | "pill" | "centered-rule" | "square" | "dashed" | "dotted" | "tripledot" | "underline";
+type HeaderStyle = "classic" | "band" | "centered" | "leftbar" | "plain-centered" | "split" | "topbar" | "right" | "twotone";
+type SectionStyle = "rule" | "pill" | "centered-rule" | "square" | "dashed" | "dotted" | "tripledot" | "underline" | "boxed" | "short";
 
 interface Theme {
   accent: string; dark: string; rule: string;
@@ -65,6 +65,15 @@ const THEMES: Record<number, Theme> = {
   9:  { accent: "#ec4899", dark: "#831843", rule: "#fbcfe8", header: "band",     section: "rule",          nameCase: "upper" },
   10: { accent: "#64748b", dark: "#0f172a", rule: "#cbd5e1", header: "classic",  section: "tripledot",     nameCase: "upper" },
   11: { accent: "#000000", dark: "#000000", rule: "#000000", header: "plain-centered", section: "underline", nameCase: "upper", fontFamily: "Georgia, Cambria, 'Times New Roman', serif" },
+  12: { accent: "#16a34a", dark: "#14532d", rule: "#bbf7d0", header: "split",     section: "short", nameCase: "upper" },
+  13: { accent: "#1e40af", dark: "#1e3a8a", rule: "#bfdbfe", header: "topbar",    section: "rule",  nameCase: "upper" },
+  14: { accent: "#334155", dark: "#0f172a", rule: "#cbd5e1", header: "classic",   section: "boxed", nameCase: "upper", fontFamily: 'ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif' },
+  15: { accent: "#9a3412", dark: "#431407", rule: "#fed7aa", header: "right",     section: "underline", nameCase: "upper", fontFamily: "Georgia, Cambria, 'Times New Roman', serif" },
+  16: { accent: "#0891b2", dark: "#155e75", rule: "#a5f3fc", header: "twotone",   section: "rule",  nameCase: "upper" },
+  17: { accent: "#475569", dark: "#1e293b", rule: "#e2e8f0", header: "classic",   section: "short", nameCase: "upper" },
+  18: { accent: "#d4a017", dark: "#111827", rule: "#fde68a", header: "band",      section: "short", nameCase: "upper" },
+  19: { accent: "#8b5cf6", dark: "#312e81", rule: "#ddd6fe", header: "centered",  section: "centered-rule", nameCase: "upper" },
+  20: { accent: "#2563eb", dark: "#1e3a8a", rule: "#bfdbfe", header: "topbar",    section: "rule", nameCase: "upper" },
 };
 
 const BODY = "#18181b";
@@ -263,6 +272,20 @@ export function buildResumeHtml(r: ResumeData, templateId: number): string {
     .header-plain-centered .rname { font-size: 15pt; letter-spacing: 1px; }
     .header-plain-centered .rcontact { color: var(--body); }
     .header-plain-centered .rcontact a { color: var(--body); text-decoration: underline; }
+    .header-split .rhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px; border-bottom: 2.5pt solid var(--accent); padding-bottom: 8px; margin-bottom: 10px; }
+    .header-split .rcontact { text-align: right; margin-top: 0; }
+    .header-topbar { border-top: 8pt solid var(--dark); padding-top: 10px; }
+    .header-topbar .rhead { border-bottom: 2.5pt solid var(--dark); padding-bottom: 8px; margin-bottom: 10px; }
+    .header-topbar .rtitle { text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; }
+    .header-right .rhead { text-align: right; border-bottom: 0.75pt solid var(--accent); padding-bottom: 8px; margin-bottom: 10px; }
+    .header-right .rtitle { font-style: italic; }
+    .header-twotone .rhead {
+      background: linear-gradient(90deg, var(--dark) 62%, var(--accent) 62%);
+      color: #fff; margin: 0 0 12px 0; padding: 16px 18px;
+    }
+    .header-twotone .rtitle { color: #fff; opacity: 0.9; }
+    .header-twotone .rcontact { color: #fff; opacity: 0.9; }
+    .header-twotone .rcontact a { color: #fff; text-decoration: underline; }
 
     /* Section header style variants */
     .section-pill h2 { display: inline-block; background: var(--accent); color: #fff; border: none; padding: 3px 10px; border-radius: 10px; }
@@ -275,10 +298,21 @@ export function buildResumeHtml(r: ResumeData, templateId: number): string {
       border-bottom: 0.75pt solid var(--rule);
       color: var(--body); font-size: 11pt; letter-spacing: 0;
     }
+    .section-boxed h2 {
+      display: inline-block; background: var(--dark); color: #fff;
+      border: none; padding: 3px 9px; font-size: 9pt; letter-spacing: 1px;
+    }
+    .section-short h2 {
+      border-bottom: none; padding-bottom: 0;
+    }
+    .section-short h2::after {
+      content: ""; display: block; width: 48px; height: 2.5pt;
+      background: var(--accent); margin-top: 4px;
+    }
 
     @media print {
       a { color: var(--accent) !important; }
-      .header-band .rcontact a { color: #fff !important; }
+      .header-band .rcontact a, .header-twotone .rcontact a { color: #fff !important; }
     }
   `;
 
@@ -344,7 +378,7 @@ export async function downloadResumePDF(resumeText: string | object, filename: s
     return;
   }
 
-  const tpl = Math.max(1, Math.min(11, Math.round(templateId)));
+  const tpl = Math.max(1, Math.min(20, Math.round(templateId)));
   const html = buildResumeHtml(r, tpl);
   printHtmlAsPDF(html, filename);
 }

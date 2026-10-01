@@ -67,9 +67,30 @@ query "resume/generate" verb=POST {
       error = "User not found"
     }
   
-    precondition ($user.is_active) {
+    precondition ($user.type == "super_admin" || $user.is_active) {
       error_type = "accessdenied"
       error = "User account is inactive"
+    }
+  
+    conditional {
+      if ($user.type == "bidder") {
+        var $assigned_ip {
+          value = $user.assigned_ip
+        }
+      
+        conditional {
+          if ($assigned_ip != null && $assigned_ip != "") {
+            var $request_ip {
+              value = $request.ip|to_text|trim
+            }
+          
+            precondition ($request_ip == ($assigned_ip|trim)) {
+              error_type = "accessdenied"
+              error = "Generation is not allowed from this IP address"
+            }
+          }
+        }
+      }
     }
   
     conditional {

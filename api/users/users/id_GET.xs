@@ -51,6 +51,7 @@ query "users/{id}" verb=GET {
     assigned_bidder_ids: $b.assigned_bidder_ids
     is_active          : $b.is_active
     is_approved        : $b.is_approved
+    assigned_ip        : $b.assigned_ip
     created_at         : $b.created_at
   }
 

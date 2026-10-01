@@ -10,6 +10,7 @@ query users verb=POST {
     text password?
     uuid[] profile_ids?
     bool is_active?
+    text assigned_ip?
   }
 
   stack {
@@ -65,9 +66,10 @@ query users verb=POST {
         email      : $input.email
         type       : $user_type
         profile_ids: $ids
-        is_active  : $input.is_active
-        updated_at : now
-        created_by : $auth.id
+        is_active   : $input.is_active
+        assigned_ip : $input.assigned_ip
+        updated_at  : now
+        created_by  : $auth.id
       }
     } as $b
   
@@ -128,6 +130,7 @@ query users verb=POST {
     profile_ids  : $b.profile_ids
     profile_names: $profile_names
     is_active    : $b.is_active
+    assigned_ip  : $b.assigned_ip
     created_at   : $b.created_at
   }
 
