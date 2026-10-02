@@ -233,7 +233,7 @@ export default function CreditsPage() {
         <h1 className="text-3xl font-bold">Credits</h1>
         <p className="text-gray-600 mt-2">
           Top up your balance with USDT to keep generating resumes and using the chat
-          assistant. Every AI call costs 1.5x the provider's raw price.
+          assistant. Every AI call costs 1.5x the provider&apos;s raw price.
         </p>
       </div>
 
@@ -340,7 +340,7 @@ export default function CreditsPage() {
                 <p className="text-xs text-gray-500 mt-1">Minimum deposit: $10</p>
               </div>
               <p className="text-xs text-gray-500">
-                You'll be redirected to Paymento's secure checkout to choose your asset and
+                You&apos;ll be redirected to Paymento&apos;s secure checkout to choose your asset and
                 network (e.g. USDT on BEP20 or TRC20) and complete the payment.
               </p>
               <Button onClick={handleDeposit} loading={depositLoading} className="w-full">
