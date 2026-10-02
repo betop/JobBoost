@@ -34,15 +34,11 @@ export interface AdminCreditSummary {
 
 export interface DepositResponse {
   deposit_id: string;
-  pay_address: string;
   payment_url: string;
-  amount_crypto: number;
   currency: string;
   amount_usd: number;
   status: string;
 }
-
-export type DepositCurrency = "USDT_BEP20" | "USDT_TRC20";
 
 export const creditsService = {
   getBalance: async (adminId?: string): Promise<CreditBalanceResponse> => {
@@ -61,10 +57,9 @@ export const creditsService = {
     return response.data;
   },
 
-  deposit: async (amountUsd: number, currency: DepositCurrency): Promise<DepositResponse> => {
+  deposit: async (amountUsd: number): Promise<DepositResponse> => {
     const response = await api.post("/dashboard/credits/deposit", {
       amount_usd: amountUsd,
-      currency,
     });
     return response.data;
   },

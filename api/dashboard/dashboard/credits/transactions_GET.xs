@@ -97,7 +97,7 @@ query "dashboard/credits/transactions" verb=GET {
     }
   }
 
-  response = {items: $results}
+  response = {items: $results.items}
 
   guid = "a2BdR7wPqM4sX1oLvZtFj5cKeYh"
 }

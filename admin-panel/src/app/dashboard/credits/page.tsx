@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Wallet, Copy, Check, Plus, Minus } from "lucide-react";
-import { creditsService, type DepositCurrency } from "@/services/creditsService";
+import { Wallet, Plus, Minus, ExternalLink } from "lucide-react";
+import { creditsService } from "@/services/creditsService";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import Button from "@/components/Button";
@@ -34,12 +34,10 @@ export default function CreditsPage() {
 
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState("25");
-  const [depositCurrency, setDepositCurrency] = useState<DepositCurrency>("USDT_BEP20");
   const [depositResult, setDepositResult] = useState<Awaited<
     ReturnType<typeof creditsService.deposit>
   > | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const [adjustTarget, setAdjustTarget] = useState<{ id: string; name: string } | null>(null);
   const [adjustAmount, setAdjustAmount] = useState("");
@@ -51,6 +49,10 @@ export default function CreditsPage() {
     queryFn: () => creditsService.getBalance(),
     enabled: !isSuperAdmin,
   });
+
+  const recentTransactions = Array.isArray(balance?.recent_transactions)
+    ? balance!.recent_transactions
+    : [];
 
   const { data: adminsData, isLoading: adminsLoading } = useQuery({
     queryKey: ["credits-admins"],
@@ -66,8 +68,11 @@ export default function CreditsPage() {
     }
     setDepositLoading(true);
     try {
-      const result = await creditsService.deposit(amount, depositCurrency);
+      const result = await creditsService.deposit(amount);
       setDepositResult(result);
+      if (result.payment_url) {
+        window.open(result.payment_url, "_blank", "noreferrer");
+      }
     } catch (err: any) {
       showToast(err.response?.data?.error || "Failed to create deposit", "error");
     } finally {
@@ -80,13 +85,6 @@ export default function CreditsPage() {
     setDepositResult(null);
     setDepositAmount("25");
     queryClient.invalidateQueries({ queryKey: ["credits-balance"] });
-  };
-
-  const copyAddress = async () => {
-    if (!depositResult) return;
-    await navigator.clipboard.writeText(depositResult.pay_address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleAdjust = async () => {
@@ -289,14 +287,14 @@ export default function CreditsPage() {
                 </td>
               </tr>
             )}
-            {!balanceLoading && (balance?.recent_transactions.length ?? 0) === 0 && (
+            {!balanceLoading && (recentTransactions.length ?? 0) === 0 && (
               <tr>
                 <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                   No transactions yet
                 </td>
               </tr>
             )}
-            {balance?.recent_transactions.map((t) => {
+            {recentTransactions.map((t) => {
               const badge = TYPE_BADGE[t.type] ?? { label: t.type, className: "bg-gray-100 text-gray-800" };
               return (
                 <tr key={t.id} className="hover:bg-gray-50">
@@ -325,7 +323,7 @@ export default function CreditsPage() {
         </table>
       </div>
 
-      <Modal isOpen={depositModalOpen} onClose={closeDepositModal} title="Deposit USDT" size="sm">
+      <Modal isOpen={depositModalOpen} onClose={closeDepositModal} title="Deposit via Paymento" size="sm">
         <div className="p-6 space-y-4">
           {!depositResult ? (
             <>
@@ -341,64 +339,32 @@ export default function CreditsPage() {
                 />
                 <p className="text-xs text-gray-500 mt-1">Minimum deposit: $10</p>
               </div>
-              <div>
-                <label className="text-sm font-medium block mb-1">Network</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setDepositCurrency("USDT_BEP20")}
-                    className={`flex-1 px-3 py-2 text-sm rounded-md border ${
-                      depositCurrency === "USDT_BEP20"
-                        ? "border-primary-600 bg-primary-50 text-primary-700"
-                        : "border-gray-300 text-gray-700"
-                    }`}
-                  >
-                    USDT (BEP20)
-                  </button>
-                  <button
-                    onClick={() => setDepositCurrency("USDT_TRC20")}
-                    className={`flex-1 px-3 py-2 text-sm rounded-md border ${
-                      depositCurrency === "USDT_TRC20"
-                        ? "border-primary-600 bg-primary-50 text-primary-700"
-                        : "border-gray-300 text-gray-700"
-                    }`}
-                  >
-                    USDT (TRC20)
-                  </button>
-                </div>
-              </div>
+              <p className="text-xs text-gray-500">
+                You'll be redirected to Paymento's secure checkout to choose your asset and
+                network (e.g. USDT on BEP20 or TRC20) and complete the payment.
+              </p>
               <Button onClick={handleDeposit} loading={depositLoading} className="w-full">
-                Generate Payment Address
+                Continue to Paymento
               </Button>
             </>
           ) : (
             <div className="space-y-4">
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-                <p className="text-sm text-gray-600 mb-1">Send exactly</p>
-                <p className="text-lg font-bold">
-                  {depositResult.amount_crypto} USDT ({depositResult.currency.replace("USDT_", "")})
-                </p>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Deposit Address</label>
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md p-3">
-                  <code className="text-xs break-all flex-1">{depositResult.pay_address}</code>
-                  <button onClick={copyAddress} className="shrink-0 text-gray-500 hover:text-gray-800">
-                    {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
+                <p className="text-sm text-gray-600 mb-1">Deposit request created</p>
+                <p className="text-lg font-bold">{formatCurrency(depositResult.amount_usd)}</p>
               </div>
               {depositResult.payment_url && (
                 <a
                   href={depositResult.payment_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="block text-center text-sm text-primary-600 hover:text-primary-800 font-medium"
+                  className="flex items-center justify-center gap-2 text-sm text-primary-600 hover:text-primary-800 font-medium"
                 >
-                  Open payment page →
+                  Open payment page <ExternalLink className="w-4 h-4" />
                 </a>
               )}
               <p className="text-xs text-gray-500 text-center">
-                Your balance updates automatically once the network confirms the payment.
+                Your balance updates automatically once Paymento confirms the payment.
               </p>
               <Button variant="secondary" onClick={closeDepositModal} className="w-full">
                 Done

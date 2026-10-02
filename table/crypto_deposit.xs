@@ -1,4 +1,4 @@
-// crypto_deposit table — tracks USDT (BEP20/TRC20) top-up requests via payment provider (0xProcessing)
+// crypto_deposit table — tracks USDT (and other crypto) top-up requests via payment provider (Paymento)
 // status lifecycle: pending -> confirmed | failed | expired
 table crypto_deposit {
   auth = false
@@ -10,7 +10,7 @@ table crypto_deposit {
       table = "users"
     }
   
-    text provider?="0xprocessing"
+    text provider?="paymento"
     text external_invoice_id?
     text currency?
     decimal amount_usd?

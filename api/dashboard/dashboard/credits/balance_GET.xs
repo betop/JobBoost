@@ -55,7 +55,11 @@ query "dashboard/credits/balance" verb=GET {
         type: "list"
         paging: {page: 1, per_page: 20, totals: false}
       }
-    } as $recent_transactions
+    } as $recent_transactions_paged
+
+    var $recent_transactions {
+      value = $recent_transactions_paged.items
+    }
   }
 
   response = {
