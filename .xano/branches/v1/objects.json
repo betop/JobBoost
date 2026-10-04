@@ -1,1 +1,37 @@
-[]
+[
+  {
+    "id": 0,
+    "path": "functions/credits/check_sufficient_balance.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/credit_charge_usage.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/provider_nowpayments_create_invoice.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/provider_nowpayments_get_payment.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/resolve_billing_admin.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  }
+]

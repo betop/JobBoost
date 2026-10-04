@@ -17,6 +17,8 @@ query "logs/list" verb=GET {
 
   input {
     timestamp updated_since?
+    timestamp date_from?
+    timestamp date_to?
     int offset?
     int limit?
     bool count_only?
@@ -33,8 +35,10 @@ query "logs/list" verb=GET {
       value = $input.updated_since != null
     }
   
+    // Lean projection: the heavy job_description text is NOT returned (it is fetched
+    // on demand via logs/jd); has_job_description tells the UI whether one exists.
     var $query {
-      value = "SELECT * FROM x1_7"
+      value = "SELECT id, created_at, updated_at, profile_id, user_id, job_url, job_description_snippet, ai_provider, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, resume_filename, cover_letter_filename, position_title, company_name, is_regenerated, original_log_id, is_matched, match_reason, is_applied, seniority, tech_scope, compensation, content_id, (job_description IS NOT NULL AND job_description <> '') AS has_job_description FROM x1_7"
     }
   
     var $has_where {
@@ -88,6 +92,38 @@ query "logs/list" verb=GET {
       
         var.update $query {
           value = $query ~ $delta_keyword ~ " updated_at >= '" ~ $input.updated_since ~ "'"
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.date_from != null) {
+        var $from_keyword {
+          value = $has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $query {
+          value = $query ~ $from_keyword ~ " created_at >= '" ~ $input.date_from ~ "'"
+        }
+      
+        var.update $has_where {
+          value = true
+        }
+      }
+    }
+  
+    conditional {
+      if ($input.date_to != null) {
+        var $to_keyword {
+          value = $has_where ? " AND" : " WHERE"
+        }
+      
+        var.update $query {
+          value = $query ~ $to_keyword ~ " created_at < '" ~ $input.date_to ~ "'"
+        }
+      
+        var.update $has_where {
+          value = true
         }
       }
     }

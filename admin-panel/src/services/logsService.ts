@@ -78,6 +78,7 @@ export interface GenerationLog {
   job_url: string;
   job_description_snippet: string;
   job_description: string;
+  has_job_description?: boolean;
   ai_provider: string;
   input_tokens: number;
   output_tokens: number;
@@ -166,6 +167,7 @@ export const logsService = {
   listAllPages: async (
     onBatch?: () => Promise<void>,
     pageSize = 500,
+    range?: { from?: string; to?: string },
   ): Promise<{ failedOffsets: number[] }> => {
     const CONCURRENT_PAGES = 10;
     const MAX_ATTEMPTS = 3;
@@ -174,10 +176,16 @@ export const logsService = {
 
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+    const rangeParams = (params: URLSearchParams) => {
+      if (range?.from) params.set("date_from", range.from);
+      if (range?.to) params.set("date_to", range.to);
+    };
+
     const fetchPage = async (offset: number): Promise<void> => {
       const params = new URLSearchParams();
       params.set("limit", String(pageSize));
       params.set("offset", String(offset));
+      rangeParams(params);
       const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
       const items = response.data.items;
       if (items.length > 0) {
@@ -199,7 +207,9 @@ export const logsService = {
     };
 
     // Step 1: get total count
-    const countRes = await api.get<{ total: number }>(`/logs/list?count_only=true`);
+    const countParams = new URLSearchParams({ count_only: "true" });
+    rangeParams(countParams);
+    const countRes = await api.get<{ total: number }>(`/logs/list?${countParams.toString()}`);
     const total = Number(countRes.data.total) || 0;
 
     if (total === 0) {
@@ -275,6 +285,12 @@ export const logsService = {
     if (effectiveDateTo) params.set("date_to", toEndOfDayEST(effectiveDateTo));
     const response = await api.get(`/logs/stats?${params.toString()}`);
     return response.data;
+  },
+
+  /** Fetch the heavy job_description of one log on demand (list omits it). */
+  getJobDescription: async (logId: string): Promise<string> => {
+    const response = await api.get<{ id: string; job_description: string | null }>(`/logs/jd?log_id=${logId}`);
+    return response.data.job_description ?? "";
   },
 
   regenerate: async (logId: string, forceGenerate = false): Promise<RegenerateResponse> => {

@@ -292,3 +292,15 @@ export async function clearCache(): Promise<void> {
     tx.onerror    = () => reject(tx.error);
   });
 }
+
+/**
+ * Earliest created_at (ISO) the cache is guaranteed to cover up to "now".
+ * "" means the whole history is cached; null means nothing has been loaded yet.
+ */
+export function getCoveredFrom(): Promise<string | null> {
+  return getMeta("coveredFrom");
+}
+
+export function setCoveredFrom(iso: string): Promise<void> {
+  return setMeta("coveredFrom", iso);
+}

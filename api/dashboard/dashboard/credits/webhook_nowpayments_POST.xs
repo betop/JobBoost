@@ -20,6 +20,10 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
       value = "ignored"
     }
 
+    var $error_detail {
+      value = null
+    }
+
     var $payload_obj {
       value = {
         payment_id    : $input.payment_id
@@ -61,6 +65,10 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
 
             var $outcome_currency_normalized {
               value = ($payment.outcome_currency|to_text|first_notnull:"")|to_lower
+            }
+
+            var.update $error_detail {
+              value = "s1"
             }
 
             var $deposit {
@@ -108,6 +116,10 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
               }
             }
 
+            var.update $error_detail {
+              value = "s2"
+            }
+
             conditional {
               if ($deposit == null || $deposit.provider != "nowpayments") {
                 var.update $outcome {
@@ -122,6 +134,10 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
               }
 
               elseif ($payment_status_normalized == "finished") {
+                var.update $error_detail {
+              value = "s3"
+            }
+
                 var $price_ok {
                   value = ($payment.price_currency|to_lower) == "usd" && ($payment.price_amount|to_decimal) >= $deposit.amount_usd
                 }
@@ -163,6 +179,10 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                       }
                     }
 
+                    var.update $error_detail {
+              value = "s4"
+            }
+
                     db.get users {
                       field_name = "id"
                       field_value = $deposit.admin_id
@@ -176,24 +196,42 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                       value = $current_balance + $credit_amount
                     }
 
-                    db.patch users {
-                      field_name = "id"
-                      field_value = $deposit.admin_id
-                      data = {credit_balance: $new_balance}
-                    } as $_
+                    var $confirm_payload {
+                      value = {
+                        payment_id               : $input.payment_id
+                        invoice_id               : $input.invoice_id
+                        order_id                 : $input.order_id
+                        payment_status           : $input.payment_status
+                        verified_pay_currency    : $payment.pay_currency
+                        verified_outcome_currency: $payment.outcome_currency
+                        verified_outcome_amount  : $payment.outcome_amount
+                      }
+                    }
 
+                    // Mark confirmed FIRST so a failure later can never lead to a double credit
                     db.patch crypto_deposit {
                       field_name = "id"
                       field_value = $deposit.id
                       data = {
                         status             : "confirmed"
                         confirmed_at        : now
-                        raw_webhook_payload: $payload_obj
-                          |set:"verified_pay_currency":$payment.pay_currency
-                          |set:"verified_outcome_currency":$payment.outcome_currency
-                          |set:"verified_outcome_amount":$payment.outcome_amount
+                        raw_webhook_payload: $confirm_payload
                       }
                     } as $_
+
+                    var.update $error_detail {
+                      value = "after_confirm_patch"
+                    }
+
+                    db.patch users {
+                      field_name = "id"
+                      field_value = $deposit.admin_id
+                      data = {credit_balance: $new_balance}
+                    } as $_
+
+                    var.update $error_detail {
+                      value = "after_users_patch"
+                    }
 
                     db.add credit_transaction {
                       data = {
@@ -235,9 +273,6 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                   field_value = $deposit.id
                   data = {
                     raw_webhook_payload: $payload_obj
-                      |set:"verified_pay_currency":$payment.pay_currency
-                      |set:"verified_outcome_currency":$payment.outcome_currency
-                      |set:"verified_outcome_amount":$payment.outcome_amount
                   }
                 } as $_
 
@@ -253,6 +288,10 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
               value = "NOWPayments webhook processing error: " ~ $error
             }
 
+            var.update $error_detail {
+              value = {stage: $error_detail, err: $error}
+            }
+
             var.update $outcome {
               value = "error"
             }
@@ -262,7 +301,7 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
     }
   }
 
-  response = {received: true, outcome: $outcome}
+  response = {received: true, outcome: $outcome, error_detail: $error_detail}
 
   guid = "Xd5KvT2pQnM8wR3oZlBsYc7HjFa"
 }

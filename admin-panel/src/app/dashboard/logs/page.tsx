@@ -958,18 +958,44 @@ export default function LogsPage() {
     const effectiveTo   = to   !== undefined ? to   : dateTo;
     setLogsLoading(true);
     const lastSync = await logCache.getLastSyncAt();
+    const coveredFrom = await logCache.getCoveredFrom();
+
+    // Only fetch what the visible window needs (plus a 7-day buffer). Everything older is
+    // pulled lazily when the user widens the range, so a fresh device loads a small payload.
+    const BUFFER_MS = 7 * 24 * 60 * 60 * 1000;
+    const needFromMs = effectiveFrom === undefined ? 0 : Math.max(0, effectiveFrom - BUFFER_MS);
+    const needFromISO = needFromMs > 0 ? new Date(needFromMs).toISOString() : "";
 
     try {
-      if (lastSync) {
+      let failed = 0;
+      if (lastSync && coveredFrom !== null) {
         // Delta: listDelta handles mergeRecords + setLastSyncAt internally
         await logsService.listDelta(lastSync);
-      } else {
-        // Full load: listAllPages handles IndexedDB writes AND setLastSyncAt per batch;
-        // it keeps fetching remaining pages even if some individual pages fail.
-        const { failedOffsets } = await logsService.listAllPages();
-        if (failedOffsets.length > 0) {
-          showToast(`Loaded logs, but ${failedOffsets.length} page(s) failed to fetch. Try Hard Refresh to retry.`, "error");
+        await flushCacheToState(effectiveFrom, effectiveTo);
+
+        // Gap fill: the window reaches further back than what is cached
+        const coveredMs = coveredFrom === "" ? 0 : new Date(coveredFrom).getTime();
+        if (coveredMs > needFromMs) {
+          const res = await logsService.listAllPages(
+            async () => { await flushCacheToState(effectiveFrom, effectiveTo); },
+            500,
+            { from: needFromISO || undefined, to: coveredFrom || undefined },
+          );
+          failed = res.failedOffsets.length;
+          if (failed === 0) await logCache.setCoveredFrom(needFromISO);
         }
+      } else {
+        // First load on this device: only the visible window, flushed page-by-page
+        const res = await logsService.listAllPages(
+          async () => { await flushCacheToState(effectiveFrom, effectiveTo); },
+          500,
+          { from: needFromISO || undefined },
+        );
+        failed = res.failedOffsets.length;
+        if (failed === 0) await logCache.setCoveredFrom(needFromISO);
+      }
+      if (failed > 0) {
+        showToast(`Loaded logs, but ${failed} page(s) failed to fetch. Try Hard Refresh to retry.`, "error");
       }
 
       await flushCacheToState(effectiveFrom, effectiveTo);
@@ -1050,11 +1076,7 @@ export default function LogsPage() {
     setIsRefreshing(true);
     try {
       await logCache.clearCache();
-      const { failedOffsets } = await logsService.listAllPages();
-      await flushCacheToState(dateFrom, dateTo);
-      if (failedOffsets.length > 0) {
-        showToast(`Hard refresh finished, but ${failedOffsets.length} page(s) failed to fetch after retries. Try Hard Refresh again to fill the gaps.`, "error");
-      }
+      await doFetch(dateFrom, dateTo);
     } catch (err) {
       console.error("[LogsPage] hard refresh failed", err);
       // Cache was already cleared — flush whatever partial data made it in before the failure
@@ -1089,6 +1111,20 @@ export default function LogsPage() {
   //     setIsRecovering(false);
   //   }
   // }
+
+  // The list endpoint omits job_description; load it on demand before opening a modal.
+  async function openWithJD(log: GenerationLog, open: (l: GenerationLog) => void) {
+    if (log.job_description) {
+      open(log);
+      return;
+    }
+    try {
+      const jd = await logsService.getJobDescription(log.id);
+      open({ ...log, job_description: jd });
+    } catch {
+      showToast("Failed to load job description.", "error");
+    }
+  }
 
   function applyPeriod(period: LogsPeriod) {
     setStatsPeriod(period);
@@ -1959,11 +1995,11 @@ export default function LogsPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => log.job_description ? setJobDetailsLog(log) : undefined}
-                            disabled={!log.job_description}
-                            title={log.job_description ? "View job description" : "No job description stored for this log"}
+                            onClick={() => (log.job_description || log.has_job_description) ? openWithJD(log, setJobDetailsLog) : undefined}
+                            disabled={!(log.job_description || log.has_job_description)}
+                            title={(log.job_description || log.has_job_description) ? "View job description" : "No job description stored for this log"}
                             className={`p-1.5 rounded-md border transition-colors ${
-                              log.job_description
+                              (log.job_description || log.has_job_description)
                                 ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 cursor-pointer"
                                 : "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed"
                             }`}
@@ -1971,11 +2007,11 @@ export default function LogsPage() {
                             <FileText className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => log.job_description ? setRegenerateLog(log) : undefined}
-                            disabled={!log.job_description}
-                            title={log.job_description ? "Regenerate resume" : "No job description stored for this log"}
+                            onClick={() => (log.job_description || log.has_job_description) ? setRegenerateLog(log) : undefined}
+                            disabled={!(log.job_description || log.has_job_description)}
+                            title={(log.job_description || log.has_job_description) ? "Regenerate resume" : "No job description stored for this log"}
                             className={`p-1.5 rounded-md border transition-colors ${
-                              log.job_description
+                              (log.job_description || log.has_job_description)
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer"
                                 : "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed"
                             }`}

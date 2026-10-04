@@ -40,7 +40,7 @@ function "credits/provider_nowpayments_get_payment" {
     pay_currency     : $api_result.response.result.pay_currency
     outcome_currency : $api_result.response.result.outcome_currency
     outcome_amount   : $api_result.response.result.outcome_amount
-    parent_payment_id: $api_result.response.result.parent_payment_id
+    parent_payment_id: $api_result.response.result|get:"parent_payment_id"
   }
 
   guid = "Wc3PzN7vQkL5mX2oTdRsYb8HjFa"
