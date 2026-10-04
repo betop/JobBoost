@@ -9,7 +9,8 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
   api_group = "dashboard"
 
   input {
-    json payment_id?
+    text payment_id?
+    text invoice_id?
     text payment_status?
     text order_id?
   }
@@ -22,6 +23,7 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
     var $payload_obj {
       value = {
         payment_id    : $input.payment_id
+        invoice_id    : $input.invoice_id
         payment_status: $input.payment_status
         order_id      : $input.order_id
       }
@@ -41,12 +43,70 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
               input = {payment_id: $input.payment_id|to_text}
             } as $payment
 
-            // order_id is our crypto_deposit.id; a foreign/invalid value throws and
-            // is caught below so it is acknowledged instead of erroring
-            db.query crypto_deposit {
-              where = $db.crypto_deposit.id == $payment.order_id
-              return = {type: "single"}
-            } as $deposit
+            var $verified_order_id {
+              value = ($payment.order_id|to_text|first_notnull:"")|trim
+            }
+
+            var $verified_invoice_id {
+              value = ($payment.invoice_id|to_text|first_notnull:"")|trim
+            }
+
+            var $callback_invoice_id {
+              value = ($input.invoice_id|to_text|first_notnull:"")|trim
+            }
+
+            var $payment_status_normalized {
+              value = ($payment.payment_status|to_text|first_notnull:"")|to_lower
+            }
+
+            var $outcome_currency_normalized {
+              value = ($payment.outcome_currency|to_text|first_notnull:"")|to_lower
+            }
+
+            var $deposit {
+              value = null
+            }
+
+            // Primary match: verified order_id (our crypto_deposit.id)
+            conditional {
+              if ($verified_order_id != "") {
+                db.query crypto_deposit {
+                  where = $db.crypto_deposit.id == $verified_order_id
+                  return = {type: "single"}
+                } as $deposit_by_order
+
+                var.update $deposit {
+                  value = $deposit_by_order
+                }
+              }
+            }
+
+            // Fallback: invoice id (preferred verified source, then callback source)
+            conditional {
+              if ($deposit == null && $verified_invoice_id != "") {
+                db.query crypto_deposit {
+                  where = $db.crypto_deposit.external_invoice_id == $verified_invoice_id
+                  return = {type: "single"}
+                } as $deposit_by_invoice
+
+                var.update $deposit {
+                  value = $deposit_by_invoice
+                }
+              }
+            }
+
+            conditional {
+              if ($deposit == null && $callback_invoice_id != "") {
+                db.query crypto_deposit {
+                  where = $db.crypto_deposit.external_invoice_id == $callback_invoice_id
+                  return = {type: "single"}
+                } as $deposit_by_callback_invoice
+
+                var.update $deposit {
+                  value = $deposit_by_callback_invoice
+                }
+              }
+            }
 
             conditional {
               if ($deposit == null || $deposit.provider != "nowpayments") {
@@ -61,9 +121,13 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                 }
               }
 
-              elseif ($payment.payment_status == "finished") {
+              elseif ($payment_status_normalized == "finished") {
                 var $price_ok {
                   value = ($payment.price_currency|to_lower) == "usd" && ($payment.price_amount|to_decimal) >= $deposit.amount_usd
+                }
+
+                var $outcome_currency_ok {
+                  value = true
                 }
 
                 conditional {
@@ -80,7 +144,25 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                     }
                   }
 
+                  elseif (!$outcome_currency_ok) {
+                    var.update $outcome {
+                      value = "outcome_currency_mismatch"
+                    }
+                  }
+
                   else {
+                    var $credit_amount {
+                      value = $deposit.amount_usd
+                    }
+
+                    conditional {
+                      if ($credit_amount <= 0) {
+                        var.update $credit_amount {
+                          value = $deposit.amount_usd
+                        }
+                      }
+                    }
+
                     db.get users {
                       field_name = "id"
                       field_value = $deposit.admin_id
@@ -91,7 +173,7 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                     }
 
                     var $new_balance {
-                      value = $current_balance + $deposit.amount_usd
+                      value = $current_balance + $credit_amount
                     }
 
                     db.patch users {
@@ -107,6 +189,9 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                         status             : "confirmed"
                         confirmed_at        : now
                         raw_webhook_payload: $payload_obj
+                          |set:"verified_pay_currency":$payment.pay_currency
+                          |set:"verified_outcome_currency":$payment.outcome_currency
+                          |set:"verified_outcome_amount":$payment.outcome_amount
                       }
                     } as $_
 
@@ -114,10 +199,10 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                       data = {
                         admin_id         : $deposit.admin_id
                         type              : "deposit"
-                        amount            : $deposit.amount_usd
+                        amount            : $credit_amount
                         balance_after     : $new_balance
                         related_deposit_id: $deposit.id
-                        note              : "Crypto deposit confirmed via NOWPayments"
+                        note              : "Deposit confirmed via NOWPayments (settled as USDT_BEP20)"
                       }
                     } as $_
 
@@ -128,7 +213,7 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                 }
               }
 
-              elseif ($payment.payment_status == "failed" || $payment.payment_status == "expired" || $payment.payment_status == "refunded") {
+              elseif ($payment_status_normalized == "failed" || $payment_status_normalized == "expired" || $payment_status_normalized == "refunded") {
                 db.patch crypto_deposit {
                   field_name = "id"
                   field_value = $deposit.id
@@ -150,6 +235,9 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                   field_value = $deposit.id
                   data = {
                     raw_webhook_payload: $payload_obj
+                      |set:"verified_pay_currency":$payment.pay_currency
+                      |set:"verified_outcome_currency":$payment.outcome_currency
+                      |set:"verified_outcome_amount":$payment.outcome_amount
                   }
                 } as $_
 

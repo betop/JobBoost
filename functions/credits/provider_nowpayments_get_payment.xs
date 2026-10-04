@@ -34,8 +34,12 @@ function "credits/provider_nowpayments_get_payment" {
   response = {
     payment_status   : $api_result.response.result.payment_status
     order_id         : $api_result.response.result.order_id
+    invoice_id       : $api_result.response.result.invoice_id
     price_amount     : $api_result.response.result.price_amount
     price_currency   : $api_result.response.result.price_currency
+    pay_currency     : $api_result.response.result.pay_currency
+    outcome_currency : $api_result.response.result.outcome_currency
+    outcome_amount   : $api_result.response.result.outcome_amount
     parent_payment_id: $api_result.response.result.parent_payment_id
   }
 

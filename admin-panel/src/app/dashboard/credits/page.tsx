@@ -62,8 +62,8 @@ export default function CreditsPage() {
 
   const handleDeposit = async () => {
     const amount = parseFloat(depositAmount);
-    if (!amount || amount < 1) {
-      showToast("Minimum deposit amount is $1", "error");
+    if (!amount || amount < 15) {
+      showToast("Minimum deposit amount is $15", "error");
       return;
     }
     setDepositLoading(true);
@@ -331,13 +331,13 @@ export default function CreditsPage() {
                 <label className="text-sm font-medium block mb-1">Amount (USD)</label>
                 <input
                   type="number"
-                  min={1}
+                  min={15}
                   step="1"
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                 />
-                <p className="text-xs text-gray-500 mt-1">Minimum deposit: $1</p>
+                <p className="text-xs text-gray-500 mt-1">Minimum deposit: $15</p>
               </div>
               <p className="text-xs text-gray-500">
                 You&apos;ll be redirected to NOWPayments&apos; secure invoice page, where you can choose

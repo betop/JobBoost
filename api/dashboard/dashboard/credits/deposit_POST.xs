@@ -29,9 +29,9 @@ query "dashboard/credits/deposit" verb=POST {
       error = "Only admin accounts can deposit credits"
     }
 
-    precondition ($input.amount_usd != null && $input.amount_usd >= 1) {
+    precondition ($input.amount_usd != null && $input.amount_usd >= 15) {
       error_type = "badrequest"
-      error = "Minimum deposit amount is $1"
+      error = "Minimum deposit amount is $15"
     }
 
     // Create the pending deposit row first so we have an id to use as the
@@ -40,7 +40,7 @@ query "dashboard/credits/deposit" verb=POST {
       data = {
         admin_id  : $user.id
         provider   : "nowpayments"
-        currency   : "CRYPTO"
+        currency   : "USDT_BEP20"
         amount_usd : $input.amount_usd
         status     : "pending"
       }
@@ -85,7 +85,7 @@ query "dashboard/credits/deposit" verb=POST {
     deposit_id  : $deposit.id
     provider    : "nowpayments"
     payment_url : $invoice.payment_url
-    currency    : "CRYPTO"
+    currency    : "USDT_BEP20"
     amount_usd  : $input.amount_usd
     status      : "pending"
   }
