@@ -1,6 +1,6 @@
-// Admin requests a crypto deposit (e.g. USDT via BEP20/TRC20, chosen on Paymento's
-// hosted checkout) to top up their credit balance.
-// Creates a pending crypto_deposit record and a payment request via Paymento.
+// Admin requests a USDT deposit to top up their credit balance, paid via NOWPayments.
+// Creates a pending crypto_deposit record and a hosted NOWPayments invoice; the balance
+// is credited by credits/webhook-nowpayments once the payment is verified as finished.
 // super_admin accounts cannot deposit (billing does not apply to them).
 query "dashboard/credits/deposit" verb=POST {
   api_group = "dashboard"
@@ -9,6 +9,10 @@ query "dashboard/credits/deposit" verb=POST {
   input {
     decimal amount_usd {
       description = "Deposit amount in USD"
+    }
+
+    text network?="TRC20" {
+      description = "USDT network: TRC20 or BEP20"
     }
   }
 
@@ -33,13 +37,34 @@ query "dashboard/credits/deposit" verb=POST {
       error = "Minimum deposit amount is $1"
     }
 
-    // Create the pending deposit row first so we have an id to use as
-    // Paymento's orderId (helps us reconcile the callback/webhook)
+    var $network {
+      value = ($input.network|first_notnull:"TRC20")|trim|to_upper
+    }
+
+    precondition ($network == "TRC20" || $network == "BEP20") {
+      error_type = "badrequest"
+      error = "network must be TRC20 or BEP20"
+    }
+
+    var $now_pay_currency {
+      value = "usdttrc20"
+    }
+
+    conditional {
+      if ($network == "BEP20") {
+        var.update $now_pay_currency {
+          value = "usdtbsc"
+        }
+      }
+    }
+
+    // Create the pending deposit row first so we have an id to use as the
+    // NOWPayments order_id (helps us reconcile the callback)
     db.add crypto_deposit {
       data = {
         admin_id  : $user.id
-        provider   : "paymento"
-        currency   : "USDT"
+        provider   : "nowpayments"
+        currency   : "USDT_" ~ $network
         amount_usd : $input.amount_usd
         status     : "pending"
       }
@@ -61,29 +86,31 @@ query "dashboard/credits/deposit" verb=POST {
       }
     }
 
-    function.run "credits/provider_paymento_create_payment" {
+    function.run "credits/provider_nowpayments_create_invoice" {
       input = {
-        amount_usd : $input.amount_usd
-        order_id   : $deposit.id
-        return_url : $safe_return_url
-        email      : $user.email
+        amount_usd      : $input.amount_usd
+        order_id        : $deposit.id
+        pay_currency    : $now_pay_currency
+        ipn_callback_url: "https://api.shsws-solutions.com/api:5kArnPy5/dashboard/credits/webhook-nowpayments"
+        return_url      : $safe_return_url
       }
-    } as $payment
+    } as $invoice
 
     db.patch crypto_deposit {
       field_name = "id"
       field_value = $deposit.id
       data = {
-        external_invoice_id: $payment.token
-        payment_url         : $payment.payment_url
+        external_invoice_id: $invoice.external_invoice_id
+        payment_url         : $invoice.payment_url
       }
     } as $updated_deposit
   }
 
   response = {
     deposit_id  : $deposit.id
-    payment_url : $payment.payment_url
-    currency    : "USDT"
+    provider    : "nowpayments"
+    payment_url : $invoice.payment_url
+    currency    : "USDT_" ~ $network
     amount_usd  : $input.amount_usd
     status      : "pending"
   }

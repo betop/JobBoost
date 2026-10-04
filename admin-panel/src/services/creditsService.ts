@@ -34,6 +34,7 @@ export interface AdminCreditSummary {
 
 export interface DepositResponse {
   deposit_id: string;
+  provider?: string;
   payment_url: string;
   currency: string;
   amount_usd: number;
@@ -57,9 +58,13 @@ export const creditsService = {
     return response.data;
   },
 
-  deposit: async (amountUsd: number): Promise<DepositResponse> => {
+  deposit: async (
+    amountUsd: number,
+    network: "TRC20" | "BEP20" = "TRC20"
+  ): Promise<DepositResponse> => {
     const response = await api.post("/dashboard/credits/deposit", {
       amount_usd: amountUsd,
+      network,
     });
     return response.data;
   },

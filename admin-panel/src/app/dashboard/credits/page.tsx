@@ -38,6 +38,7 @@ export default function CreditsPage() {
     ReturnType<typeof creditsService.deposit>
   > | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
+  const [network, setNetwork] = useState<"TRC20" | "BEP20">("TRC20");
 
   const [adjustTarget, setAdjustTarget] = useState<{ id: string; name: string } | null>(null);
   const [adjustAmount, setAdjustAmount] = useState("");
@@ -68,7 +69,7 @@ export default function CreditsPage() {
     }
     setDepositLoading(true);
     try {
-      const result = await creditsService.deposit(amount);
+      const result = await creditsService.deposit(amount, network);
       setDepositResult(result);
       if (result.payment_url) {
         window.open(result.payment_url, "_blank", "noreferrer");
@@ -323,10 +324,21 @@ export default function CreditsPage() {
         </table>
       </div>
 
-      <Modal isOpen={depositModalOpen} onClose={closeDepositModal} title="Deposit via Paymento" size="sm">
+      <Modal isOpen={depositModalOpen} onClose={closeDepositModal} title="Deposit USDT" size="sm">
         <div className="p-6 space-y-4">
           {!depositResult ? (
             <>
+              <div>
+                <label className="text-sm font-medium block mb-1">USDT network</label>
+                <select
+                  value={network}
+                  onChange={(e) => setNetwork(e.target.value as "TRC20" | "BEP20")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                >
+                  <option value="TRC20">TRC20 (Tron)</option>
+                  <option value="BEP20">BEP20 (BNB Smart Chain)</option>
+                </select>
+              </div>
               <div>
                 <label className="text-sm font-medium block mb-1">Amount (USD)</label>
                 <input
@@ -340,11 +352,11 @@ export default function CreditsPage() {
                 <p className="text-xs text-gray-500 mt-1">Minimum deposit: $1</p>
               </div>
               <p className="text-xs text-gray-500">
-                You&apos;ll be redirected to Paymento&apos;s secure checkout to choose your asset and
-                network (e.g. USDT on BEP20 or TRC20) and complete the payment.
+                You&apos;ll be redirected to NOWPayments&apos; secure invoice page to complete the USDT
+                payment.
               </p>
               <Button onClick={handleDeposit} loading={depositLoading} className="w-full">
-                Continue to Paymento
+                Continue to NOWPayments
               </Button>
             </>
           ) : (
@@ -364,7 +376,7 @@ export default function CreditsPage() {
                 </a>
               )}
               <p className="text-xs text-gray-500 text-center">
-                Your balance updates automatically once Paymento confirms the payment.
+                Your balance updates automatically once the payment is confirmed.
               </p>
               <Button variant="secondary" onClick={closeDepositModal} className="w-full">
                 Done
