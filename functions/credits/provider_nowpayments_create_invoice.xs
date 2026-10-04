@@ -1,10 +1,11 @@
 // Creates a hosted crypto invoice via NOWPayments (POST /v1/invoice).
 // Docs: https://documenter.getpostman.com/view/7907941/2s93JusNJt
-// Requires env var NOWPAYMENTS_API_KEY. The customer pays on NOWPayments' hosted
+// Requires env var NOWPAYMENTS_API_KEY. pay_currency is intentionally NOT sent, so the
+// customer picks any coin/network enabled on the merchant account on NOWPayments' hosted
 // invoice page (invoice_url); we receive status updates on ipn_callback_url.
 // order_id carries our crypto_deposit.id for reconciliation.
 function "credits/provider_nowpayments_create_invoice" {
-  description = "Create a hosted USDT invoice via NOWPayments"
+  description = "Create a hosted crypto invoice via NOWPayments (customer picks the coin)"
 
   input {
     decimal amount_usd {
@@ -13,10 +14,6 @@ function "credits/provider_nowpayments_create_invoice" {
 
     text order_id {
       description = "Our internal reference (crypto_deposit.id) sent as NOWPayments order_id"
-    }
-
-    text pay_currency {
-      description = "NOWPayments coin code, e.g. usdttrc20 or usdtbsc"
     }
 
     text ipn_callback_url {
@@ -43,7 +40,6 @@ function "credits/provider_nowpayments_create_invoice" {
       value = {
         price_amount     : $input.amount_usd
         price_currency   : "usd"
-        pay_currency     : $input.pay_currency
         order_id         : $input.order_id
         order_description: "Credit top-up"
         ipn_callback_url : $input.ipn_callback_url

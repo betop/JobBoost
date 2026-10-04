@@ -38,7 +38,6 @@ export default function CreditsPage() {
     ReturnType<typeof creditsService.deposit>
   > | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
-  const [network, setNetwork] = useState<"TRC20" | "BEP20">("TRC20");
 
   const [adjustTarget, setAdjustTarget] = useState<{ id: string; name: string } | null>(null);
   const [adjustAmount, setAdjustAmount] = useState("");
@@ -69,7 +68,7 @@ export default function CreditsPage() {
     }
     setDepositLoading(true);
     try {
-      const result = await creditsService.deposit(amount, network);
+      const result = await creditsService.deposit(amount);
       setDepositResult(result);
       if (result.payment_url) {
         window.open(result.payment_url, "_blank", "noreferrer");
@@ -233,7 +232,7 @@ export default function CreditsPage() {
       <div>
         <h1 className="text-3xl font-bold">Credits</h1>
         <p className="text-gray-600 mt-2">
-          Top up your balance with USDT to keep generating resumes and using the chat
+          Top up your balance with crypto to keep generating resumes and using the chat
           assistant. Every AI call costs 1.5x the provider&apos;s raw price.
         </p>
       </div>
@@ -261,7 +260,7 @@ export default function CreditsPage() {
           </div>
           <Button onClick={() => setDepositModalOpen(true)}>
             <Plus className="w-4 h-4" />
-            Deposit USDT
+            Deposit Crypto
           </Button>
         </div>
       </div>
@@ -324,21 +323,10 @@ export default function CreditsPage() {
         </table>
       </div>
 
-      <Modal isOpen={depositModalOpen} onClose={closeDepositModal} title="Deposit USDT" size="sm">
+      <Modal isOpen={depositModalOpen} onClose={closeDepositModal} title="Deposit crypto" size="sm">
         <div className="p-6 space-y-4">
           {!depositResult ? (
             <>
-              <div>
-                <label className="text-sm font-medium block mb-1">USDT network</label>
-                <select
-                  value={network}
-                  onChange={(e) => setNetwork(e.target.value as "TRC20" | "BEP20")}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                >
-                  <option value="TRC20">TRC20 (Tron)</option>
-                  <option value="BEP20">BEP20 (BNB Smart Chain)</option>
-                </select>
-              </div>
               <div>
                 <label className="text-sm font-medium block mb-1">Amount (USD)</label>
                 <input
@@ -352,8 +340,8 @@ export default function CreditsPage() {
                 <p className="text-xs text-gray-500 mt-1">Minimum deposit: $1</p>
               </div>
               <p className="text-xs text-gray-500">
-                You&apos;ll be redirected to NOWPayments&apos; secure invoice page to complete the USDT
-                payment.
+                You&apos;ll be redirected to NOWPayments&apos; secure invoice page, where you can choose
+                from all available coins and networks to complete the payment.
               </p>
               <Button onClick={handleDeposit} loading={depositLoading} className="w-full">
                 Continue to NOWPayments

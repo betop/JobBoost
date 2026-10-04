@@ -58,13 +58,9 @@ export const creditsService = {
     return response.data;
   },
 
-  deposit: async (
-    amountUsd: number,
-    network: "TRC20" | "BEP20" = "TRC20"
-  ): Promise<DepositResponse> => {
+  deposit: async (amountUsd: number): Promise<DepositResponse> => {
     const response = await api.post("/dashboard/credits/deposit", {
       amount_usd: amountUsd,
-      network,
     });
     return response.data;
   },

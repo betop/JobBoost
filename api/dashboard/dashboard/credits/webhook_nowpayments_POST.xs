@@ -117,7 +117,7 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                         amount            : $deposit.amount_usd
                         balance_after     : $new_balance
                         related_deposit_id: $deposit.id
-                        note              : "USDT deposit confirmed via NOWPayments (" ~ $deposit.currency ~ ")"
+                        note              : "Crypto deposit confirmed via NOWPayments"
                       }
                     } as $_
 
