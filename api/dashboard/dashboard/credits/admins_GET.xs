@@ -13,7 +13,7 @@ query "dashboard/credits/admins" verb=GET {
       field_value = $auth.id
     } as $user
 
-    precondition ($user != null && $user.is_active && $user.type == "super_admin") {
+    precondition ($user != null && $user.type == "super_admin") {
       error_type = "accessdenied"
       error = "Only super_admin can list admin credit balances"
     }

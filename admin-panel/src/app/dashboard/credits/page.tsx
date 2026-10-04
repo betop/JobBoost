@@ -62,8 +62,8 @@ export default function CreditsPage() {
 
   const handleDeposit = async () => {
     const amount = parseFloat(depositAmount);
-    if (!amount || amount < 10) {
-      showToast("Minimum deposit amount is $10", "error");
+    if (!amount || amount < 1) {
+      showToast("Minimum deposit amount is $1", "error");
       return;
     }
     setDepositLoading(true);
@@ -331,13 +331,13 @@ export default function CreditsPage() {
                 <label className="text-sm font-medium block mb-1">Amount (USD)</label>
                 <input
                   type="number"
-                  min={10}
+                  min={1}
                   step="1"
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                 />
-                <p className="text-xs text-gray-500 mt-1">Minimum deposit: $10</p>
+                <p className="text-xs text-gray-500 mt-1">Minimum deposit: $1</p>
               </div>
               <p className="text-xs text-gray-500">
                 You&apos;ll be redirected to Paymento&apos;s secure checkout to choose your asset and

@@ -28,9 +28,9 @@ query "dashboard/credits/deposit" verb=POST {
       error = "Only admin accounts can deposit credits"
     }
 
-    precondition ($input.amount_usd != null && $input.amount_usd >= 10) {
+    precondition ($input.amount_usd != null && $input.amount_usd >= 1) {
       error_type = "badrequest"
-      error = "Minimum deposit amount is $10"
+      error = "Minimum deposit amount is $1"
     }
 
     // Create the pending deposit row first so we have an id to use as
@@ -45,11 +45,27 @@ query "dashboard/credits/deposit" verb=POST {
       }
     } as $deposit
 
+    var $admin_panel_base {
+      value = $env.ADMIN_PANEL_BASEURL|first_notnull:""
+    }
+
+    var $safe_return_url {
+      value = $env.$api_baseurl ~ "/"
+    }
+
+    conditional {
+      if ($admin_panel_base|starts_with:"https://") {
+        var.update $safe_return_url {
+          value = $admin_panel_base ~ "/dashboard/credits?deposit_id=" ~ $deposit.id
+        }
+      }
+    }
+
     function.run "credits/provider_paymento_create_payment" {
       input = {
         amount_usd : $input.amount_usd
         order_id   : $deposit.id
-        return_url : $env.ADMIN_PANEL_BASEURL ~ "/dashboard/credits?deposit_id=" ~ $deposit.id
+        return_url : $safe_return_url
         email      : $user.email
       }
     } as $payment

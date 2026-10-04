@@ -39,6 +39,40 @@ query "resume/regenerate" verb=POST {
       error_type = "accessdenied"
       error = "Profile is not approved. Please contact your admin."
     }
+
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $auth_user
+
+    conditional {
+      if ($auth_user != null && $auth_user.type == "bidder") {
+        var $assigned_ip {
+          value = $auth_user.assigned_ip
+        }
+
+        conditional {
+          if ($assigned_ip != null && $assigned_ip != "") {
+            var $assigned_ip_normalized {
+              value = (($assigned_ip|to_text)|trim)|replace:"::ffff:":""
+            }
+
+            var $request_ip_raw {
+              value = $env.$remote_ip|to_text|trim
+            }
+
+            var $request_ip_normalized {
+              value = $request_ip_raw|replace:"::ffff:":""
+            }
+
+            precondition ($assigned_ip_normalized == "" || $request_ip_normalized == $assigned_ip_normalized) {
+              error_type = "accessdenied"
+              error = "Generation is not allowed from this IP address"
+            }
+          }
+        }
+      }
+    }
   
     // Pay-as-you-go credit check — super_admins are exempt; bidders are billed
     // through the admin that created them

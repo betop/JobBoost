@@ -37,6 +37,20 @@ query "resume/generate" verb=POST {
       error = "The job description is too short. Please paste the full job description text, not just a job title or link."
     }
   
+    // Reject federal government job postings
+    var $fed_text {
+      value = (($input.job_url|to_text) ~ " " ~ ($input.job_description|to_text))|to_lower
+    }
+  
+    var $is_federal_job {
+      value = ($fed_text|contains:"usajobs") || ($fed_text|contains:"federal government") || ($fed_text|contains:"federal agency") || ($fed_text|contains:"federal employee") || ($fed_text|contains:"u.s. government") || ($fed_text|contains:"us government") || ($fed_text|contains:"executive branch") || ($fed_text|contains:"general schedule") || ($fed_text|contains:"gs-0") || ($fed_text|contains:"gs-1") || ($fed_text|contains:"excepted service") || ($fed_text|contains:"competitive service") || ($fed_text|contains:".gov/") || ($fed_text|contains:".gov ")
+    }
+  
+    precondition (!$is_federal_job) {
+      error_type = "badrequest"
+      error = "Federal government jobs are not supported."
+    }
+  
     precondition ($input.token != null) {
       error_type = "accessdenied"
       error = "Missing authorization key"
@@ -91,11 +105,19 @@ query "resume/generate" verb=POST {
       
         conditional {
           if ($assigned_ip != null && $assigned_ip != "") {
-            var $request_ip {
-              value = $request.ip|to_text|trim
+            var $assigned_ip_normalized {
+              value = (($assigned_ip|to_text)|trim)|replace:"::ffff:":""
+            }
+
+            var $request_ip_raw {
+              value = $env.$remote_ip|to_text|trim
+            }
+
+            var $request_ip_normalized {
+              value = $request_ip_raw|replace:"::ffff:":""
             }
           
-            precondition ($request_ip == ($assigned_ip|trim)) {
+            precondition ($assigned_ip_normalized == "" || $request_ip_normalized == $assigned_ip_normalized) {
               error_type = "accessdenied"
               error = "Generation is not allowed from this IP address"
             }
@@ -347,7 +369,7 @@ query "resume/generate" verb=POST {
                         |set:"messages":([]
                           |push:({}
                             |set:"role":"user"
-                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"compensation\": \"the salary or pay range as stated in the job description (e.g. '$120K - $150K/yr'), or '' if not mentioned\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"requires_in_person_interview\": \"true or false - true only if the job description states the hiring process includes an in-person, onsite, or in-office interview or meeting (e.g. onsite final round, in-person panel, candidate must come to the office to interview); false if the hiring process is fully remote/virtual or the job description does not mention it\",\n\"primary_language\": \"the primary human language the job description and hiring process are written/conducted in, as a single English word, e.g. English, Spanish, German, French, Portuguese, Italian, Dutch, Polish, Japanese, Chinese\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
+                            |set:"content":"Extract json object ({\n\"is_job_posting\": \"true or false\",\n\"company\": \"full company name or ''\",\n\"position\": \"full position title or ''\",\n\"compensation\": \"the salary or pay range as stated in the job description (e.g. '$120K - $150K/yr'), or '' if not mentioned\",\n\"is_remote\": \"true or false\",\n\"travels_or_relocation_required\": \"true or false\",\n\"is_freelancer_marketplace_similar_to_toptal\": \"true or false\",\n\"clearance_required\": \"true or false\",\n\"is_federal_government_employer\": \"true or false - true if the employer is a United States federal government entity (a federal agency, department, or military branch hiring federal employees, e.g. via USAJOBS). Use your own knowledge of the company named in the job description, not only the text, since the posting often does not say so. false for private companies, government contractors, and state or local governments\",\n\"requires_in_person_interview\": \"true or false - true only if the job description states the hiring process includes an in-person, onsite, or in-office interview or meeting (e.g. onsite final round, in-person panel, candidate must come to the office to interview); false if the hiring process is fully remote/virtual or the job description does not mention it\",\n\"primary_language\": \"the primary human language the job description and hiring process are written/conducted in, as a single English word, e.g. English, Spanish, German, French, Portuguese, Italian, Dutch, Polish, Japanese, Chinese\",\n\"seniority\": \"one of intern, entry, junior, mid, senior, lead, staff, principal, manager, director, vice_president, c_level or founder\",\n\"tech_scope\": \"one of ai, machine_learning, data_science, data_analytics, data_engineering, data_research, computer_vision, mlops, generative_ai, ai_security, ai_product, ai_research, edge_ai, speech_ai, recommendation_systems, knowledge_systems, full_stack_ai, backend_ai, frontend_ai, ai_software_engineering, software_engineering, full_stack, backend, frontend or devops. Use machine_learning for deep learning and reinforcement learning roles. Use ai for NLP roles unless another category fits better.\"\n}) from this job description.\n\nJob Description:\n" ~ $input.job_description ~ "\n\nseniority and tech_scope must have only 1 value. Return only JSON. No explanations. No markdown. No additional text."
                           )
                         )
                       headers = []
@@ -524,6 +546,11 @@ query "resume/generate" verb=POST {
                       }
                     }
 
+                    // Federal government check: flag comes from the extraction prompt above
+                    var $is_federal_company {
+                      value = $extraction_json.is_federal_government_employer == "true" || $extraction_json.is_federal_government_employer == true
+                    }
+
                     // Max 3 successful submissions to the same company per profile
                     // in a rolling 30-day window (2,592,000 seconds).
                     var $company_cap_secs {
@@ -575,6 +602,16 @@ query "resume/generate" verb=POST {
 
                         var.update $error_msg {
                           value = "This company (" ~ $company_name ~ ") is on your blacklist. Skipping this application."
+                        }
+                      }
+
+                      elseif ($is_federal_company) {
+                        var.update $match_status {
+                          value = 2
+                        }
+
+                        var.update $error_msg {
+                          value = "This company (" ~ $company_name ~ ") is a federal government employer. Federal government jobs are not supported."
                         }
                       }
 
