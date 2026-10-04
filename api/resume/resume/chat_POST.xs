@@ -102,13 +102,13 @@ query "resume/chat" verb=POST {
             conditional {
               if ($jd_text != null && ($jd_text|strlen) > 0) {
                 var.update $parts {
-                  value = $parts ~ "=== JOB DESCRIPTION ===\n" ~ $jd_text ~ "\n\n"
+                  value = $parts ~ "=== JOB DESCRIPTION ===\n" ~ ($jd_text|substr:0:12000) ~ "\n\n"
                 }
               }
             }
           
             conditional {
-              if ($resume_text != null && ($resume_text|strlen) > 0) {
+              if ($resume_text != null && ($resume_text|strlen) > 0 && ($input.resume_base64 == null || ($input.resume_base64|strlen) == 0)) {
                 var.update $parts {
                   value = $parts ~ "=== RESUME CONTENT ===\n" ~ $resume_text ~ "\n\n"
                 }
@@ -157,6 +157,86 @@ No explanations needed, just answer the question based on the provided informati
     var $messages {
       value = []
     }
+
+    // Attached PDFs go in a stable LEADING turn (before the history) and are marked
+    // cacheable, so every follow-up question in the thread reads them from cache at
+    // ~10% of the price instead of paying full price for the PDFs on each question.
+    var $doc_blocks {
+      value = []
+    }
+
+    conditional {
+      if ($input.resume_base64 != null && ($input.resume_base64|strlen) > 0) {
+        var $resume_pdf_data {
+          value = "/^data:[^,]*,/"|regex_replace:"":$input.resume_base64
+        }
+
+        var $resume_doc_block {
+          value = {}
+            |set:"type":"document"
+            |set:"title":"Candidate resume"
+            |set:"source":({}
+              |set:"type":"base64"
+              |set:"media_type":"application/pdf"
+              |set:"data":$resume_pdf_data
+            )
+        }
+
+        var.update $doc_blocks {
+          value = $doc_blocks|push:$resume_doc_block
+        }
+      }
+    }
+
+    conditional {
+      if ($input.cover_letter_base64 != null && ($input.cover_letter_base64|strlen) > 0) {
+        var $cover_pdf_data {
+          value = "/^data:[^,]*,/"|regex_replace:"":$input.cover_letter_base64
+        }
+
+        var $cover_doc_block {
+          value = {}
+            |set:"type":"document"
+            |set:"title":"Candidate cover letter"
+            |set:"source":({}
+              |set:"type":"base64"
+              |set:"media_type":"application/pdf"
+              |set:"data":$cover_pdf_data
+            )
+        }
+
+        var.update $doc_blocks {
+          value = $doc_blocks|push:$cover_doc_block
+        }
+      }
+    }
+
+    conditional {
+      if (($doc_blocks|count) > 0) {
+        var $doc_intro_block {
+          value = {}
+            |set:"type":"text"
+            |set:"text":"The documents above are the candidate's current resume and/or cover letter. Treat them as the authoritative source of the candidate's facts."
+            |set:"cache_control":({}|set:"type":"ephemeral")
+        }
+
+        var $doc_user_msg {
+          value = {}
+            |set:"role":"user"
+            |set:"content":($doc_blocks|push:$doc_intro_block)
+        }
+
+        var $doc_ack_msg {
+          value = {}
+            |set:"role":"assistant"
+            |set:"content":"Understood. I will use the attached documents as the source of truth."
+        }
+
+        var.update $messages {
+          value = $messages|push:$doc_user_msg|push:$doc_ack_msg
+        }
+      }
+    }
   
     // var.update $messages {
     //   value = $messages|push:$system_message
@@ -165,53 +245,72 @@ No explanations needed, just answer the question based on the provided informati
     // Append prior conversation history (each item must have role + content)
     conditional {
       if ($input.history != null && ($input.history|count) > 0) {
-        foreach ($input.history) {
+        // Keep only the last 8 turns, cap each turn's length, and make sure the
+        // thread starts with a user turn. Answers are short, so this loses nothing useful.
+        var $hist_count {
+          value = $input.history|count
+        }
+
+        var $hist_offset {
+          value = $hist_count > 8 ? $hist_count - 8 : 0
+        }
+
+        var $hist_tail {
+          value = $input.history|slice:$hist_offset:8
+        }
+
+        var $hist_clean {
+          value = []
+        }
+
+        foreach ($hist_tail) {
           each as $turn {
+            conditional {
+              if (($turn.role == "user" || $turn.role == "assistant") && $turn.content != null && !(($hist_clean|count) == 0 && $turn.role == "assistant")) {
+                var $turn_clean {
+                  value = {}
+                    |set:"role":$turn.role
+                    |set:"content":($turn.content|substr:0:1200)
+                }
+
+                var.update $hist_clean {
+                  value = $hist_clean|push:$turn_clean
+                }
+              }
+            }
+          }
+        }
+
+        // Older extension builds already append the current question to history: drop that copy
+        conditional {
+          if (($hist_clean|count) > 0) {
+            var $hist_last {
+              value = $hist_clean|last
+            }
+
+            conditional {
+              if ($hist_last.role == "user" && $hist_last.content == ($input.question|substr:0:1200)) {
+                var.update $hist_clean {
+                  value = $hist_clean|slice:0:(($hist_clean|count) - 1)
+                }
+              }
+            }
+          }
+        }
+
+        foreach ($hist_clean) {
+          each as $turn_final {
             var.update $messages {
-              value = $messages|push:$turn
+              value = $messages|push:$turn_final
             }
           }
         }
       }
     }
   
-    // Build current user message — may include PDF file blocks
+    // Build current user message (text only; PDFs live in the cached leading turn)
     var $user_content {
       value = []
-    }
-  
-    conditional {
-      if ($input.resume_base64 != null && ($input.resume_base64|strlen) > 0) {
-        var $resume_block {
-          value = {}
-            |set:"type":"file"
-            |set:"file":({}
-              |set:"filename":"resume.pdf"
-              |set:"file_data":$input.resume_base64
-            )
-        }
-      
-        var.update $user_content {
-          value = $user_content|push:$resume_block
-        }
-      }
-    }
-  
-    conditional {
-      if ($input.cover_letter_base64 != null && ($input.cover_letter_base64|strlen) > 0) {
-        var $cover_block {
-          value = {}
-            |set:"type":"file"
-            |set:"file":({}
-              |set:"filename":"cover_letter.pdf"
-              |set:"file_data":$input.cover_letter_base64
-            )
-        }
-      
-        var.update $user_content {
-          value = $user_content|push:$cover_block
-        }
-      }
     }
   
     // Append the text question. Marked cacheable so a follow-up question in the
@@ -314,7 +413,7 @@ No explanations needed, just answer the question based on the provided informati
           method = "POST"
           params = {}
             |set:"model":"claude-haiku-4-5"
-            |set:"max_tokens":1000
+            |set:"max_tokens":600
             |set:"temperature":0.5
             |set:"system":([]
               |push:({}
@@ -394,9 +493,14 @@ No explanations needed, just answer the question based on the provided informati
     // Charge the billing admin for this AI usage (1.5x raw provider cost)
     conditional {
       if ($billing_check.is_billable) {
-        var $chat_raw_cost {
-          value = ((($input_tokens|first_notnull:0) / 1000000) * 0.8) + ((($output_tokens|first_notnull:0) / 1000000) * 2.4) + ((($cache_creation_input_tokens|first_notnull:0) / 1000000) * 1.0) + ((($cache_read_input_tokens|first_notnull:0) / 1000000) * 0.08)
-        }
+        function.run "ai/claude_haiku_cost" {
+          input = {
+            input_tokens         : $input_tokens
+            output_tokens        : $output_tokens
+            cache_creation_tokens: $cache_creation_input_tokens
+            cache_read_tokens    : $cache_read_input_tokens
+          }
+        } as $chat_raw_cost
 
         function.run "credits/credit_charge_usage" {
           input = {

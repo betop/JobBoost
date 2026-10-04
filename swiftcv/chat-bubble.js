@@ -768,10 +768,12 @@
       f.name.toLowerCase().includes("cover") || (resumeFile && f.name !== resumeFile.name)
     );
 
+    // Snapshot of PRIOR turns only (taken before the current question is pushed below,
+    // otherwise the question would be sent twice). Capped to the last 8 turns.
     const payload = {
       token,
       question,
-      history: conversationHistory,
+      history: conversationHistory.slice(-8),
     };
 
     if (stored.lastLogId) payload.log_id = stored.lastLogId;

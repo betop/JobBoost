@@ -1627,7 +1627,17 @@ Regenerate if violated.
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
-                        |set:"content":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ $profile_contact_section ~ " (keep it empty for missing fields )\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description) ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $result_schema ~ $omit_instruction ~ "\n\nReturn only JSON and generate values only defined in the JSON. No explanations. No markdown. No additional text."
+                        |set:"content":([]
+                          |push:({}
+                            |set:"type":"text"
+                            |set:"text":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ $profile_contact_section ~ " (keep it empty for missing fields )\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $result_schema ~ $omit_instruction
+                            |set:"cache_control":({}|set:"type":"ephemeral")
+                          )
+                          |push:({}
+                            |set:"type":"text"
+                            |set:"text":"\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:12000) ~ "\n\nReturn only JSON and generate values only defined in the JSON. No explanations. No markdown. No additional text."
+                          )
+                        )
                       )
                     )
                   headers = []
@@ -1838,9 +1848,14 @@ Regenerate if violated.
     // for non-billable users (super_admin, or bidders with no resolvable admin).
     conditional {
       if (!$use_legacy_api && $billing_check.is_billable) {
-        var $gen_raw_cost {
-          value = ((($input_tokens|first_notnull:0) / 1000000) * 0.8) + ((($output_tokens|first_notnull:0) / 1000000) * 2.4) + ((($cache_creation_input_tokens|first_notnull:0) / 1000000) * 1.0) + ((($cache_read_input_tokens|first_notnull:0) / 1000000) * 0.08)
-        }
+        function.run "ai/claude_haiku_cost" {
+          input = {
+            input_tokens         : $input_tokens
+            output_tokens        : $output_tokens
+            cache_creation_tokens: $cache_creation_input_tokens
+            cache_read_tokens    : $cache_read_input_tokens
+          }
+        } as $gen_raw_cost
 
         function.run "credits/credit_charge_usage" {
           input = {

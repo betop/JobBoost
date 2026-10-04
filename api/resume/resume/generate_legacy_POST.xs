@@ -1438,9 +1438,12 @@ query "resume/generate_legacy" verb=POST {
     // Charge the billing admin for this AI usage (1.5x raw provider cost)
     conditional {
       if ($billing_check.is_billable) {
-        var $gen_raw_cost {
-          value = ((($input_tokens|first_notnull:0) / 1000000) * 0.8) + ((($output_tokens|first_notnull:0) / 1000000) * 2.4)
-        }
+        function.run "ai/claude_haiku_cost" {
+          input = {
+            input_tokens : $input_tokens
+            output_tokens: $output_tokens
+          }
+        } as $gen_raw_cost
 
         function.run "credits/credit_charge_usage" {
           input = {

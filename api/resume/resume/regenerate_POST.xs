@@ -534,7 +534,17 @@ Remember today's year is 2026.
             |set:"messages":([]
               |push:({}
                 |set:"role":"user"
-                |set:"content":"Generate a full tailored resume only.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\nJOB DESCRIPTION:\n" ~ ($input.job_description) ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $resume_schema ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+                |set:"content":([]
+                  |push:({}
+                    |set:"type":"text"
+                    |set:"text":"Generate a full tailored resume only.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $resume_schema
+                    |set:"cache_control":({}|set:"type":"ephemeral")
+                  )
+                  |push:({}
+                    |set:"type":"text"
+                    |set:"text":"\nJOB DESCRIPTION:\n" ~ ($input.job_description|substr:0:12000) ~ "\n\nReturn only JSON. No explanations. No markdown. No additional text."
+                  )
+                )
               )
             )
           headers = []
@@ -701,9 +711,14 @@ Remember today's year is 2026.
     // Charge the billing admin for this AI usage (1.5x raw provider cost)
     conditional {
       if ($billing_check.is_billable) {
-        var $gen_raw_cost {
-          value = ((($input_tokens|first_notnull:0) / 1000000) * 0.8) + ((($output_tokens|first_notnull:0) / 1000000) * 2.4) + ((($cache_creation_input_tokens|first_notnull:0) / 1000000) * 1.0) + ((($cache_read_input_tokens|first_notnull:0) / 1000000) * 0.08)
-        }
+        function.run "ai/claude_haiku_cost" {
+          input = {
+            input_tokens         : $input_tokens
+            output_tokens        : $output_tokens
+            cache_creation_tokens: $cache_creation_input_tokens
+            cache_read_tokens    : $cache_read_input_tokens
+          }
+        } as $gen_raw_cost
 
         function.run "credits/credit_charge_usage" {
           input = {

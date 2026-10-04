@@ -4,6 +4,13 @@
 // the matching deposit only when that authoritative status is "finished".
 // Repeated deposits (parent_payment_id set) and underpriced payments are never auto-credited.
 // Always acknowledges with HTTP 200 (never throws) so NOWPayments does not keep retrying.
+// After a deposit is credited it auto-withdraws to the owner's wallet via
+// credits/provider_nowpayments_payout (best effort, failures only recorded under
+// raw_webhook_payload.payout, never affecting the credit/outcome). Extra env vars:
+// NOWPAYMENTS_EMAIL, NOWPAYMENTS_PASSWORD, NOWPAYMENTS_PAYOUT_ADDRESS (USDT BEP20), and
+// optional NOWPAYMENTS_PAYOUT_2FA_SECRET (currently unused: TOTP can't be computed in
+// XanoScript, so payouts stay pending until verified in the NOWPayments dashboard).
+// The Xano outbound IP must be whitelisted in NOWPayments for the Payout API.
 // The callback URL is set per invoice in credits/deposit, no dashboard setting needed.
 query "dashboard/credits/webhook-nowpayments" verb=POST {
   api_group = "dashboard"
@@ -246,6 +253,60 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
 
                     var.update $outcome {
                       value = "confirmed"
+                    }
+
+                    // Auto-withdraw to the owner's wallet. Credit is already saved: a payout
+                    // failure must never change the outcome, undo the credit, or throw.
+                    try_catch {
+                      try {
+                        var $payout_amount {
+                          value = $deposit.amount_usd
+                        }
+
+                        conditional {
+                          if ($outcome_currency_normalized == "usdtbsc" && $payment.outcome_amount != null && ($payment.outcome_amount|to_decimal) > 0) {
+                            var.update $payout_amount {
+                              value = $payment.outcome_amount|to_decimal
+                            }
+                          }
+                        }
+
+                        function.run "credits/provider_nowpayments_payout" {
+                          input = {amount: $payout_amount, deposit_id: $deposit.id|to_text}
+                        } as $payout
+
+                        db.patch crypto_deposit {
+                          field_name = "id"
+                          field_value = $deposit.id
+                          data = {
+                            raw_webhook_payload: $confirm_payload|set:"payout":({payout_id: $payout.payout_id, status: $payout.status, amount: $payout_amount})
+                          }
+                        } as $_
+                      }
+
+                      catch {
+                        debug.log {
+                          value = "NOWPayments payout error: " ~ $error
+                        }
+
+                        try_catch {
+                          try {
+                            db.patch crypto_deposit {
+                              field_name = "id"
+                              field_value = $deposit.id
+                              data = {
+                                raw_webhook_payload: $confirm_payload|set:"payout":({status: "error", error: ($error|to_text)})
+                              }
+                            } as $_
+                          }
+
+                          catch {
+                            debug.log {
+                              value = "NOWPayments payout error record failed: " ~ $error
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }

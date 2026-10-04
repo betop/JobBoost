@@ -33,5 +33,19 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/ai/claude_haiku_cost.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/provider_nowpayments_payout.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]
