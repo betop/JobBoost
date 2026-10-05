@@ -13,7 +13,7 @@ query "dashboard/credits/settings" verb=GET {
       field_value = $auth.id
     } as $user
 
-    precondition ($user != null && $user.is_active) {
+    precondition ($user != null && ($user.type == "super_admin" || $user.is_active)) {
       error_type = "accessdenied"
       error = "User not authorized"
     }

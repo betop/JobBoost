@@ -16,7 +16,7 @@ query "dashboard/credits/settings" verb=PUT {
       field_value = $auth.id
     } as $user
 
-    precondition ($user != null && $user.is_active && $user.type == "super_admin") {
+    precondition ($user != null && $user.type == "super_admin") {
       error_type = "accessdenied"
       error = "Only super_admin can update billing settings"
     }
