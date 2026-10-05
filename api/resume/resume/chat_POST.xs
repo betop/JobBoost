@@ -540,6 +540,10 @@ No explanations needed, just answer the question based on the provided informati
           input = {
             admin_id        : $billing_check.billing_admin_id
             raw_cost_usd     : $chat_raw_cost
+            input_tokens: $input_tokens
+            output_tokens: $output_tokens
+            cache_creation_tokens: $cache_creation_input_tokens
+            cache_read_tokens: $cache_read_input_tokens
             related_log_table: "chat_log"
             allow_negative    : true
           }

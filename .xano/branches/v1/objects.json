@@ -68,5 +68,12 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/ai/claude_haiku_rates.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

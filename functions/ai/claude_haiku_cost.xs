@@ -27,8 +27,12 @@ function "ai/claude_haiku_cost" {
   }
 
   stack {
+    function.run "ai/claude_haiku_rates" {
+      input = {}
+    } as $rates
+
     var $cost {
-      value = ((($input.input_tokens|first_notnull:0) * 1.0) + (($input.output_tokens|first_notnull:0) * 5.0) + (($input.cache_creation_tokens|first_notnull:0) * 1.25) + (($input.cache_read_tokens|first_notnull:0) * 0.1)) / 1000000
+      value = ((($input.input_tokens|first_notnull:0) * $rates.input_per_million) + (($input.output_tokens|first_notnull:0) * $rates.output_per_million) + (($input.cache_creation_tokens|first_notnull:0) * $rates.cache_write_per_million) + (($input.cache_read_tokens|first_notnull:0) * $rates.cache_read_per_million)) / 1000000
     }
   }
 

@@ -1892,6 +1892,10 @@ Regenerate if violated.
           input = {
             admin_id        : $billing_check.billing_admin_id
             raw_cost_usd     : $gen_raw_cost
+            input_tokens: $input_tokens
+            output_tokens: $output_tokens
+            cache_creation_tokens: $cache_creation_input_tokens
+            cache_read_tokens: $cache_read_input_tokens
             related_log_table: "generation_log"
             related_log_id   : $log.id
             allow_negative    : true

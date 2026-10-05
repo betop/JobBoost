@@ -46,7 +46,67 @@ export interface CreditSettings {
   low_balance_threshold: number;
 }
 
+export type UsageAppKey = "resume_generation" | "assistant" | "mail_triage" | "other";
+
+export interface UsageTokens {
+  input: number;
+  output: number;
+  cache_write: number;
+  cache_read: number;
+}
+
+export interface UsageRawCost extends UsageTokens {
+  total: number;
+}
+
+export interface UsagePricing {
+  input_per_million: number;
+  output_per_million: number;
+  cache_write_per_million: number;
+  cache_read_per_million: number;
+}
+
+export interface UsageByApp {
+  key: UsageAppKey;
+  label: string;
+  amount: number;
+  count: number;
+  tokens?: UsageTokens;
+  raw_cost?: UsageRawCost;
+  tracked_count?: number;
+  untracked_count?: number;
+}
+
+export interface UsageSummaryResponse {
+  date_from: string;
+  date_to: string;
+  admin_id?: string | null;
+  total_spent: number;
+  total_count: number;
+  by_app: UsageByApp[];
+  tokens?: UsageTokens;
+  raw_cost?: UsageRawCost;
+  tracked_count?: number;
+  untracked_count?: number;
+  pricing?: UsagePricing;
+  usage_rate?: number;
+}
+
 export const creditsService = {
+  getUsageSummary: async (params: {
+    date_from: string;
+    date_to: string;
+    admin_id?: string;
+  }): Promise<UsageSummaryResponse> => {
+    const query: Record<string, string> = {
+      date_from: params.date_from,
+      date_to: params.date_to,
+    };
+    if (params.admin_id) query.admin_id = params.admin_id;
+    const response = await api.get("/dashboard/credits/usage-summary", { params: query });
+    return response.data;
+  },
+
   getSettings: async (): Promise<CreditSettings> => {
     const response = await api.get("/dashboard/credits/settings");
     return response.data;

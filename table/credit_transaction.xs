@@ -20,6 +20,12 @@ table credit_transaction {
     }
   
     text note?
+    int? input_tokens?
+    int? output_tokens?
+    int? cache_creation_tokens?
+    int? cache_read_tokens?
+    decimal? raw_cost_usd?
+    decimal? usage_rate?
   }
 
   index = [

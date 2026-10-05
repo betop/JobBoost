@@ -242,6 +242,10 @@ query "public/gmail-analyze" verb=POST {
               input = {
                 admin_id         : $billing_admin_id
                 raw_cost_usd     : $mt_raw_cost
+                input_tokens: $input_tokens
+                output_tokens: $output_tokens
+                cache_creation_tokens: $usage_obj|get:"cache_creation_input_tokens"|first_notnull:0
+                cache_read_tokens: $usage_obj|get:"cache_read_input_tokens"|first_notnull:0
                 related_log_table: "mail_triage_log"
                 related_log_id   : $triage_log.id
                 allow_negative   : true

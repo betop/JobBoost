@@ -23,6 +23,22 @@ function "credits/credit_charge_usage" {
       description = "id of the related log row"
     }
 
+    int input_tokens? {
+      description = "Uncached input tokens behind raw_cost_usd (null when unknown)"
+    }
+
+    int output_tokens? {
+      description = "Output tokens behind raw_cost_usd"
+    }
+
+    int cache_creation_tokens? {
+      description = "Cache-write tokens behind raw_cost_usd"
+    }
+
+    int cache_read_tokens? {
+      description = "Cache-read tokens behind raw_cost_usd"
+    }
+
     bool allow_negative?=false {
       description = "If true, charge proceeds even if it drives balance negative (used when balance was already verified pre-flight)"
     }
@@ -78,6 +94,12 @@ function "credits/credit_charge_usage" {
         related_log_table: $input.related_log_table
         related_log_id   : $input.related_log_id
         related_deposit_id: null
+        input_tokens     : $input.input_tokens|first_notnull:0
+        output_tokens    : $input.output_tokens|first_notnull:0
+        cache_creation_tokens: $input.cache_creation_tokens|first_notnull:0
+        cache_read_tokens: $input.cache_read_tokens|first_notnull:0
+        raw_cost_usd     : $input.raw_cost_usd
+        usage_rate       : $rate_info.usage_rate
         note             : "AI usage charge (raw cost $" ~ $input.raw_cost_usd ~ " x" ~ $rate_info.usage_rate ~ ")"
       }
     } as $txn
