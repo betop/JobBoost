@@ -44,7 +44,9 @@ function "credits/credit_charge_usage" {
       error = "super_admin accounts are not billable"
     }
 
-    function.run "credits/get_usage_rate" as $rate_info
+    function.run "credits/get_usage_rate" {
+      input = {}
+    } as $rate_info
 
     var $charge_amount {
       value = ($input.raw_cost_usd * $rate_info.usage_rate)|round:8
@@ -69,11 +71,15 @@ function "credits/credit_charge_usage" {
       data = {credit_balance: $new_balance}
     } as $_
 
+    var $negative_amount {
+      value = 0 - $charge_amount
+    }
+
     db.add credit_transaction {
       data = {
         admin_id        : $input.admin_id
         type             : "usage"
-        amount           : $charge_amount * -1
+        amount           : $negative_amount
         balance_after    : $new_balance
         related_log_table: $input.related_log_table
         related_log_id   : $input.related_log_id
