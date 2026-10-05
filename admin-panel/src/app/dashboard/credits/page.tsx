@@ -65,16 +65,17 @@ function BreakdownTable({
   rawCost,
   pricing,
   usageRate,
-  billed,
+  total,
   showPrice,
 }: {
   tokens?: UsageTokens;
   rawCost?: UsageRawCost;
   pricing?: UsagePricing;
   usageRate?: number;
-  billed: number;
+  total: number;
   showPrice: boolean;
 }) {
+  if (usageRate === undefined || !rawCost) return null;
   const cell = "py-1.5";
   return (
     <table className="w-full text-sm">
@@ -88,8 +89,8 @@ function BreakdownTable({
       </thead>
       <tbody>
         {BREAKDOWN_ROWS.map((r) => {
-          const price = pricing?.[r.priceKey];
-          const cost = rawCost?.[r.key];
+          const rawPrice = pricing?.[r.priceKey];
+          const rawTypeCost = rawCost[r.key];
           return (
             <tr key={r.key} className="border-b border-gray-100">
               <td className={`${cell} text-gray-700`}>{r.label}</td>
@@ -98,44 +99,35 @@ function BreakdownTable({
               </td>
               {showPrice && (
                 <td className={`${cell} text-right tabular-nums`}>
-                  {price !== undefined ? formatCost(price) : "—"}
+                  {rawPrice !== undefined ? formatCost(rawPrice * usageRate) : "—"}
                 </td>
               )}
               <td className={`${cell} text-right tabular-nums`}>
-                {cost !== undefined ? formatCost(cost) : "—"}
+                {rawTypeCost !== undefined ? formatCost(rawTypeCost * usageRate) : "—"}
               </td>
             </tr>
           );
         })}
       </tbody>
       <tfoot>
-        <tr>
-          <td className={`${cell} text-gray-700 font-medium`} colSpan={showPrice ? 3 : 2}>
-            Raw provider cost
-          </td>
-          <td className={`${cell} text-right tabular-nums font-medium`}>
-            {rawCost ? formatCost(rawCost.total) : "—"}
-          </td>
-        </tr>
-        {usageRate !== undefined && (
-          <tr>
-            <td className={`${cell} text-gray-700`} colSpan={showPrice ? 3 : 2}>
-              Usage rate
-            </td>
-            <td className={`${cell} text-right tabular-nums`}>x{usageRate}</td>
-          </tr>
-        )}
         <tr className="border-t border-gray-200">
           <td className={`${cell} text-gray-900 font-semibold`} colSpan={showPrice ? 3 : 2}>
-            Billed amount
+            Total
           </td>
           <td className={`${cell} text-right tabular-nums font-semibold`}>
-            {formatUsage(billed)}
+            {formatCost(total)}
           </td>
         </tr>
       </tfoot>
     </table>
   );
+}
+
+// Total shown under the breakdown: the tracked (billed) total so per-type costs add up.
+// Falls back to the billed amount when every charge is tracked.
+function breakdownTotal(billed: number, rawCost?: UsageRawCost, usageRate?: number, untracked?: number): number {
+  if ((untracked ?? 0) > 0 && rawCost && usageRate !== undefined) return rawCost.total * usageRate;
+  return billed;
 }
 
 const EST = "America/New_York";
@@ -349,7 +341,8 @@ function UsageSection({
               {(data?.total_count ?? 0).toLocaleString()} requests · {range.from} to {range.to} (EST)
             </p>
           </div>
-          {hasTracked(data?.tokens, data?.raw_cost, data?.tracked_count) &&
+          {data?.usage_rate !== undefined &&
+            hasTracked(data?.tokens, data?.raw_cost, data?.tracked_count) &&
             (data?.tokens || data?.raw_cost) && (
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">Cost breakdown</h3>
@@ -359,7 +352,7 @@ function UsageSection({
                     rawCost={data?.raw_cost}
                     pricing={data?.pricing}
                     usageRate={data?.usage_rate}
-                    billed={total}
+                    total={breakdownTotal(total, data?.raw_cost, data?.usage_rate, data?.untracked_count)}
                     showPrice
                   />
                 </div>
@@ -390,7 +383,7 @@ function UsageSection({
                     <div className={`h-full ${c.bar}`} style={{ width: `${pct}%` }} />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">{pct.toFixed(1)}% of total</p>
-                  {item && (item.tokens || item.raw_cost) &&
+                  {item && data?.usage_rate !== undefined && (item.tokens || item.raw_cost) &&
                     hasTracked(item.tokens, item.raw_cost, item.tracked_count) && (
                       <details className="mt-3 text-sm">
                         <summary className="cursor-pointer text-primary-600 text-xs font-medium">
@@ -402,7 +395,7 @@ function UsageSection({
                             rawCost={item.raw_cost}
                             pricing={data?.pricing}
                             usageRate={data?.usage_rate}
-                            billed={amount}
+                            total={breakdownTotal(amount, item.raw_cost, data?.usage_rate, item.untracked_count)}
                             showPrice={false}
                           />
                         </div>
