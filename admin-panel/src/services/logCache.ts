@@ -20,6 +20,45 @@ const DB_VERSION = 3;          // v3: drop created_at index, use updated_at only
 const STORE_LOGS = "logs";
 const STORE_META = "meta";
 
+// ── Retention ─────────────────────────────────────────────────────────────────
+
+const RETENTION_MONTHS = 6;
+
+/** Oldest created_at (ms) we keep/load: now minus 6 months. */
+export function getRetentionCutoffMs(): number {
+  const d = new Date();
+  d.setMonth(d.getMonth() - RETENTION_MONTHS);
+  return d.getTime();
+}
+
+/** Delete every cached record older than the retention window. */
+export async function pruneOldRecords(): Promise<void> {
+  const cutoff = getRetentionCutoffMs();
+  const db = await openDB();
+  const tx = db.transaction([STORE_LOGS, STORE_META], "readwrite");
+  const logs = tx.objectStore(STORE_LOGS);
+  const cursorReq = logs.openCursor();
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) return;
+    if (new Date((cursor.value as GenerationLog).created_at).getTime() < cutoff) cursor.delete();
+    cursor.continue();
+  };
+  // Cache can no longer claim coverage older than the cutoff
+  const meta = tx.objectStore(STORE_META);
+  const coveredReq = meta.get("coveredFrom");
+  coveredReq.onsuccess = () => {
+    const v = coveredReq.result?.value as string | undefined;
+    if (v !== undefined && (v === "" || new Date(v).getTime() < cutoff)) {
+      meta.put({ key: "coveredFrom", value: new Date(cutoff).toISOString() });
+    }
+  };
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+  });
+}
+
 // ── DB open ───────────────────────────────────────────────────────────────────
 
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -83,6 +122,8 @@ function withStore<T>(
  * New records are added, existing ones are replaced (handles field updates).
  */
 export async function mergeRecords(records: GenerationLog[]): Promise<void> {
+  const cutoff = getRetentionCutoffMs();
+  records = records.filter((r) => new Date(r.created_at).getTime() >= cutoff);
   if (records.length === 0) return;
   const db  = await openDB();
   const tx  = db.transaction(STORE_LOGS, "readwrite");
@@ -107,16 +148,12 @@ export async function getCachedRecords(fromISO?: string, toISO?: string): Promis
   const store = tx.objectStore(STORE_LOGS);
 
   const all = await idbRequest<GenerationLog[]>(store.getAll());
-  let records = all;
-
-  if (fromISO || toISO) {
-    const from = fromISO ? new Date(fromISO).getTime() : 0;
-    const to   = toISO   ? new Date(toISO).getTime()   : Infinity;
-    records = records.filter((r) => {
-      const t = new Date(r.created_at).getTime();
-      return t >= from && t <= to;
-    });
-  }
+  const from = Math.max(fromISO ? new Date(fromISO).getTime() : 0, getRetentionCutoffMs());
+  const to   = toISO ? new Date(toISO).getTime() : Infinity;
+  const records = all.filter((r) => {
+    const t = new Date(r.created_at).getTime();
+    return t >= from && t <= to;
+  });
 
   records.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return records;

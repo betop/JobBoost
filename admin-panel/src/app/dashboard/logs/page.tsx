@@ -954,16 +954,20 @@ export default function LogsPage() {
   }, []);
 
   async function doFetch(from?: number, to?: number) {
-    const effectiveFrom = from !== undefined ? from : dateFrom;
+    // Only the last 6 months are ever loaded or kept in the local cache
+    const cutoffMs = logCache.getRetentionCutoffMs();
+    const requestedFrom = from !== undefined ? from : dateFrom;
+    const effectiveFrom = Math.max(requestedFrom ?? 0, cutoffMs);
     const effectiveTo   = to   !== undefined ? to   : dateTo;
     setLogsLoading(true);
+    await logCache.pruneOldRecords();
     const lastSync = await logCache.getLastSyncAt();
     const coveredFrom = await logCache.getCoveredFrom();
 
     // Only fetch what the visible window needs (plus a 7-day buffer). Everything older is
     // pulled lazily when the user widens the range, so a fresh device loads a small payload.
     const BUFFER_MS = 7 * 24 * 60 * 60 * 1000;
-    const needFromMs = effectiveFrom === undefined ? 0 : Math.max(0, effectiveFrom - BUFFER_MS);
+    const needFromMs = Math.max(cutoffMs, effectiveFrom - BUFFER_MS);
     const needFromISO = needFromMs > 0 ? new Date(needFromMs).toISOString() : "";
 
     try {
