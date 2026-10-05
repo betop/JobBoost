@@ -8,8 +8,6 @@ import {
   creditsService,
   type UsageAppKey,
   type UsageTokens,
-  type UsageRawCost,
-  type UsagePricing,
 } from "@/services/creditsService";
 import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
 import { useAuthStore } from "@/store/authStore";
@@ -43,91 +41,9 @@ function formatCost(num: number): string {
   }).format(num)}`;
 }
 
-const BREAKDOWN_ROWS: {
-  key: keyof UsageTokens;
-  label: string;
-  priceKey: keyof UsagePricing;
-}[] = [
-  { key: "input", label: "Input tokens", priceKey: "input_per_million" },
-  { key: "output", label: "Output tokens", priceKey: "output_per_million" },
-  { key: "cache_write", label: "Cache write tokens", priceKey: "cache_write_per_million" },
-  { key: "cache_read", label: "Cache read tokens", priceKey: "cache_read_per_million" },
-];
-
-function hasTracked(tokens?: UsageTokens, rawCost?: UsageRawCost, trackedCount?: number): boolean {
-  if (trackedCount !== undefined) return trackedCount > 0;
-  const t = tokens ? tokens.input + tokens.output + tokens.cache_write + tokens.cache_read : 0;
-  return t > 0 || (rawCost?.total ?? 0) > 0;
-}
-
-function BreakdownTable({
-  tokens,
-  rawCost,
-  pricing,
-  usageRate,
-  total,
-  showPrice,
-}: {
-  tokens?: UsageTokens;
-  rawCost?: UsageRawCost;
-  pricing?: UsagePricing;
-  usageRate?: number;
-  total: number;
-  showPrice: boolean;
-}) {
-  if (usageRate === undefined || !rawCost) return null;
-  const cell = "py-1.5";
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-          <th className={`${cell} font-medium`}>Type</th>
-          <th className={`${cell} font-medium text-right`}>Tokens</th>
-          {showPrice && <th className={`${cell} font-medium text-right`}>Price / 1M ($)</th>}
-          <th className={`${cell} font-medium text-right`}>Cost ($)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {BREAKDOWN_ROWS.map((r) => {
-          const rawPrice = pricing?.[r.priceKey];
-          const rawTypeCost = rawCost[r.key];
-          return (
-            <tr key={r.key} className="border-b border-gray-100">
-              <td className={`${cell} text-gray-700`}>{r.label}</td>
-              <td className={`${cell} text-right tabular-nums`}>
-                {(tokens?.[r.key] ?? 0).toLocaleString("en-US")}
-              </td>
-              {showPrice && (
-                <td className={`${cell} text-right tabular-nums`}>
-                  {rawPrice !== undefined ? formatCost(rawPrice * usageRate) : "—"}
-                </td>
-              )}
-              <td className={`${cell} text-right tabular-nums`}>
-                {rawTypeCost !== undefined ? formatCost(rawTypeCost * usageRate) : "—"}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-      <tfoot>
-        <tr className="border-t border-gray-200">
-          <td className={`${cell} text-gray-900 font-semibold`} colSpan={showPrice ? 3 : 2}>
-            Total
-          </td>
-          <td className={`${cell} text-right tabular-nums font-semibold`}>
-            {formatCost(total)}
-          </td>
-        </tr>
-      </tfoot>
-    </table>
-  );
-}
-
-// Total shown under the breakdown: the tracked (billed) total so per-type costs add up.
-// Falls back to the billed amount when every charge is tracked.
-function breakdownTotal(billed: number, rawCost?: UsageRawCost, usageRate?: number, untracked?: number): number {
-  if ((untracked ?? 0) > 0 && rawCost && usageRate !== undefined) return rawCost.total * usageRate;
-  return billed;
+function sumTokens(tokens?: UsageTokens): number | undefined {
+  if (!tokens) return undefined;
+  return tokens.input + tokens.output + tokens.cache_write + tokens.cache_read;
 }
 
 const EST = "America/New_York";
@@ -341,29 +257,12 @@ function UsageSection({
               {(data?.total_count ?? 0).toLocaleString()} requests · {range.from} to {range.to} (EST)
             </p>
           </div>
-          {data?.usage_rate !== undefined &&
-            hasTracked(data?.tokens, data?.raw_cost, data?.tracked_count) &&
-            (data?.tokens || data?.raw_cost) && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-2">Cost breakdown</h3>
-                <div className="border border-gray-200 rounded-lg px-4 py-2 overflow-x-auto">
-                  <BreakdownTable
-                    tokens={data?.tokens}
-                    rawCost={data?.raw_cost}
-                    pricing={data?.pricing}
-                    usageRate={data?.usage_rate}
-                    total={breakdownTotal(total, data?.raw_cost, data?.usage_rate, data?.untracked_count)}
-                    showPrice
-                  />
-                </div>
-              </div>
-            )}
           {(data?.untracked_count ?? 0) > 0 && (
             <p className="text-xs text-gray-500">
               {data!.untracked_count!.toLocaleString()}{" "}
               {data!.untracked_count === 1 ? "charge" : "charges"} made before token tracking{" "}
               {data!.untracked_count === 1 ? "is" : "are"} included in the billed amount but not in
-              the token breakdown.
+              the token totals.
             </p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
@@ -383,24 +282,32 @@ function UsageSection({
                     <div className={`h-full ${c.bar}`} style={{ width: `${pct}%` }} />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">{pct.toFixed(1)}% of total</p>
-                  {item && data?.usage_rate !== undefined && (item.tokens || item.raw_cost) &&
-                    hasTracked(item.tokens, item.raw_cost, item.tracked_count) && (
+                  {item && (() => {
+                    const totalTokens = item.total_tokens ?? sumTokens(item.tokens);
+                    const tracked = item.tracked_amount;
+                    if (totalTokens === undefined && tracked === undefined) return null;
+                    return (
                       <details className="mt-3 text-sm">
                         <summary className="cursor-pointer text-primary-600 text-xs font-medium">
                           Details
                         </summary>
-                        <div className="mt-2">
-                          <BreakdownTable
-                            tokens={item.tokens}
-                            rawCost={item.raw_cost}
-                            pricing={data?.pricing}
-                            usageRate={data?.usage_rate}
-                            total={breakdownTotal(amount, item.raw_cost, data?.usage_rate, item.untracked_count)}
-                            showPrice={false}
-                          />
+                        <div className="mt-2 space-y-1">
+                          {totalTokens !== undefined && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-700">Total tokens</span>
+                              <span className="tabular-nums">{totalTokens.toLocaleString("en-US")}</span>
+                            </div>
+                          )}
+                          {tracked !== undefined && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-700">Total cost</span>
+                              <span className="tabular-nums">{formatCost(tracked)}</span>
+                            </div>
+                          )}
                         </div>
                       </details>
-                    )}
+                    );
+                  })()}
                 </div>
               );
             })}

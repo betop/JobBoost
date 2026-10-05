@@ -1,6 +1,7 @@
 // Credit usage summary for a date range, grouped by app (resume generation / assistant / mail triage).
 // Active admin: always their own usage (admin_id ignored).
 // super_admin: pass admin_id for one admin, omit for all admins combined.
+// total_tokens / tracked_amount / raw_cost.total come only from stored ledger values (tracked rows), so they never change when the usage rate or prices change.
 // Amounts are returned as positive "spent" values (usage rows are stored negative).
 query "dashboard/credits/usage-summary" verb=GET {
   api_group = "dashboard"
@@ -155,6 +156,14 @@ query "dashboard/credits/usage-summary" verb=GET {
       value = 0
     }
 
+    var $gen_tamt {
+      value = 0
+    }
+
+    var $gen_traw {
+      value = 0
+    }
+
     var $chat_in {
       value = 0
     }
@@ -172,6 +181,14 @@ query "dashboard/credits/usage-summary" verb=GET {
     }
 
     var $chat_tracked {
+      value = 0
+    }
+
+    var $chat_tamt {
+      value = 0
+    }
+
+    var $chat_traw {
       value = 0
     }
 
@@ -195,6 +212,14 @@ query "dashboard/credits/usage-summary" verb=GET {
       value = 0
     }
 
+    var $mail_tamt {
+      value = 0
+    }
+
+    var $mail_traw {
+      value = 0
+    }
+
     var $other_in {
       value = 0
     }
@@ -212,6 +237,14 @@ query "dashboard/credits/usage-summary" verb=GET {
     }
 
     var $other_tracked {
+      value = 0
+    }
+
+    var $other_tamt {
+      value = 0
+    }
+
+    var $other_traw {
       value = 0
     }
 
@@ -309,6 +342,14 @@ query "dashboard/credits/usage-summary" verb=GET {
           value = $gen_tracked + ($gen_rows|filter:$$.input_tokens != null|count)
         }
 
+        var.update $gen_tamt {
+          value = $gen_tamt + ($gen_rows|filter:$$.input_tokens != null|map:$$.amount|sum)
+        }
+
+        var.update $gen_traw {
+          value = $gen_traw + ($gen_rows|filter:$$.input_tokens != null|map:($$.raw_cost_usd|first_notnull:0)|sum)
+        }
+
         var.update $chat_in {
           value = $chat_in + ($chat_rows|map:($$.input_tokens|first_notnull:0)|sum)
         }
@@ -327,6 +368,14 @@ query "dashboard/credits/usage-summary" verb=GET {
 
         var.update $chat_tracked {
           value = $chat_tracked + ($chat_rows|filter:$$.input_tokens != null|count)
+        }
+
+        var.update $chat_tamt {
+          value = $chat_tamt + ($chat_rows|filter:$$.input_tokens != null|map:$$.amount|sum)
+        }
+
+        var.update $chat_traw {
+          value = $chat_traw + ($chat_rows|filter:$$.input_tokens != null|map:($$.raw_cost_usd|first_notnull:0)|sum)
         }
 
         var.update $mail_in {
@@ -349,6 +398,14 @@ query "dashboard/credits/usage-summary" verb=GET {
           value = $mail_tracked + ($mail_rows|filter:$$.input_tokens != null|count)
         }
 
+        var.update $mail_tamt {
+          value = $mail_tamt + ($mail_rows|filter:$$.input_tokens != null|map:$$.amount|sum)
+        }
+
+        var.update $mail_traw {
+          value = $mail_traw + ($mail_rows|filter:$$.input_tokens != null|map:($$.raw_cost_usd|first_notnull:0)|sum)
+        }
+
         var.update $other_in {
           value = $other_in + ($other_rows|map:($$.input_tokens|first_notnull:0)|sum)
         }
@@ -367,6 +424,14 @@ query "dashboard/credits/usage-summary" verb=GET {
 
         var.update $other_tracked {
           value = $other_tracked + ($other_rows|filter:$$.input_tokens != null|count)
+        }
+
+        var.update $other_tamt {
+          value = $other_tamt + ($other_rows|filter:$$.input_tokens != null|map:$$.amount|sum)
+        }
+
+        var.update $other_traw {
+          value = $other_traw + ($other_rows|filter:$$.input_tokens != null|map:($$.raw_cost_usd|first_notnull:0)|sum)
         }
 
         conditional {
@@ -395,8 +460,10 @@ query "dashboard/credits/usage-summary" verb=GET {
         count: $gen_count
         tracked_count: $gen_tracked
         untracked_count: ($gen_count - $gen_tracked)
+        total_tokens: ($gen_in + $gen_out + $gen_cw + $gen_cr)
+        tracked_amount: ((0 - $gen_tamt)|round:6)
         tokens: {input: $gen_in, output: $gen_out, cache_write: $gen_cw, cache_read: $gen_cr}
-        raw_cost: {input: (($gen_in * $rates.input_per_million / 1000000)|round:6), output: (($gen_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($gen_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($gen_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ((($gen_in * $rates.input_per_million) + ($gen_out * $rates.output_per_million) + ($gen_cw * $rates.cache_write_per_million) + ($gen_cr * $rates.cache_read_per_million)) / 1000000)|round:6}
+        raw_cost: {input: (($gen_in * $rates.input_per_million / 1000000)|round:6), output: (($gen_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($gen_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($gen_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($gen_traw|round:6)}
       }
       {
         key: "assistant"
@@ -405,8 +472,10 @@ query "dashboard/credits/usage-summary" verb=GET {
         count: $chat_count
         tracked_count: $chat_tracked
         untracked_count: ($chat_count - $chat_tracked)
+        total_tokens: ($chat_in + $chat_out + $chat_cw + $chat_cr)
+        tracked_amount: ((0 - $chat_tamt)|round:6)
         tokens: {input: $chat_in, output: $chat_out, cache_write: $chat_cw, cache_read: $chat_cr}
-        raw_cost: {input: (($chat_in * $rates.input_per_million / 1000000)|round:6), output: (($chat_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($chat_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($chat_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ((($chat_in * $rates.input_per_million) + ($chat_out * $rates.output_per_million) + ($chat_cw * $rates.cache_write_per_million) + ($chat_cr * $rates.cache_read_per_million)) / 1000000)|round:6}
+        raw_cost: {input: (($chat_in * $rates.input_per_million / 1000000)|round:6), output: (($chat_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($chat_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($chat_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($chat_traw|round:6)}
       }
       {
         key: "mail_triage"
@@ -415,8 +484,10 @@ query "dashboard/credits/usage-summary" verb=GET {
         count: $mail_count
         tracked_count: $mail_tracked
         untracked_count: ($mail_count - $mail_tracked)
+        total_tokens: ($mail_in + $mail_out + $mail_cw + $mail_cr)
+        tracked_amount: ((0 - $mail_tamt)|round:6)
         tokens: {input: $mail_in, output: $mail_out, cache_write: $mail_cw, cache_read: $mail_cr}
-        raw_cost: {input: (($mail_in * $rates.input_per_million / 1000000)|round:6), output: (($mail_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($mail_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($mail_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ((($mail_in * $rates.input_per_million) + ($mail_out * $rates.output_per_million) + ($mail_cw * $rates.cache_write_per_million) + ($mail_cr * $rates.cache_read_per_million)) / 1000000)|round:6}
+        raw_cost: {input: (($mail_in * $rates.input_per_million / 1000000)|round:6), output: (($mail_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($mail_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($mail_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($mail_traw|round:6)}
       }
       ]
     }
@@ -431,8 +502,10 @@ query "dashboard/credits/usage-summary" verb=GET {
         count: $other_count
         tracked_count: $other_tracked
         untracked_count: ($other_count - $other_tracked)
+        total_tokens: ($other_in + $other_out + $other_cw + $other_cr)
+        tracked_amount: ((0 - $other_tamt)|round:6)
         tokens: {input: $other_in, output: $other_out, cache_write: $other_cw, cache_read: $other_cr}
-        raw_cost: {input: (($other_in * $rates.input_per_million / 1000000)|round:6), output: (($other_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($other_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($other_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ((($other_in * $rates.input_per_million) + ($other_out * $rates.output_per_million) + ($other_cw * $rates.cache_write_per_million) + ($other_cr * $rates.cache_read_per_million)) / 1000000)|round:6}
+        raw_cost: {input: (($other_in * $rates.input_per_million / 1000000)|round:6), output: (($other_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($other_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($other_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($other_traw|round:6)}
       }
         }
       }
@@ -450,10 +523,12 @@ query "dashboard/credits/usage-summary" verb=GET {
     var $t_out { value = $gen_out + $chat_out + $mail_out + $other_out }
     var $t_cw { value = $gen_cw + $chat_cw + $mail_cw + $other_cw }
     var $t_cr { value = $gen_cr + $chat_cr + $mail_cr + $other_cr }
+    var $t_tamt { value = $gen_tamt + $chat_tamt + $mail_tamt + $other_tamt }
+    var $t_traw { value = $gen_traw + $chat_traw + $mail_traw + $other_traw }
     var $t_tracked { value = $gen_tracked + $chat_tracked + $mail_tracked + $other_tracked }
 
     var $t_raw {
-      value = {input: (($t_in * $rates.input_per_million / 1000000)|round:6), output: (($t_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($t_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($t_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ((($t_in * $rates.input_per_million) + ($t_out * $rates.output_per_million) + ($t_cw * $rates.cache_write_per_million) + ($t_cr * $rates.cache_read_per_million)) / 1000000)|round:6}
+      value = {input: (($t_in * $rates.input_per_million / 1000000)|round:6), output: (($t_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($t_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($t_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($t_traw|round:6)}
     }
   }
 
@@ -467,6 +542,8 @@ query "dashboard/credits/usage-summary" verb=GET {
     tokens     : {input: $t_in, output: $t_out, cache_write: $t_cw, cache_read: $t_cr}
     raw_cost   : $t_raw
     tracked_count: $t_tracked
+    total_tokens: ($t_in + $t_out + $t_cw + $t_cr)
+    tracked_amount: ((0 - $t_tamt)|round:6)
     untracked_count: ($total_count - $t_tracked)
     pricing    : $rates
     usage_rate : $rate_info.usage_rate

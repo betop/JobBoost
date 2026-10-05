@@ -1772,8 +1772,13 @@ Regenerate if violated.
                       value = 1
                     }
                   
+                    // Profile is the source of truth for header contact info (AI may omit/garble it)
+                    function.run "resume/apply_profile_header" {
+                      input = {resume: $parsed_response.resume, profile: $prof}
+                    } as $resume_final
+
                     var.update $resume_text {
-                      value = $parsed_response.resume|json_encode
+                      value = $resume_final|json_encode
                     }
                   
                     conditional {

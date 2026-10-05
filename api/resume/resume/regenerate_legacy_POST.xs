@@ -428,8 +428,13 @@ query "resume/regenerate_legacy" verb=POST {
               value = 1
             }
           
+            // Profile is the source of truth for header contact info (AI may omit/garble it)
+            function.run "resume/apply_profile_header" {
+              input = {resume: $parsed_response, profile: $prof}
+            } as $resume_final
+
             var.update $resume_text {
-              value = $parsed_response|json_encode
+              value = $resume_final|json_encode
             }
           }
         }

@@ -55,25 +55,15 @@ export interface UsageTokens {
   cache_read: number;
 }
 
-export interface UsageRawCost extends UsageTokens {
-  total: number;
-}
-
-export interface UsagePricing {
-  input_per_million: number;
-  output_per_million: number;
-  cache_write_per_million: number;
-  cache_read_per_million: number;
-}
-
 export interface UsageByApp {
   key: UsageAppKey;
   label: string;
   amount: number;
   count: number;
   tokens?: UsageTokens;
-  raw_cost?: UsageRawCost;
   tracked_count?: number;
+  total_tokens?: number;
+  tracked_amount?: number;
   untracked_count?: number;
 }
 
@@ -85,11 +75,10 @@ export interface UsageSummaryResponse {
   total_count: number;
   by_app: UsageByApp[];
   tokens?: UsageTokens;
-  raw_cost?: UsageRawCost;
   tracked_count?: number;
+  total_tokens?: number;
+  tracked_amount?: number;
   untracked_count?: number;
-  pricing?: UsagePricing;
-  usage_rate?: number;
 }
 
 export const creditsService = {

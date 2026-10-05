@@ -75,5 +75,12 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/resume/apply_profile_header.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]
