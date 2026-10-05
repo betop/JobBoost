@@ -15,7 +15,6 @@ import {
   Activity,
   Package,
   Mail,
-  BarChart2,
   ChevronsLeft,
   ChevronsRight,
   Ban,
@@ -27,19 +26,45 @@ import { authService } from "@/services/authService";
 import { creditsService } from "@/services/creditsService";
 import { cn } from "@/utils/cn";
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, superOnly: false },
-  { name: "Overview", href: "/dashboard/overview", icon: BarChart2, superOnly: false },
-  { name: "Profiles", href: "/dashboard/profiles", icon: Users, superOnly: false },
-  { name: "Blacklist", href: "/dashboard/blacklist", icon: Ban, superOnly: false },
-  { name: "Users", href: "/dashboard/users", icon: UserCheck, superOnly: false },
-  { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: false },
-  { name: "Credits", href: "/dashboard/credits", icon: Wallet, superOnly: false, adminOnly: true },
-  { name: "API Costs", href: "/dashboard/pricing", icon: BarChart2, superOnly: true },
-  { name: "Rules", href: "/dashboard/rules", icon: FileText, superOnly: true },
-  { name: "Extensions", href: "/dashboard/versions", icon: Package, superOnly: true },
-  { name: "Generation Logs", href: "/dashboard/logs", icon: Activity, superOnly: false },
-  { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail, superOnly: true },
+type NavItem = { name: string; href: string; icon: typeof Users; superOnly: boolean; adminOnly?: boolean };
+type NavGroup = { label: string | null; items: NavItem[] };
+
+const navigationGroups: NavGroup[] = [
+  {
+    label: null,
+    items: [
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, superOnly: false },
+    ],
+  },
+  {
+    label: "Resumes",
+    items: [
+      { name: "Profiles", href: "/dashboard/profiles", icon: Users, superOnly: false },
+      { name: "Blacklist", href: "/dashboard/blacklist", icon: Ban, superOnly: false },
+      { name: "Generation Logs", href: "/dashboard/logs", icon: Activity, superOnly: false },
+      { name: "Rules", href: "/dashboard/rules", icon: FileText, superOnly: true },
+    ],
+  },
+  {
+    label: "Team",
+    items: [
+      { name: "Users", href: "/dashboard/users", icon: UserCheck, superOnly: false },
+      { name: "Keys", href: "/dashboard/tokens", icon: Key, superOnly: false },
+    ],
+  },
+  {
+    label: "Billing",
+    items: [
+      { name: "Credits", href: "/dashboard/credits", icon: Wallet, superOnly: false, adminOnly: true },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail, superOnly: true },
+      { name: "Extensions", href: "/dashboard/versions", icon: Package, superOnly: true },
+    ],
+  },
 ];
 
 export default function Sidebar() {
@@ -57,11 +82,16 @@ export default function Sidebar() {
   };
 
   const isSuperAdmin = admin?.type === "super_admin";
-  const visibleNav = navigation.filter((item) => {
-    if (item.superOnly && !isSuperAdmin) return false;
-    if ((item as { adminOnly?: boolean }).adminOnly && !isSuperAdmin && admin?.type !== "admin") return false;
-    return true;
-  });
+  const visibleGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.superOnly && !isSuperAdmin) return false;
+        if (item.adminOnly && !isSuperAdmin && admin?.type !== "admin") return false;
+        return true;
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const { data: balanceData } = useQuery({
     queryKey: ["sidebar-credits-balance"],
@@ -131,46 +161,65 @@ export default function Sidebar() {
           </div>
 
           <nav className="sidebar-nav flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-            {visibleNav.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname === item.href || pathname.startsWith(item.href + "/");
-              const showBalanceBadge = item.href === "/dashboard/credits" && admin?.type === "admin" && typeof balance === "number";
+            {visibleGroups.map((group, groupIndex) => (
+              <div key={group.label ?? "main"} className={cn(groupIndex > 0 && "pt-4")}>
+                {group.label && (
+                  <p
+                    className={cn(
+                      "px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-500",
+                      sidebarCollapsed && "lg:hidden"
+                    )}
+                  >
+                    {group.label}
+                  </p>
+                )}
+                {group.label && sidebarCollapsed && (
+                  <div className="hidden lg:block mx-2 mb-2 border-t border-gray-800" />
+                )}
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const isActive =
+                        item.href === "/dashboard"
+                          ? pathname === "/dashboard"
+                          : pathname === item.href || pathname.startsWith(item.href + "/");
+                      const showBalanceBadge = item.href === "/dashboard/credits" && admin?.type === "admin" && typeof balance === "number";
 
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                    isActive
-                      ? "bg-primary-600 text-white"
-                      : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                  )}
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  <span className={cn("text-sm font-medium flex-1", sidebarCollapsed && "lg:hidden")}>{item.name}</span>
-                  {showBalanceBadge && (
-                    <span
-                      className={cn(
-                        "text-xs font-semibold px-2 py-0.5 rounded-full",
-                        sidebarCollapsed && "lg:hidden",
-                        isNegativeBalance
-                          ? "bg-red-500 text-white"
-                          : isLowBalance
-                          ? "bg-yellow-500 text-gray-900"
-                          : "bg-gray-700 text-gray-200"
-                      )}
-                    >
-                      ${balance!.toFixed(0)}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+                      return (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                            isActive
+                              ? "bg-primary-600 text-white"
+                              : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                          )}
+                        >
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          <span className={cn("text-sm font-medium flex-1", sidebarCollapsed && "lg:hidden")}>{item.name}</span>
+                          {showBalanceBadge && (
+                            <span
+                              className={cn(
+                                "text-xs font-semibold px-2 py-0.5 rounded-full",
+                                sidebarCollapsed && "lg:hidden",
+                                isNegativeBalance
+                                  ? "bg-red-500 text-white"
+                                  : isLowBalance
+                                  ? "bg-yellow-500 text-gray-900"
+                                  : "bg-gray-700 text-gray-200"
+                              )}
+                            >
+                              ${balance!.toFixed(0)}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
 
           <div className="p-4 border-t border-gray-800">
