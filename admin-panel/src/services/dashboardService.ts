@@ -5,6 +5,8 @@ export interface DashboardStats {
   total_bidders: number;
   active_tokens: number;
   active_rules: number;
+  /** super_admin only; null for admin */
+  pending_profiles?: number | null;
 }
 
 export const dashboardService = {

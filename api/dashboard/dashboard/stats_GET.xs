@@ -22,6 +22,12 @@ query "dashboard/stats" verb=GET {
           return = {type: "count"}
         } as $total_profiles
       
+        // Profiles awaiting approval (false or null)
+        db.query profile {
+          where = $db.profile.is_approved == false || $db.profile.is_approved == null
+          return = {type: "count"}
+        } as $pending_profiles
+      
         db.query users {
           return = {type: "count"}
         } as $total_bidders
@@ -135,6 +141,11 @@ query "dashboard/stats" verb=GET {
           value = $my_profile_ids|unique|count
         }
       
+        // Not applicable for admins
+        var $pending_profiles {
+          value = null
+        }
+      
         // Count active tokens for my bidders
         db.query access_token {
           where = $db.access_token.is_active == true
@@ -179,6 +190,7 @@ query "dashboard/stats" verb=GET {
     total_bidders : $total_bidders
     active_tokens : $active_tokens
     active_rules  : $active_rules
+    pending_profiles: $pending_profiles
   }
 
   guid = "t2TArUGHjKH8qX03syR4Q4tnPl0"
