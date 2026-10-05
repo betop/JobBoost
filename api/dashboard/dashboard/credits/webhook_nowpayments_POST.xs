@@ -8,8 +8,8 @@
 // credits/provider_nowpayments_payout (best effort, failures only recorded under
 // raw_webhook_payload.payout, never affecting the credit/outcome). Extra env vars:
 // NOWPAYMENTS_EMAIL, NOWPAYMENTS_PASSWORD, NOWPAYMENTS_PAYOUT_ADDRESS (USDT BEP20), and
-// optional NOWPAYMENTS_PAYOUT_2FA_SECRET (currently unused: TOTP can't be computed in
-// XanoScript, so payouts stay pending until verified in the NOWPayments dashboard).
+// NOWPAYMENTS_PAYOUT_2FA_SECRET (base32 authenticator secret; used to auto-verify the payout
+// via credits/totp_generate, without it payouts stay pending until verified in the dashboard).
 // The Xano outbound IP must be whitelisted in NOWPayments for the Payout API.
 // The callback URL is set per invoice in credits/deposit, no dashboard setting needed.
 query "dashboard/credits/webhook-nowpayments" verb=POST {
@@ -263,23 +263,32 @@ query "dashboard/credits/webhook-nowpayments" verb=POST {
                           value = $deposit.amount_usd
                         }
 
+                        var $payout_currency {
+                          value = "usdtbsc"
+                        }
+
+                        // Pay out exactly what was settled to custody, in the settled coin
                         conditional {
-                          if ($outcome_currency_normalized == "usdtbsc" && $payment.outcome_amount != null && ($payment.outcome_amount|to_decimal) > 0) {
+                          if ($outcome_currency_normalized != "" && $payment.outcome_amount != null && ($payment.outcome_amount|to_decimal) > 0) {
                             var.update $payout_amount {
                               value = $payment.outcome_amount|to_decimal
+                            }
+
+                            var.update $payout_currency {
+                              value = $outcome_currency_normalized
                             }
                           }
                         }
 
                         function.run "credits/provider_nowpayments_payout" {
-                          input = {amount: $payout_amount, deposit_id: $deposit.id|to_text}
+                          input = {amount: $payout_amount, deposit_id: $deposit.id|to_text, currency: $payout_currency}
                         } as $payout
 
                         db.patch crypto_deposit {
                           field_name = "id"
                           field_value = $deposit.id
                           data = {
-                            raw_webhook_payload: $confirm_payload|set:"payout":({payout_id: $payout.payout_id, status: $payout.status, amount: $payout_amount})
+                            raw_webhook_payload: $confirm_payload|set:"payout":({payout_id: $payout.payout_id, status: $payout.status, verified: $payout.verified, detail: $payout.detail, amount: $payout_amount, currency: $payout_currency})
                           }
                         } as $_
                       }

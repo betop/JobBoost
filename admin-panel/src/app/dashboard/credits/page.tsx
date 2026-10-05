@@ -231,10 +231,6 @@ export default function CreditsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Credits</h1>
-        <p className="text-gray-600 mt-2">
-          Top up your balance with crypto to keep generating resumes and using the chat
-          assistant. Every AI call costs 1.5x the provider&apos;s raw price.
-        </p>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-6">

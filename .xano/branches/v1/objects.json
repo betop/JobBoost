@@ -47,5 +47,12 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/totp_generate.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

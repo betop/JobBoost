@@ -46,8 +46,14 @@ query "dashboard/credits/deposit" verb=POST {
       }
     } as $deposit
 
+    // Admin panel base URL: ADMIN_PANEL_BASEURL env var if set, otherwise the default
+    // production admin panel. Trailing slashes are stripped.
+    var $admin_panel_raw {
+      value = $env.ADMIN_PANEL_BASEURL|first_notempty:"https://hhq.shsws-solutions.com"
+    }
+
     var $admin_panel_base {
-      value = $env.ADMIN_PANEL_BASEURL|first_notnull:""
+      value = $admin_panel_raw|trim:"/"
     }
 
     var $safe_return_url {
@@ -57,7 +63,7 @@ query "dashboard/credits/deposit" verb=POST {
     conditional {
       if ($admin_panel_base|starts_with:"https://") {
         var.update $safe_return_url {
-          value = $admin_panel_base ~ "/dashboard/credits?deposit_id=" ~ $deposit.id
+          value = $admin_panel_base ~ "/dashboard/credits"
         }
       }
     }
