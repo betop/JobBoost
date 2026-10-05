@@ -200,6 +200,43 @@ export default function ProfileViewPage() {
               </div>
 
               <div>
+                <p className="text-sm text-gray-500">Billing Admin</p>
+                <p className="text-gray-900 font-medium">
+                  {profile.billing_admin_name || "Not assigned"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Created By</p>
+                <p className="text-gray-900 font-medium">{profile.created_by_name || "—"}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Created</p>
+                <p className="text-gray-900 font-medium">
+                  {profile.created_at ? formatDate(profile.created_at) : "—"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Last Updated</p>
+                <p className="text-gray-900 font-medium">
+                  {profile.updated_at ? formatDate(profile.updated_at) : "—"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Visibility</p>
+                <span
+                  className={`inline-flex mt-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    profile.hide ? "bg-gray-200 text-gray-700" : "bg-emerald-100 text-emerald-800"
+                  }`}
+                >
+                  {profile.hide ? "Hidden" : "Visible"}
+                </span>
+              </div>
+
+              <div>
                 <p className="text-sm text-gray-500">Job Category</p>
                 {jobCategoryTags.length > 0 ? (
                   <div className="mt-1 flex flex-wrap gap-2">
@@ -248,6 +285,37 @@ export default function ProfileViewPage() {
                     Awards & Recognition: {profile.include_achievements ? "On" : "Off"}
                   </span>
                 </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-2">Generation Rules</p>
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      profile.tailor_job_title
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    Tailor Job Title: {profile.tailor_job_title ? "On" : "Off"}
+                  </span>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      profile.block_lead_roles
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    Block Lead Roles: {profile.block_lead_roles ? "On" : "Off"}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">Allowed Languages</p>
+                <p className="text-gray-900 font-medium">
+                  {profile.allowed_languages || "English"}
+                </p>
               </div>
 
               <div>

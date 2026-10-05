@@ -138,6 +138,27 @@ query "profiles/{id}" verb=GET {
       }
     }
   
+    var $created_by_name {
+      value = null
+    }
+
+    conditional {
+      if ($p.created_by != null) {
+        db.get users {
+          field_name = "id"
+          field_value = $p.created_by
+        } as $creator
+
+        conditional {
+          if ($creator != null) {
+            var.update $created_by_name {
+              value = $creator.full_name
+            }
+          }
+        }
+      }
+    }
+
     var $profile_out {
       value = {
         id                    : $p.id
@@ -161,6 +182,10 @@ query "profiles/{id}" verb=GET {
         default_compensation  : $p.default_compensation
         billing_admin_id      : $p.billing_admin_id
         billing_admin_name    : $billing_admin_name
+        created_by            : $p.created_by
+        created_by_name       : $created_by_name
+        hide                  : $p.hide
+        updated_at            : $p.updated_at
         education             : $education_out
         work_experience       : $work_out
       }

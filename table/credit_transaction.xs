@@ -6,7 +6,7 @@ table credit_transaction {
   schema {
     uuid id
     timestamp created_at?=now
-    uuid admin_id? {
+    uuid? admin_id? {
       table = "users"
     }
   
@@ -14,8 +14,8 @@ table credit_transaction {
     decimal amount?
     decimal balance_after?
     text related_log_table?
-    uuid related_log_id?
-    uuid related_deposit_id? {
+    uuid? related_log_id?
+    uuid? related_deposit_id? {
       table = "crypto_deposit"
     }
   

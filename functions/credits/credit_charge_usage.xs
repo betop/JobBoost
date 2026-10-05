@@ -65,12 +65,6 @@ function "credits/credit_charge_usage" {
       error = "Insufficient credit balance. Please deposit USDT to continue generating."
     }
 
-    db.patch users {
-      field_name = "id"
-      field_value = $input.admin_id
-      data = {credit_balance: $new_balance}
-    } as $_
-
     var $negative_amount {
       value = 0 - $charge_amount
     }
@@ -83,9 +77,17 @@ function "credits/credit_charge_usage" {
         balance_after    : $new_balance
         related_log_table: $input.related_log_table
         related_log_id   : $input.related_log_id
+        related_deposit_id: null
         note             : "AI usage charge (raw cost $" ~ $input.raw_cost_usd ~ " x" ~ $rate_info.usage_rate ~ ")"
       }
     } as $txn
+
+    // Ledger row is written first; the balance is only debited once the row exists.
+    db.patch users {
+      field_name = "id"
+      field_value = $input.admin_id
+      data = {credit_balance: $new_balance}
+    } as $_
   }
 
   response = {

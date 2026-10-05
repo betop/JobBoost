@@ -221,12 +221,12 @@ export default function ProfilesPage() {
         );
       },
     }] : []),
-    {
+    ...(isSuperAdmin ? [{
       key: "billing_admin_name",
       label: "Billing admin",
       sortable: true,
       render: (value: string | null | undefined) => value || "—",
-    },
+    }] : []),
     {
       key: "created_at",
       label: "Created Date",

@@ -11,6 +11,10 @@ export interface Profile {
   job_category?: string;
   resume_template?: number;
   created_at: string;
+  updated_at?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  hide?: boolean;
   billing_admin_id?: string | null;
   billing_admin_name?: string | null;
   is_approved: boolean;
