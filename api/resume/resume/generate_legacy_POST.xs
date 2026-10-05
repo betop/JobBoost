@@ -123,9 +123,9 @@ query "resume/generate_legacy" verb=POST {
               value = (($assigned_ip|to_text)|trim)|replace:"::ffff:":""
             }
 
-            var $request_ip_raw {
-              value = $env.$remote_ip|to_text|trim
-            }
+            function.run "security/get_client_ip" {
+              input = {}
+            } as $request_ip_raw
 
             var $request_ip_normalized {
               value = $request_ip_raw|replace:"::ffff:":""

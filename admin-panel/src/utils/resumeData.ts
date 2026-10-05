@@ -1,6 +1,6 @@
 /**
  * Shared resume data model + parsing helpers.
- * Used by both pdfDownload.ts (HTML/print-based PDF) and docxDownload.ts (Word export).
+ * Used by docxDownload.ts (Word export); PDFs are produced by the vendored swiftcv generator (pdfDownload.ts).
  */
 
 export interface TextSegment {
@@ -185,24 +185,49 @@ export function extractJSON(raw: string): { resume?: ResumeData } | null {
     try { return JSON.parse(s.slice(start, end + 1)); } catch (_) { /* continue */ }
   }
   try { return JSON.parse(raw.trim()); } catch (_) { /* continue */ }
+
+  // Truncation recovery (mirrors swiftcv _extractJSON step 6): salvage just the "resume" object.
+  const resumeKey = s.indexOf('"resume"');
+  if (resumeKey !== -1) {
+    const objStart = s.indexOf("{", resumeKey);
+    if (objStart !== -1) {
+      let depth = 0, i = objStart, found = -1;
+      while (i < s.length) {
+        const ch = s[i];
+        if (ch === "{") depth++;
+        else if (ch === "}") { depth--; if (depth === 0) { found = i; break; } }
+        i++;
+      }
+      const resumeSlice = found !== -1
+        ? s.slice(objStart, found + 1)
+        : s.slice(objStart).replace(/,\s*"[^"]*"\s*:\s*[^,}\]]*$/, "") + "}";
+      try { return { resume: JSON.parse(resumeSlice) }; } catch (_) { /* continue */ }
+    }
+  }
   return null;
 }
 
 // ─── Inline marker parser (bold via **, italic via *wrap*) ────────────────
 
 export function parseMarkers(raw: string | undefined): TextSegment[] {
+  // Mirrors swiftcv/pdfGenerator.js PDFGenerator._parseMarkers exactly.
   if (!raw) return [];
   const str = String(raw);
   const isItalic =
     str.startsWith("*") && !str.startsWith("**") &&
     str.endsWith("*")   && !str.endsWith("**");
   const inner = isItalic ? str.slice(1, -1) : str;
-  const parts = inner.split(/\*\*(.+?)\*\*/g).filter((p) => p.length > 0);
-  return parts.map((part, i) => ({
-    text:   part,
-    bold:   i % 2 === 1,
-    italic: isItalic,
-  }));
+  const segments: TextSegment[] = [];
+  const re = /\*\*(.+?)\*\*/gs;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(inner)) !== null) {
+    if (match.index > lastIndex) segments.push({ text: inner.slice(lastIndex, match.index), bold: false, italic: isItalic });
+    segments.push({ text: match[1], bold: true, italic: isItalic });
+    lastIndex = re.lastIndex;
+  }
+  if (lastIndex < inner.length) segments.push({ text: inner.slice(lastIndex), bold: false, italic: isItalic });
+  return segments.filter((s) => s.text.length > 0);
 }
 
 /** Normalizes raw resume text/object (handles JSON strings, {resume:{...}} envelopes) into ResumeData, or null if unparseable. */

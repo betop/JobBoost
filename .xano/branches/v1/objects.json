@@ -82,5 +82,12 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/security/get_client_ip.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

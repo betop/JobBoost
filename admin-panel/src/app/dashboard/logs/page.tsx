@@ -345,6 +345,10 @@ function JobDetailsModal({
   );
 }
 
+// Regeneration from the logs page is disabled: the button and modal are not rendered.
+// The code is kept in place; set to true to bring them back.
+const REGENERATE_ENABLED = false;
+
 // Regenerate Confirm Modal
 function RegenerateModal({
   log,
@@ -1343,7 +1347,7 @@ export default function LogsPage() {
           onClose={() => setJobDetailsLog(null)}
         />
       )}
-      {regenerateLog && (
+      {REGENERATE_ENABLED && regenerateLog && (
         <RegenerateModal
           log={regenerateLog}
           resumeTemplate={profiles?.find((p) => p.id === regenerateLog.profile_id)?.resume_template ?? 11}
@@ -2010,18 +2014,21 @@ export default function LogsPage() {
                           >
                             <FileText className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => (log.job_description || log.has_job_description) ? setRegenerateLog(log) : undefined}
-                            disabled={!(log.job_description || log.has_job_description)}
-                            title={(log.job_description || log.has_job_description) ? "Regenerate resume" : "No job description stored for this log"}
-                            className={`p-1.5 rounded-md border transition-colors ${
-                              (log.job_description || log.has_job_description)
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer"
-                                : "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed"
-                            }`}
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Regenerate is hidden for now (see REGENERATE_ENABLED); flip the flag to restore it. */}
+                          {REGENERATE_ENABLED && (
+                            <button
+                              onClick={() => (log.job_description || log.has_job_description) ? setRegenerateLog(log) : undefined}
+                              disabled={!(log.job_description || log.has_job_description)}
+                              title={(log.job_description || log.has_job_description) ? "Regenerate resume" : "No job description stored for this log"}
+                              className={`p-1.5 rounded-md border transition-colors ${
+                                (log.job_description || log.has_job_description)
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 cursor-pointer"
+                                  : "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed"
+                              }`}
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={async () => {
                               if (!log.content_id) return;
@@ -2059,7 +2066,8 @@ export default function LogsPage() {
                               try {
                                 const data = await logsService.getContent(log.content_id);
                                 const filename = [log.profile_name, log.company_name, log.position_title].filter(Boolean).join(" - ") || "Resume";
-                                await downloadResumeDocx(data.raw_response, filename);
+                                const tpl = profiles?.find((p) => p.id === log.profile_id)?.resume_template ?? 11;
+                                await downloadResumeDocx(data.raw_response, filename, tpl);
                               } catch (err) {
                                 console.error("Failed to download resume:", err);
                                 alert("Failed to download resume Word doc.");
