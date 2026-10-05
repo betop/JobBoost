@@ -1,9 +1,10 @@
-// Charges an admin's credit_balance for an AI usage event at 1.5x the raw provider cost.
+// Charges an admin's credit_balance for an AI usage event at the configured multiplier (default 1.5x) of the raw provider cost.
+// Amounts keep sub-cent precision (rounded to 8 decimals, never to cents).
 // Call this AFTER the AI call completes (so the real token-based cost is known).
 // Throws accessdenied if the billing admin has insufficient balance — callers that need
 // a pre-flight check should call credits/check_sufficient_balance before making the AI call.
 function "credits/credit_charge_usage" {
-  description = "Deduct 1.5x AI usage cost from an admin's credit balance and log the transaction"
+  description = "Deduct configured-rate AI usage cost from an admin's credit balance and log the transaction"
 
   input {
     uuid admin_id {
@@ -43,8 +44,10 @@ function "credits/credit_charge_usage" {
       error = "super_admin accounts are not billable"
     }
 
+    function.run "credits/get_usage_rate" as $rate_info
+
     var $charge_amount {
-      value = $input.raw_cost_usd * 1.5
+      value = ($input.raw_cost_usd * $rate_info.usage_rate)|round:8
     }
 
     var $current_balance {
@@ -52,7 +55,7 @@ function "credits/credit_charge_usage" {
     }
 
     var $new_balance {
-      value = $current_balance - $charge_amount
+      value = ($current_balance - $charge_amount)|round:8
     }
 
     precondition ($input.allow_negative || $new_balance >= 0) {
@@ -74,7 +77,7 @@ function "credits/credit_charge_usage" {
         balance_after    : $new_balance
         related_log_table: $input.related_log_table
         related_log_id   : $input.related_log_id
-        note             : "AI usage charge (raw cost $" ~ $input.raw_cost_usd ~ " x1.5)"
+        note             : "AI usage charge (raw cost $" ~ $input.raw_cost_usd ~ " x" ~ $rate_info.usage_rate ~ ")"
       }
     } as $txn
   }

@@ -11,6 +11,8 @@ export interface Profile {
   job_category?: string;
   resume_template?: number;
   created_at: string;
+  billing_admin_id?: string | null;
+  billing_admin_name?: string | null;
   is_approved: boolean;
   include_key_projects: boolean;
   include_certifications: boolean;
@@ -64,6 +66,7 @@ export interface CreateProfileInput {
   tailor_job_title?: boolean;
   allowed_languages?: string;
   default_compensation?: string;
+  billing_admin_id?: string;
 }
 
 export const profileService = {

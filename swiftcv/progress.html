@@ -72,6 +72,8 @@
       .admin-override-banner .btn-admin-cancel:hover { background: #d1d5db; }
       .admin-warning-banner { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px; margin-top: 8px; text-align: left; }
       .admin-warning-banner .admin-badge { display: inline-block; background: #f59e0b; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .credit-warning-banner { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 12px; margin-top: 8px; text-align: left; }
+      .credit-warning-banner .credit-warning-text { color: #78350f; font-size: 11px; margin: 0; line-height: 1.4; }
       .admin-warning-banner .admin-warning-text { color: #78350f; font-size: 11px; margin: 0; line-height: 1.4; }
       .version-banner { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; margin-top: 12px; text-align: left; }
       .version-banner .version-title { color: #991b1b; font-weight: 600; font-size: 14px; margin: 0 0 6px; }
@@ -172,6 +174,9 @@
         <div id="adminWarningBanner" class="admin-warning-banner" style="display:none">
           <span class="admin-badge">🔑 Admin</span>
           <p id="adminWarningText" class="admin-warning-text"></p>
+        </div>
+        <div id="creditWarningBanner" class="credit-warning-banner" style="display:none">
+          <p id="creditWarningText" class="credit-warning-text"></p>
         </div>
         <div id="versionBanner" class="version-banner" style="display:none">
           <p class="version-title">🔄 Extension Update Required</p>

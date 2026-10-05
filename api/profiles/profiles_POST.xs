@@ -21,6 +21,7 @@ query profiles verb=POST {
     bool tailor_job_title?
     text allowed_languages?
     text default_compensation?
+    uuid billing_admin_id?
   }
 
   stack {
@@ -35,6 +36,59 @@ query profiles verb=POST {
       value = $auth_user.type == "super_admin"
     }
   
+    // Billing admin: admin -> self; bidder -> creating admin; super_admin -> must pick an active admin
+    var $billing_admin_id {
+      value = null
+    }
+  
+    conditional {
+      if ($auth_user.type == "admin") {
+        var.update $billing_admin_id {
+          value = $auth_user.id
+        }
+      }
+    
+      elseif ($auth_user.type == "super_admin") {
+        precondition ($input.billing_admin_id != null) {
+          error_type = "badrequest"
+          error = "billing_admin_id is required"
+        }
+      
+        db.get users {
+          field_name = "id"
+          field_value = $input.billing_admin_id
+        } as $chosen_admin
+      
+        precondition ($chosen_admin != null && $chosen_admin.type == "admin" && $chosen_admin.is_active == true) {
+          error_type = "badrequest"
+          error = "billing_admin_id must be an active admin"
+        }
+      
+        var.update $billing_admin_id {
+          value = $chosen_admin.id
+        }
+      }
+    
+      else {
+        conditional {
+          if ($auth_user.created_by != null) {
+            db.get users {
+              field_name = "id"
+              field_value = $auth_user.created_by
+            } as $creator_admin
+          
+            conditional {
+              if ($creator_admin != null && $creator_admin.type == "admin") {
+                var.update $billing_admin_id {
+                  value = $creator_admin.id
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  
     db.add profile {
       data = {
         created_at            : now
@@ -47,6 +101,7 @@ query profiles verb=POST {
         job_category          : $input.job_category
         updated_at            : now
         created_by            : $auth.id
+        billing_admin_id      : $billing_admin_id
         is_approved           : $auto_approved
         include_key_projects  : ($input.include_key_projects|json_encode) != "" ? $input.include_key_projects : true
         include_certifications: ($input.include_certifications|json_encode) != "" ? $input.include_certifications : true
@@ -159,6 +214,7 @@ query profiles verb=POST {
         linkedin       : $p.linkedin_url
         github         : $p.github_url
         created_at     : $p.created_at
+        billing_admin_id: $p.billing_admin_id
         education      : $education_out
         work_experience: $work_out
       }

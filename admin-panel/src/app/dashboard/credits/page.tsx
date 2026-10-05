@@ -60,6 +60,33 @@ export default function CreditsPage() {
     enabled: isSuperAdmin,
   });
 
+  const { data: settings } = useQuery({
+    queryKey: ["credits-settings"],
+    queryFn: () => creditsService.getSettings(),
+  });
+
+  const [rateInput, setRateInput] = useState("");
+  const [rateSaving, setRateSaving] = useState(false);
+
+  const handleSaveRate = async () => {
+    const rate = parseFloat(rateInput);
+    if (!isFinite(rate) || rate < 1 || rate > 10) {
+      showToast("Usage rate must be between 1 and 10", "error");
+      return;
+    }
+    setRateSaving(true);
+    try {
+      const updated = await creditsService.updateSettings(rate);
+      queryClient.setQueryData(["credits-settings"], updated);
+      setRateInput("");
+      showToast(`Usage rate updated to ${updated.usage_rate}x`, "success");
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.response?.data?.error || "Failed to update usage rate", "error");
+    } finally {
+      setRateSaving(false);
+    }
+  };
+
   const handleDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount < 15) {
@@ -115,9 +142,38 @@ export default function CreditsPage() {
         <div>
           <h1 className="text-3xl font-bold">Credits</h1>
           <p className="text-gray-600 mt-2">
-            Monitor and manage admin credit balances. Admins are billed 1.5x the raw AI
-            provider cost for resume generation and chat assistant usage.
+            Monitor and manage admin credit balances. Admins are billed{" "}
+            {settings ? `${settings.usage_rate}x` : "a multiple of"} the raw AI provider cost for
+            resume generation and chat assistant usage.
           </p>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold">Usage rate</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Admins are billed raw AI provider cost × this rate. Current rate:{" "}
+            <span className="font-semibold text-gray-900">
+              {settings ? `${settings.usage_rate}x` : "—"}
+            </span>
+          </p>
+          <div className="flex items-end gap-3 mt-4 flex-wrap">
+            <div>
+              <label className="text-sm font-medium block mb-1">New rate (1 – 10)</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                step="0.01"
+                value={rateInput}
+                onChange={(e) => setRateInput(e.target.value)}
+                placeholder={settings ? String(settings.usage_rate) : "e.g. 1.5"}
+                className="w-40 px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+            </div>
+            <Button onClick={handleSaveRate} loading={rateSaving} disabled={!rateInput}>
+              Save
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -232,6 +288,22 @@ export default function CreditsPage() {
       <div>
         <h1 className="text-3xl font-bold">Credits</h1>
       </div>
+
+      {!balanceLoading && balance && (balance.credit_balance ?? 0) <= 0 && (
+        <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">
+          Insufficient credit: usage is blocked until you top up.
+        </div>
+      )}
+      {!balanceLoading &&
+        balance &&
+        settings &&
+        balance.credit_balance > 0 &&
+        balance.credit_balance < settings.low_balance_threshold && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg px-4 py-3 text-sm">
+            Your credit is running low ({formatCurrency(balance.credit_balance)} remaining). Please
+            top up soon.
+          </div>
+        )}
 
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">

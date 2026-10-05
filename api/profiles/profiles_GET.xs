@@ -87,6 +87,44 @@ query profiles verb=GET {
       }
     }
   
+    // Batch-load billing admin names (single query, avoids N+1)
+    var $admin_names {
+      value = {}
+    }
+  
+    var $admin_ids {
+      value = []
+    }
+  
+    foreach ($profiles) {
+      each as $bp {
+        conditional {
+          if ($bp.billing_admin_id != null) {
+            array.push $admin_ids {
+              value = $bp.billing_admin_id
+            }
+          }
+        }
+      }
+    }
+  
+    conditional {
+      if (($admin_ids|count) > 0) {
+        db.query users {
+          where = $db.users.id in $admin_ids
+          return = {type: "list"}
+        } as $billing_admins
+      
+        foreach ($billing_admins) {
+          each as $ba {
+            var.update $admin_names {
+              value = $admin_names|set:($ba.id|to_text):$ba.full_name
+            }
+          }
+        }
+      }
+    }
+  
     // Map to response format
     var $out {
       value = []
@@ -115,6 +153,8 @@ query profiles verb=GET {
             tailor_job_title      : $p.tailor_job_title
             allowed_languages     : $p.allowed_languages
             default_compensation  : $p.default_compensation
+            billing_admin_id      : $p.billing_admin_id
+            billing_admin_name    : $p.billing_admin_id != null ? ($admin_names|get:($p.billing_admin_id|to_text)) : null
             education             : []
             work_experience       : []
           }

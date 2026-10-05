@@ -75,16 +75,33 @@ query "resume/regenerate" verb=POST {
     }
   
     // Pay-as-you-go credit check — super_admins are exempt; bidders are billed
-    // through the admin that created them
+    // through the profile's billing admin (falls back to the creating admin)
     function.run "credits/check_sufficient_balance" {
-      input = {user_id: $auth.id}
+      input = {user_id: $auth.id, profile_id: $log.profile_id}
     } as $billing_check
   
     precondition (!$billing_check.is_billable || $billing_check.has_sufficient_balance) {
       error_type = "accessdenied"
-      error = "Insufficient credit balance. Please ask your admin to deposit USDT to continue generating."
+      error = "Insufficient credit. The billing admin's credit balance is empty, please top up to continue."
+    }
+
+    var $credit_warning {
+      value = null
+    }
+
+    conditional {
+      if ($billing_check.low_balance) {
+        var.update $credit_warning {
+          value = {message: $billing_check.warning_message, balance: $billing_check.balance}
+        }
+      }
     }
   
+    // Usage object of the AI call (stays {} when the call throws before returning)
+    var $main_usage {
+      value = {}
+    }
+
     var $input_tokens {
       value = 0
     }
@@ -553,6 +570,11 @@ Remember today's year is 2026.
             |push:"anthropic-version: 2023-06-01"
           timeout = 300
         } as $ai_resp
+
+        // Capture usage immediately so it is billed even if parsing below throws
+        var.update $main_usage {
+          value = $ai_resp.response.result.usage|first_notnull:{}
+        }
       
         var.update $response_text {
           value = $ai_resp.response.result.content|first|get:"text"
@@ -665,23 +687,19 @@ Remember today's year is 2026.
     }
   
     var.update $input_tokens {
-      value = $ai_resp.response.result.usage|get:"input_tokens"
+      value = $main_usage|get:"input_tokens"|first_notnull:0
     }
-  
+
     var.update $output_tokens {
-      value = $ai_resp.response.result.usage|get:"output_tokens"
+      value = $main_usage|get:"output_tokens"|first_notnull:0
     }
 
     var.update $cache_creation_input_tokens {
-      value = $ai_resp.response.result.usage
-        |get:"cache_creation_input_tokens"
-        |first_notnull:0
+      value = $main_usage|get:"cache_creation_input_tokens"|first_notnull:0
     }
 
     var.update $cache_read_input_tokens {
-      value = $ai_resp.response.result.usage
-        |get:"cache_read_input_tokens"
-        |first_notnull:0
+      value = $main_usage|get:"cache_read_input_tokens"|first_notnull:0
     }
 
     db.add generation_log {
@@ -738,6 +756,7 @@ Remember today's year is 2026.
     error_msg      : $error_msg
     resume_text    : $resume_text
     resume_filename: $resume_filename
+    credit_warning       : $credit_warning
   }
   guid = "hAnQgUuQRN0X-UuBt8keYNolcJ8"
 }

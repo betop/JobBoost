@@ -519,7 +519,12 @@ async function generateResume(jobDescription, jobUrl = "") {
       throw new Error(message);
     }
 
-    return response.json();
+    const result = await response.json();
+    // Non-blocking low-credit notice from the backend (result still succeeds)
+    if (result?.credit_warning?.message) {
+      sendProgress("credit_warning", String(result.credit_warning.message));
+    }
+    return result;
   }
 
   function getGenerateStatus(data) {

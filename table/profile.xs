@@ -17,6 +17,9 @@ table profile {
     uuid created_by? {
       table = "users"
     }
+    uuid billing_admin_id? {
+      table = "users"
+    }
   
     bool include_key_projects?=true
     bool include_certifications?=true

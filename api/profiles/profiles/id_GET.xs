@@ -117,6 +117,27 @@ query "profiles/{id}" verb=GET {
       }
     }
   
+    var $billing_admin_name {
+      value = null
+    }
+  
+    conditional {
+      if ($p.billing_admin_id != null) {
+        db.get users {
+          field_name = "id"
+          field_value = $p.billing_admin_id
+        } as $billing_admin
+      
+        conditional {
+          if ($billing_admin != null) {
+            var.update $billing_admin_name {
+              value = $billing_admin.full_name
+            }
+          }
+        }
+      }
+    }
+  
     var $profile_out {
       value = {
         id                    : $p.id
@@ -138,6 +159,8 @@ query "profiles/{id}" verb=GET {
         tailor_job_title      : $p.tailor_job_title
         allowed_languages     : $p.allowed_languages
         default_compensation  : $p.default_compensation
+        billing_admin_id      : $p.billing_admin_id
+        billing_admin_name    : $billing_admin_name
         education             : $education_out
         work_experience       : $work_out
       }

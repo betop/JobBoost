@@ -84,14 +84,26 @@ query "resume/generate_legacy" verb=POST {
     }
   
     // Pay-as-you-go credit check — super_admins are exempt; bidders are billed
-    // through the admin that created them
+    // through the profile's billing admin (falls back to the creating admin)
     function.run "credits/check_sufficient_balance" {
-      input = {user_id: $user.id}
+      input = {user_id: $user.id, profile_id: $input.profile_id}
     } as $billing_check
   
     precondition (!$billing_check.is_billable || $billing_check.has_sufficient_balance) {
       error_type = "accessdenied"
-      error = "Insufficient credit balance. Please ask your admin to deposit USDT to continue generating."
+      error = "Insufficient credit. The billing admin's credit balance is empty, please top up to continue."
+    }
+
+    var $credit_warning {
+      value = null
+    }
+
+    conditional {
+      if ($billing_check.low_balance) {
+        var.update $credit_warning {
+          value = {message: $billing_check.warning_message, balance: $billing_check.balance}
+        }
+      }
     }
   
     precondition ($user.type == "super_admin" || $user.is_active) {
@@ -181,6 +193,19 @@ query "resume/generate_legacy" verb=POST {
   
     var $extraction_output_tokens {
       value = 0
+    }
+
+    var $extraction_cache_creation_tokens {
+      value = 0
+    }
+
+    var $extraction_cache_read_tokens {
+      value = 0
+    }
+
+    // Usage object of the main resume call (stays {} when that call is skipped or throws)
+    var $main_usage {
+      value = {}
     }
   
     var $claude_auth {
@@ -312,6 +337,18 @@ query "resume/generate_legacy" verb=POST {
                 var.update $extraction_output_tokens {
                   value = $extraction_resp.response.result.usage
                     |get:"output_tokens"
+                    |first_notnull:0
+                }
+
+                var.update $extraction_cache_creation_tokens {
+                  value = $extraction_resp.response.result.usage
+                    |get:"cache_creation_input_tokens"
+                    |first_notnull:0
+                }
+
+                var.update $extraction_cache_read_tokens {
+                  value = $extraction_resp.response.result.usage
+                    |get:"cache_read_input_tokens"
                     |first_notnull:0
                 }
               }
@@ -735,6 +772,14 @@ query "resume/generate_legacy" verb=POST {
     }
   
     var $output_tokens {
+      value = 0
+    }
+
+    var $cache_creation_input_tokens {
+      value = 0
+    }
+
+    var $cache_read_input_tokens {
       value = 0
     }
   
@@ -1261,6 +1306,11 @@ query "resume/generate_legacy" verb=POST {
                 |push:"anthropic-version: 2023-06-01"
               timeout = 300
             } as $ai_resp
+
+            // Capture usage immediately so it is billed even if parsing below throws
+            var.update $main_usage {
+              value = $ai_resp.response.result.usage|first_notnull:{}
+            }
           
             var.update $response_text {
               value = $ai_resp.response.result.content|first|get:"text"
@@ -1378,23 +1428,24 @@ query "resume/generate_legacy" verb=POST {
         var.update $cover_letter_filename {
           value = $prof.full_name ~ " - Cover Letter.pdf"
         }
-      
-        var.update $input_tokens {
-          value = ```
-            ($ai_resp.response.result.usage
-                        |get:"input_tokens"
-                        |first_notnull:0) + $extraction_input_tokens
-            ```
-        }
-      
-        var.update $output_tokens {
-          value = ```
-            ($ai_resp.response.result.usage
-                        |get:"output_tokens"
-                        |first_notnull:0) + $extraction_output_tokens
-            ```
-        }
       }
+    }
+
+    // Totals = extraction call + main call, on every path (success, rejected job, AI error).
+    var.update $input_tokens {
+      value = ($main_usage|get:"input_tokens"|first_notnull:0) + $extraction_input_tokens
+    }
+
+    var.update $output_tokens {
+      value = ($main_usage|get:"output_tokens"|first_notnull:0) + $extraction_output_tokens
+    }
+
+    var.update $cache_creation_input_tokens {
+      value = ($main_usage|get:"cache_creation_input_tokens"|first_notnull:0) + $extraction_cache_creation_tokens
+    }
+
+    var.update $cache_read_input_tokens {
+      value = ($main_usage|get:"cache_read_input_tokens"|first_notnull:0) + $extraction_cache_read_tokens
     }
   
     conditional {
@@ -1405,6 +1456,8 @@ query "resume/generate_legacy" verb=POST {
           data = {
             input_tokens : $input_tokens
             output_tokens: $output_tokens
+            cache_creation_input_tokens: $cache_creation_input_tokens
+            cache_read_input_tokens    : $cache_read_input_tokens
             content_id   : $resume_content_id
             is_applied   : true
           }
@@ -1420,6 +1473,8 @@ query "resume/generate_legacy" verb=POST {
             job_description      : $input.job_description
             input_tokens         : $input_tokens
             output_tokens        : $output_tokens
+            cache_creation_input_tokens: $cache_creation_input_tokens
+            cache_read_input_tokens    : $cache_read_input_tokens
             resume_filename      : $resume_filename
             cover_letter_filename: $cover_letter_filename
             position_title       : $position_title
@@ -1440,8 +1495,10 @@ query "resume/generate_legacy" verb=POST {
       if ($billing_check.is_billable) {
         function.run "ai/claude_haiku_cost" {
           input = {
-            input_tokens : $input_tokens
-            output_tokens: $output_tokens
+            input_tokens         : $input_tokens
+            output_tokens        : $output_tokens
+            cache_creation_tokens: $cache_creation_input_tokens
+            cache_read_tokens    : $cache_read_input_tokens
           }
         } as $gen_raw_cost
 
@@ -1468,6 +1525,7 @@ query "resume/generate_legacy" verb=POST {
     cover_letter_text    : $cover_letter_text
     resume_filename      : $resume_filename
     cover_letter_filename: $cover_letter_filename
+    credit_warning       : $credit_warning
   }
 
   guid = "Go80weUXLYfZIppVVjX2yTqJdlQ"

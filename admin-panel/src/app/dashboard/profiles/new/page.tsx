@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,6 +8,8 @@ import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { profileService } from "@/services/profileService";
 import { useUIStore } from "@/store/uiStore";
+import { useAuthStore } from "@/store/authStore";
+import BillingAdminSelect from "@/components/BillingAdminSelect";
 import Input from "@/components/Input";
 import MultiSelect from "@/components/MultiSelect";
 import Button from "@/components/Button";
@@ -68,6 +71,9 @@ export default function NewProfilePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
+  const isSuperAdmin = useAuthStore((state) => state.admin?.type) === "super_admin";
+  const [billingAdminId, setBillingAdminId] = useState("");
+  const [billingAdminError, setBillingAdminError] = useState("");
 
   const {
     register,
@@ -139,8 +145,13 @@ export default function NewProfilePage() {
   });
 
   const onSubmit = (data: ProfileFormData) => {
+    if (isSuperAdmin && !billingAdminId) {
+      setBillingAdminError("Billing admin is required");
+      return;
+    }
     const payload = {
       ...data,
+      billing_admin_id: isSuperAdmin ? billingAdminId : undefined,
       linkedin: data.linkedin || undefined,
       github: data.github || undefined,
       phone: data.phone || undefined,
@@ -173,6 +184,18 @@ export default function NewProfilePage() {
             <Input label="LinkedIn URL" error={errors.linkedin?.message} {...register("linkedin")} />
             <Input label="GitHub URL" error={errors.github?.message} {...register("github")} />
           </div>
+          {isSuperAdmin && (
+            <div className="mt-4 md:w-1/2">
+              <BillingAdminSelect
+                value={billingAdminId}
+                onChange={(v) => {
+                  setBillingAdminId(v);
+                  setBillingAdminError("");
+                }}
+                error={billingAdminError}
+              />
+            </div>
+          )}
           <div className="mt-4">
             <Controller
               name="job_category"

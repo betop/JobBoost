@@ -25,6 +25,7 @@ query "profiles/{id}" verb=PUT {
     bool tailor_job_title?
     text allowed_languages?
     text default_compensation?
+    uuid billing_admin_id?
   }
 
   stack {
@@ -307,6 +308,25 @@ query "profiles/{id}" verb=PUT {
       }
     }
   
+    // Only a super_admin may change the billing admin; must be an active admin
+    conditional {
+      if ($input.billing_admin_id != null && $auth_user.type == "super_admin") {
+        db.get users {
+          field_name = "id"
+          field_value = $input.billing_admin_id
+        } as $chosen_admin
+      
+        precondition ($chosen_admin != null && $chosen_admin.type == "admin" && $chosen_admin.is_active == true) {
+          error_type = "badrequest"
+          error = "billing_admin_id must be an active admin"
+        }
+      
+        var.update $payload.billing_admin_id {
+          value = $chosen_admin.id
+        }
+      }
+    }
+  
     var.update $payload.updated_at {
       value = now
     }
@@ -455,6 +475,7 @@ query "profiles/{id}" verb=PUT {
     job_category   : $p.job_category
     resume_template: $p.resume_template
     created_at     : $p.created_at
+    billing_admin_id: $p.billing_admin_id
     education      : $education_out
     work_experience: $work_out
   }

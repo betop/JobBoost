@@ -41,7 +41,25 @@ export interface DepositResponse {
   status: string;
 }
 
+export interface CreditSettings {
+  usage_rate: number;
+  low_balance_threshold: number;
+}
+
 export const creditsService = {
+  getSettings: async (): Promise<CreditSettings> => {
+    const response = await api.get("/dashboard/credits/settings");
+    return response.data;
+  },
+
+  // super_admin only
+  updateSettings: async (usageRate: number): Promise<CreditSettings> => {
+    const response = await api.put("/dashboard/credits/settings", {
+      usage_rate: usageRate,
+    });
+    return response.data;
+  },
+
   getBalance: async (adminId?: string): Promise<CreditBalanceResponse> => {
     const params = adminId ? { admin_id: adminId } : {};
     const response = await api.get("/dashboard/credits/balance", { params });

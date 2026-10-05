@@ -54,5 +54,19 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/resolve_profile_billing_admin.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/get_usage_rate.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

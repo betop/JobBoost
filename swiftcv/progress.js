@@ -36,7 +36,16 @@ function showDone() {
     if (el) el.className = "step done";
   }
   document.getElementById("doneBanner").style.display = "block";
-  setTimeout(() => window.close(), 3000);
+  const warnVisible = document.getElementById("creditWarningBanner")?.style.display === "block";
+  setTimeout(() => window.close(), warnVisible ? 8000 : 3000);
+}
+
+// Low-credit notice: non-blocking, stays visible alongside the normal flow
+function showCreditWarning(message) {
+  const banner = document.getElementById("creditWarningBanner");
+  if (!banner) return;
+  document.getElementById("creditWarningText").textContent = message;
+  banner.style.display = "block";
 }
 
 function showError(msg, canRetry = false) {
@@ -342,6 +351,8 @@ chrome.runtime.onMessage.addListener((message) => {
     } else if (step === "admin_warning") {
       // error = title, reason = detail
       showAdminWarning(error, reason);
+    } else if (step === "credit_warning") {
+      showCreditWarning(error);
     } else if (step === "version_mismatch") {
       // error = message text; background will have set isAdmin via storage
       // We need to query storage to know if admin

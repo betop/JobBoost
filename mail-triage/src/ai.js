@@ -123,10 +123,18 @@ export async function classifyEmailsBatch({ backendApiUrl, backendApiKey, emails
     } catch { /* not JSON */ }
     const err = new Error(message);
     err.fatal = res.status === 400;
+    // Billing admin out of credit: stop the run and leave emails unprocessed so they are retried later
+    if (res.status === 403 && /^insufficient credit/i.test(String(message).trim())) {
+      err.fatal = true;
+      err.creditBlocked = true;
+    }
     throw err;
   }
 
   const data = await res.json();
   const text = data?.ai_response || "";
-  return { results: parseAndNormalizeResults(text, list) };
+  return {
+    results: parseAndNormalizeResults(text, list),
+    creditWarning: data?.credit_warning?.message ? String(data.credit_warning.message) : ""
+  };
 }

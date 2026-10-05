@@ -807,6 +807,9 @@
       const reply = data?.answer || "(No response)";
 
       addMessage("assistant", reply);
+      if (data?.credit_warning?.message) {
+        addMessage("system", `⚠️ ${data.credit_warning.message}`);
+      }
       conversationHistory.push({ role: "assistant", content: reply });
     } catch (err) {
       hideTyping();

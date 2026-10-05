@@ -222,6 +222,12 @@ export default function ProfilesPage() {
       },
     }] : []),
     {
+      key: "billing_admin_name",
+      label: "Billing admin",
+      sortable: true,
+      render: (value: string | null | undefined) => value || "—",
+    },
+    {
       key: "created_at",
       label: "Created Date",
       sortable: true,

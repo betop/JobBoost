@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
@@ -9,6 +10,7 @@ import { profileService, type Profile } from "@/services/profileService";
 import { templateVisibilityService } from "@/services/templateVisibilityService";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
+import BillingAdminSelect from "@/components/BillingAdminSelect";
 import Input from "@/components/Input";
 import MultiSelect from "@/components/MultiSelect";
 import Button from "@/components/Button";
@@ -77,6 +79,9 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   const showToast = useUIStore((state) => state.showToast);
   const admin = useAuthStore((state) => state.admin);
   const isSuperAdmin = admin?.type === "super_admin";
+  const initialBillingAdminId = profile.billing_admin_id ?? "";
+  const [billingAdminId, setBillingAdminId] = useState(initialBillingAdminId);
+  const [billingAdminError, setBillingAdminError] = useState("");
 
   const { data: templateVisibility } = useQuery({
     queryKey: ["template-visibility"],
@@ -152,7 +157,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   } = useFieldArray({ control, name: "work_experience" });
 
   const updateMutation = useMutation({
-    mutationFn: (data: ProfileFormData) => profileService.update(id, data),
+    mutationFn: (data: ProfileFormData & { billing_admin_id?: string }) => profileService.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile", id] });
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
@@ -165,9 +170,16 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
   });
 
   const onSubmit = (data: ProfileFormData) => {
+    if (isSuperAdmin && !billingAdminId) {
+      setBillingAdminError("Billing admin is required");
+      return;
+    }
     const payload = {
       ...data,
       resume_template: data.resume_template ?? 11,
+      ...(isSuperAdmin && billingAdminId !== initialBillingAdminId
+        ? { billing_admin_id: billingAdminId }
+        : {}),
     };
     updateMutation.mutate(payload);
   };
@@ -184,6 +196,24 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
           <Input label="LinkedIn URL" error={errors.linkedin?.message} {...register("linkedin")} />
           <Input label="GitHub URL" error={errors.github?.message} {...register("github")} />
         </div>
+        {isSuperAdmin ? (
+          <div className="mt-4 md:w-1/2">
+            <BillingAdminSelect
+              value={billingAdminId}
+              onChange={(v) => {
+                setBillingAdminId(v);
+                setBillingAdminError("");
+              }}
+              error={billingAdminError}
+              current={{ id: profile.billing_admin_id, name: profile.billing_admin_name }}
+            />
+          </div>
+        ) : profile.billing_admin_name ? (
+          <div className="mt-4">
+            <p className="block text-sm font-medium text-gray-700 mb-1">Billing admin</p>
+            <p className="text-sm text-gray-900">{profile.billing_admin_name}</p>
+          </div>
+        ) : null}
         <div className="mt-4">
           <Controller
             name="job_category"

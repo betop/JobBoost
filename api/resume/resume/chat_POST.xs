@@ -46,14 +46,48 @@ query "resume/chat" verb=POST {
     }
   
     // Pay-as-you-go credit check — super_admins are exempt; bidders are billed
-    // through the admin that created them
+    // through the billing admin of the profile attached to the supplied log_id
+    // Resolve the profile (if any) from the log context so its billing admin is used
+    var $billing_profile_id {
+      value = null
+    }
+  
+    conditional {
+      if ($input.log_id != null && ($input.log_id|strlen) > 0) {
+        db.get generation_log {
+          field_name = "id"
+          field_value = $input.log_id
+        } as $billing_log
+      
+        conditional {
+          if ($billing_log != null) {
+            var.update $billing_profile_id {
+              value = $billing_log.profile_id
+            }
+          }
+        }
+      }
+    }
+  
     function.run "credits/check_sufficient_balance" {
-      input = {user_id: $user.id}
+      input = {user_id: $user.id, profile_id: $billing_profile_id}
     } as $billing_check
   
     precondition (!$billing_check.is_billable || $billing_check.has_sufficient_balance) {
       error_type = "accessdenied"
-      error = "Insufficient credit balance. Please ask your admin to deposit USDT to continue using the assistant."
+      error = "Insufficient credit. The billing admin's credit balance is empty, please top up to continue."
+    }
+
+    var $credit_warning {
+      value = null
+    }
+
+    conditional {
+      if ($billing_check.low_balance) {
+        var.update $credit_warning {
+          value = {message: $billing_check.warning_message, balance: $billing_check.balance}
+        }
+      }
     }
   
     // ── Fetch log context (JD + resume content) if log_id provided ────────────────
@@ -430,13 +464,6 @@ No explanations needed, just answer the question based on the provided informati
           timeout = 60
         } as $anthropic_resp
       
-        var.update $reply {
-          value = $anthropic_resp.response.result.content
-            |first
-            |get:"text"
-            |trim
-        }
-      
         var.update $input_tokens {
           value = $anthropic_resp.response.result.usage
             |get:"input_tokens"
@@ -459,6 +486,13 @@ No explanations needed, just answer the question based on the provided informati
           value = $anthropic_resp.response.result.usage
             |get:"cache_read_input_tokens"
             |first_notnull:0
+        }
+
+        var.update $reply {
+          value = $anthropic_resp.response.result.content
+            |first
+            |get:"text"
+            |trim
         }
       }
     
@@ -514,6 +548,9 @@ No explanations needed, just answer the question based on the provided informati
     }
   }
 
-  response = {answer: $reply}
+  response = {
+    answer        : $reply
+    credit_warning: $credit_warning
+  }
   guid = "mLMGp-AJHgo38XC_T-f39ARfjxs"
 }

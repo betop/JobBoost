@@ -35,6 +35,78 @@ query "public/gmail-analyze" verb=POST {
       error = "Extension version outdated. Please update Mail-Triage to the latest version."
     }
   
+    // ── Billing pre-flight: resolve the billing admin for the profile owning this gmail ──
+    var $billing_admin_id {
+      value = null
+    }
+
+    var $credit_warning {
+      value = null
+    }
+
+    var $gmail_email_norm {
+      value = $input.gmail_email|trim|to_lower
+    }
+
+    db.query profile {
+      where = $db.profile.email == $gmail_email_norm
+      return = {type: "single"}
+    } as $billing_profile
+
+    conditional {
+      if ($billing_profile != null) {
+        function.run "credits/resolve_profile_billing_admin" {
+          input = {profile_id: $billing_profile.id}
+        } as $mt_billing
+
+        conditional {
+          if ($mt_billing.is_billable) {
+            var.update $billing_admin_id {
+              value = $mt_billing.billing_admin_id
+            }
+
+            db.get users {
+              field_name = "id"
+              field_value = $mt_billing.billing_admin_id
+            } as $mt_admin
+
+            var $mt_balance {
+              value = $mt_admin.credit_balance|first_notnull:0
+            }
+
+            precondition ($mt_balance > 0) {
+              error_type = "accessdenied"
+              error = "Insufficient credit. The billing admin's credit balance is empty, please top up to continue."
+            }
+
+            conditional {
+              if ($mt_balance < 5) {
+                var.update $credit_warning {
+                  value = {message: "Billing admin credit is low ($" ~ ($mt_balance|round:2) ~ " left). Please add credit soon, usage will stop when it reaches $0.", balance: $mt_balance}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Validate gmail_email against the allowlist BEFORE any paid AI call
+    db.query mail_triage_allowlist {
+      where = $db.mail_triage_allowlist.email == $input.gmail_email
+      return = {type: "single"}
+    } as $allowlist_entry
+  
+    precondition ($allowlist_entry != null) {
+      error_type = "unauthorized"
+      error = "This email is not authorized to use Mail Triage."
+    }
+
+    // Usage of the Claude call ({} if the call threw); billed even if the reply is empty/invalid
+    var $resp_usage {
+      value = {}
+    }
+
     var $claude_auth {
       value = "x-api-key: " ~ $env.ANTHROPIC_API_KEY
     }
@@ -73,6 +145,10 @@ query "public/gmail-analyze" verb=POST {
             |push:"anthropic-version: 2023-06-01"
           timeout = 120
         } as $resp
+
+        var.update $resp_usage {
+          value = $resp.response.result.usage|first_notnull:{}
+        }
       
         var.update $ai_response {
           value = $resp.response.result.content|first|get:"text"
@@ -86,10 +162,6 @@ query "public/gmail-analyze" verb=POST {
       }
     }
   
-    precondition ($ai_response != null && $ai_response != "") {
-      error = "Claude returned empty response"
-    }
-  
     var $clean_response {
       value = $ai_response
         |replace:"```json\n":""
@@ -101,13 +173,13 @@ query "public/gmail-analyze" verb=POST {
   
     // ── Log this API call ──────────────────────────────────────────────────
     var $input_tokens {
-      value = $resp.response.result.usage
+      value = $resp_usage
         |get:"input_tokens"
         |first_notnull:0
     }
   
     var $output_tokens {
-      value = $resp.response.result.usage
+      value = $resp_usage
         |get:"output_tokens"
         |first_notnull:0
     }
@@ -139,17 +211,6 @@ query "public/gmail-analyze" verb=POST {
       }
     }
   
-    // Validate gmail_email against the allowlist
-    db.query mail_triage_allowlist {
-      where = $db.mail_triage_allowlist.email == $input.gmail_email
-      return = {type: "single"}
-    } as $allowlist_entry
-  
-    precondition ($allowlist_entry != null) {
-      error_type = "unauthorized"
-      error = "This email is not authorized to use Mail Triage."
-    }
-  
     db.add mail_triage_log {
       data = {
         gmail_email  : $input.gmail_email|first_notnull:""
@@ -158,8 +219,51 @@ query "public/gmail-analyze" verb=POST {
         email_count  : $email_count
       }
     } as $triage_log
+
+    // ── Charge the billing admin (failures must not break the mail result) ──
+    conditional {
+      if ($billing_admin_id != null) {
+        try_catch {
+          try {
+            var $usage_obj {
+              value = $resp_usage
+            }
+
+            function.run "ai/claude_haiku_cost" {
+              input = {
+                input_tokens         : $input_tokens
+                output_tokens        : $output_tokens
+                cache_creation_tokens: $usage_obj|get:"cache_creation_input_tokens"|first_notnull:0
+                cache_read_tokens    : $usage_obj|get:"cache_read_input_tokens"|first_notnull:0
+              }
+            } as $mt_raw_cost
+
+            function.run "credits/credit_charge_usage" {
+              input = {
+                admin_id         : $billing_admin_id
+                raw_cost_usd     : $mt_raw_cost
+                related_log_table: "mail_triage_log"
+                related_log_id   : $triage_log.id
+                allow_negative   : true
+              }
+            } as $mt_charge
+          }
+
+          catch {
+            debug.log {
+              value = "mail triage billing charge failed"
+            }
+          }
+        }
+      }
+    }
+
+    // Checked after logging/billing so a paid-but-empty reply is still charged
+    precondition ($ai_response != null && $ai_response != "") {
+      error = "Claude returned empty response"
+    }
   }
 
-  response = {ai_response: $clean_response}
+  response = {ai_response: $clean_response, credit_warning: $credit_warning}
   guid = "fCRNvXFF53bRDiaQzJm8Bj2p6QM"
 }

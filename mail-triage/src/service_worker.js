@@ -345,6 +345,7 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
       gmailEmail,
     });
 
+  let lastCreditWarning = "";
   const chunkSize = 50;
   const totalGroups = Math.max(1, Math.ceil(emails.length / chunkSize));
 
@@ -357,8 +358,12 @@ async function triageRun({ maxEmailsPerRun, startDate, endDate }, sendProgress) 
     try {
       const batch = await classifyChunk(group);
       batchResults = Array.isArray(batch?.results) ? batch.results : [];
+      if (batch?.creditWarning && batch.creditWarning !== lastCreditWarning) {
+        lastCreditWarning = batch.creditWarning;
+        sendProgress({ type: "warning", message: batch.creditWarning });
+      }
     } catch (e) {
-      sendProgress({ type: "error", message: e?.message || String(e) });
+      sendProgress({ type: "error", message: e?.message || String(e), creditBlocked: e?.creditBlocked === true });
       if (e?.fatal) {
         sendProgress({ type: "done", summary });
         return summary;

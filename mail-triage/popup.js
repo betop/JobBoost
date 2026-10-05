@@ -15,6 +15,7 @@ const btnCheck = $("btnCheck");
 const fromDate = $("fromDate");
 const toDate = $("toDate");
 const runStatus = $("runStatus");
+const creditWarning = $("creditWarning");
 const summaryEl = $("summary");
 const openOptions = $("openOptions");
 let keepAlivePort = null;
@@ -141,6 +142,8 @@ btnAuth.addEventListener("click", async () => {
 btnCheck.addEventListener("click", async () => {
   btnCheck.disabled = true;
   runStatus.textContent = "Checking…";
+  runStatus.style.color = "";
+  creditWarning.textContent = "";
   renderSummary(null);
 
   // Check version first (only in prod)
@@ -196,6 +199,7 @@ openOptions.addEventListener("click", async (e) => {
 });
 
 let lastError = null;
+let creditBlocked = false;
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type !== "PROGRESS") return;
@@ -209,19 +213,30 @@ chrome.runtime.onMessage.addListener((msg) => {
     renderSummary(p.summary);
   }
 
+  if (p.type === "warning") {
+    creditWarning.textContent = p.message || "";
+  }
+
   if (p.type === "error") {
     lastError = p.message || "Run error";
     runStatus.textContent = lastError;
+    if (p.creditBlocked) {
+      creditBlocked = true;
+      runStatus.style.color = "#b00020";
+    }
   }
 
   if (p.type === "done") {
     const hasErrors = p.summary?.errors > 0;
-    runStatus.textContent = hasErrors
+    runStatus.textContent = creditBlocked
+      ? lastError
+      : hasErrors
       ? `Done with ${p.summary.errors} error(s) — check console for details`
       : lastError
       ? lastError
       : "Done";
     lastError = null;
+    creditBlocked = false;
     renderSummary(p.summary);
     btnCheck.disabled = false;
     stopKeepAlive();
