@@ -49,7 +49,7 @@ query "dashboard/credits/deposit" verb=POST {
     // Admin panel base URL: ADMIN_PANEL_BASEURL env var if set, otherwise the default
     // production admin panel. Trailing slashes are stripped.
     var $admin_panel_raw {
-      value = $env.ADMIN_PANEL_BASEURL|first_notempty:"https://hhq.shsws-solutions.com"
+      value = $env.ADMIN_PANEL_BASEURL|first_notempty:"https://hhq.vfprints.store"
     }
 
     var $admin_panel_base {
