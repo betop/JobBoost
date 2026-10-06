@@ -59,6 +59,23 @@ query users verb=POST {
       }
     }
   
+    // New admin accounts get the free trial generations (bidders get none)
+    var $free_gens {
+      value = null
+    }
+
+    conditional {
+      if ($user_type == "admin") {
+        function.run "credits/free_generation_allowance" {
+          input = {}
+        } as $free_allowance
+
+        var.update $free_gens {
+          value = $free_allowance
+        }
+      }
+    }
+
     db.add users {
       data = {
         created_at : now
@@ -70,6 +87,7 @@ query users verb=POST {
         assigned_ip : $input.assigned_ip
         updated_at  : now
         created_by  : $auth.id
+        free_generations_remaining: $free_gens
       }
     } as $b
   

@@ -48,7 +48,7 @@ export const helpSections: HelpSection[] = [
     purpose:
       "A quick checklist for a new admin: from an empty account to a bidder generating their first resume.",
     features: [
-      { text: "1. Add credit: open Credits and deposit by crypto (minimum $15). Generation stops when the balance reaches $0." },
+      { text: "1. Add credit: open Credits and deposit by crypto (minimum $15). Generation stops when the balance reaches $0. New accounts include 3 free resume generations, so you can try SwiftCV before depositing." },
       { text: "2. Create a profile: open Profiles, click create, and fill in the person's details, education, work experience, template and options." },
       { text: "3. Get the profile approved: profiles created by admins stay pending until a super admin approves them. Unapproved profiles cannot generate." },
       { text: "4. Create the bidder: open Users, add a user with the Bidder role and assign the profile(s) they will work with." },
@@ -77,6 +77,7 @@ export const helpSections: HelpSection[] = [
       { text: "Who is billed: usage by a bidder is billed to the billing admin of the profile used. For profiles created by an admin the billing admin is that admin; for profiles created by a bidder it is the admin who created the bidder. Actions by an admin are billed to that admin." },
       { text: "Warning: when the billing admin's balance drops below $5, the extension shows a non-blocking low-credit notice and the Credits page shows a yellow banner. The action still completes." },
       { text: "Blocked: at $0 or below, new AI actions are refused with \"Insufficient credit\" until the billing admin tops up." },
+      { text: "New accounts include 3 free resume generations. While they last, resume generations are not blocked at $0 credit. Free generations cover resume generations only; the Assistant and Mail Triage still need credit." },
       { text: "Mail Triage is billed to the billing admin of the profile whose email equals the Gmail address being triaged." },
       { text: "The sidebar shows your current balance next to Credits (yellow when low, red when negative)." },
       { text: "Usage is charged as the raw AI provider cost multiplied by a usage rate. The rate is set by a super admin on the Credits page (allowed range 1 to 10) and applies to every admin. Super admin accounts are not billed.", superOnly: true },
@@ -447,6 +448,11 @@ export const faqItems: FaqItem[] = [
     id: "faq-insufficient-credit",
     q: "Why is generation blocked with \"Insufficient credit\"?",
     a: "The billing admin of the profile has a balance of $0 or less. Top up on the Credits page (minimum deposit $15). Once the payment is confirmed the bidder can generate again. The same applies to the Assistant and Mail Triage.",
+  },
+  {
+    id: "faq-free-generations",
+    q: "Why can I generate with $0 credit?",
+    a: "New accounts include 3 free resume generations. While you have free generations left, resume generations work even with a $0 balance and no insufficient-credit block applies. They cover resume generations only (not the Assistant or Mail Triage) and apply to new accounts only. After they are used, usage is billed from your credit balance.",
   },
   {
     id: "faq-low-credit",

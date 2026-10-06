@@ -126,6 +126,9 @@ export default function RegisterPage() {
             <Button type="submit" loading={loading} className="w-full">
               Create Account
             </Button>
+            <p className="text-center text-xs text-gray-500">
+              New accounts include 3 free resume generations.
+            </p>
           </form>
 
           <p className="text-center text-sm text-gray-600 mt-6">

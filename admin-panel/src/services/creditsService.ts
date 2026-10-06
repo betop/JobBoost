@@ -16,6 +16,7 @@ export interface CreditTransaction {
 export interface CreditBalanceResponse {
   admin_id: string;
   credit_balance: number;
+  free_generations_remaining?: number;
   recent_transactions: CreditTransaction[];
 }
 
@@ -30,6 +31,7 @@ export interface AdminCreditSummary {
   is_active: boolean;
   is_approved: boolean;
   credit_balance: number;
+  free_generations_remaining?: number;
 }
 
 export interface DepositResponse {

@@ -30,15 +30,35 @@ query "dashboard/credits/admins" verb=GET {
 
     foreach ($admins) {
       each as $a {
-        array.push $results {
+        // db.query on production does not return the newer free_generations_remaining column,
+        // so re-read the row with db.get (which does) to get the complete record.
+        db.get users {
+          field_name = "id"
+          field_value = $a.id
+        } as $full
+
+        var $free {
+          value = $full.free_generations_remaining|first_notnull:0
+        }
+
+        var $bal {
+          value = $full.credit_balance|first_notnull:0
+        }
+
+        var $item {
           value = {
-            id            : $a.id
-            full_name     : $a.full_name
-            email         : $a.email
-            is_active     : $a.is_active
-            is_approved   : $a.is_approved
-            credit_balance: $a.credit_balance|first_notnull:0
+            id: $full.id,
+            full_name: $full.full_name,
+            email: $full.email,
+            is_active: $full.is_active,
+            is_approved: $full.is_approved,
+            credit_balance: $bal,
+            free_generations_remaining: $free
           }
+        }
+
+        array.push $results {
+          value = $item
         }
       }
     }

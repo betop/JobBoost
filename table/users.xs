@@ -27,6 +27,7 @@ table users {
     text assigned_ip?
     decimal credit_balance?=0
     bool? deleted?
+    int? free_generations_remaining?
   }
 
   index = [

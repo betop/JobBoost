@@ -65,6 +65,7 @@ query "dashboard/credits/balance" verb=GET {
   response = {
     admin_id          : $target_admin.id
     credit_balance     : $target_admin.credit_balance|first_notnull:0
+    free_generations_remaining: $target_admin.free_generations_remaining|first_notnull:0
     recent_transactions: $recent_transactions
   }
 

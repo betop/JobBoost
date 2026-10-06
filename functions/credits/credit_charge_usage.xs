@@ -43,6 +43,10 @@ function "credits/credit_charge_usage" {
       description = "Cache-read tokens behind raw_cost_usd"
     }
 
+    bool free_trial?=false {
+      description = "Free trial generation: billed amount is 0, users.credit_balance is untouched, the ledger row is still written"
+    }
+
     bool allow_negative?=false {
       description = "If true, charge proceeds even if it drives balance negative (used when balance was already verified pre-flight)"
     }
@@ -113,6 +117,14 @@ function "credits/credit_charge_usage" {
       value = ($raw_cost * $rate)|round:8
     }
 
+    conditional {
+      if ($input.free_trial) {
+        var.update $charge_amount {
+          value = 0
+        }
+      }
+    }
+
     var $current_balance {
       value = $admin.credit_balance|first_notnull:0
     }
@@ -145,16 +157,20 @@ function "credits/credit_charge_usage" {
         cache_read_tokens: $input.cache_read_tokens|first_notnull:0
         raw_cost_usd     : $raw_cost
         usage_rate       : $rate
-        note             : "AI usage charge (raw cost $" ~ $raw_cost ~ " x" ~ $rate ~ ")"
+        note             : $input.free_trial ? ("Free trial generation (raw cost $" ~ $raw_cost ~ ")") : ("AI usage charge (raw cost $" ~ $raw_cost ~ " x" ~ $rate ~ ")")
       }
     } as $txn
 
     // Ledger row is written first; the balance is only debited once the row exists.
-    db.patch users {
-      field_name = "id"
-      field_value = $input.admin_id
-      data = {credit_balance: $new_balance}
-    } as $_
+    conditional {
+      if (!$input.free_trial) {
+        db.patch users {
+          field_name = "id"
+          field_value = $input.admin_id
+          data = {credit_balance: $new_balance}
+        } as $_
+      }
+    }
   }
 
   response = {

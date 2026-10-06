@@ -495,20 +495,21 @@ export default function CreditsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Free left</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {adminsLoading && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center">
+                  <td colSpan={6} className="px-6 py-8 text-center">
                     <LoadingSpinner size="md" />
                   </td>
                 </tr>
               )}
               {!adminsLoading && adminsData?.items.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     No admin accounts found
                   </td>
                 </tr>
@@ -530,6 +531,15 @@ export default function CreditsPage() {
                     }`}
                   >
                     {formatCurrency(a.credit_balance)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-right">
+                    {(a.free_generations_remaining ?? 0) > 0 ? (
+                      <span className="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-800">
+                        {a.free_generations_remaining}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button
@@ -600,7 +610,17 @@ export default function CreditsPage() {
         <h1 className="text-3xl font-bold">Credits</h1>
       </div>
 
-      {!balanceLoading && balance && (balance.credit_balance ?? 0) <= 0 && (
+      {!balanceLoading && balance && (balance.free_generations_remaining ?? 0) > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-3 text-sm">
+          You have {balance.free_generations_remaining} free resume generation
+          {balance.free_generations_remaining === 1 ? "" : "s"} left. After that, usage is billed
+          from your credit balance.
+          <p className="text-xs text-emerald-700 mt-1">
+            Free generations cover resume generations only.
+          </p>
+        </div>
+      )}
+      {!balanceLoading && balance && (balance.free_generations_remaining ?? 0) <= 0 && (balance.credit_balance ?? 0) <= 0 && (
         <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">
           Insufficient credit: usage is blocked until you top up.
         </div>
@@ -608,6 +628,7 @@ export default function CreditsPage() {
       {!balanceLoading &&
         balance &&
         settings &&
+        (balance.free_generations_remaining ?? 0) <= 0 &&
         balance.credit_balance > 0 &&
         balance.credit_balance < settings.low_balance_threshold && (
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg px-4 py-3 text-sm">

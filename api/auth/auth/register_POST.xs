@@ -35,6 +35,11 @@ query "auth/register" verb=POST {
       error = "An account with this email already exists"
     }
   
+    // New admin accounts get the free trial generations
+    function.run "credits/free_generation_allowance" {
+      input = {}
+    } as $free_allowance
+
     // Generate UUID for the new user first
     security.create_uuid as $new_user_id
   
@@ -53,6 +58,7 @@ query "auth/register" verb=POST {
         updated_at         : now
         created_by         : $new_user_id
         assigned_bidder_ids: []
+        free_generations_remaining: $free_allowance
       }
     } as $admin
   }

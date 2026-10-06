@@ -213,6 +213,7 @@ export default function DashboardPage() {
     .sort((a, b) => a.credit_balance - b.credit_balance);
   const pending = stats?.pending_profiles ?? 0;
   const balance = balanceQ.data?.credit_balance;
+  const freeLeft = balanceQ.data?.free_generations_remaining ?? 0;
 
   const pct = (n: number) =>
     logStats && logStats.total_generations > 0 ? Math.round((n / logStats.total_generations) * 100) : 0;
@@ -366,12 +367,21 @@ export default function DashboardPage() {
             {lowAdmins.length} admin{lowAdmins.length === 1 ? "" : "s"} with empty or low balance (under {usd(LOW_BALANCE)})
           </Alert>
         )}
-        {isAdmin && balance !== undefined && balance <= 0 && (
+        {isAdmin && freeLeft > 0 && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-medium text-emerald-800">
+              You have {freeLeft} free resume generation{freeLeft === 1 ? "" : "s"} left. After that,
+              usage is billed from your credit balance.
+            </p>
+            <p className="text-xs text-emerald-700 mt-1">Free generations cover resume generations only.</p>
+          </div>
+        )}
+        {isAdmin && freeLeft <= 0 && balance !== undefined && balance <= 0 && (
           <Alert href="/dashboard/credits" tone="red" cta="Deposit now">
             Insufficient credit: usage is blocked until you top up
           </Alert>
         )}
-        {isAdmin && balance !== undefined && balance > 0 && balance < LOW_BALANCE && (
+        {isAdmin && freeLeft <= 0 && balance !== undefined && balance > 0 && balance < LOW_BALANCE && (
           <Alert href="/dashboard/credits" tone="yellow" cta="Deposit now">
             Credit is running low, top up soon
           </Alert>

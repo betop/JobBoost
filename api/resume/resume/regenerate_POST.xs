@@ -43,7 +43,7 @@ query "resume/regenerate" verb=POST {
     // Pay-as-you-go credit check — super_admins are exempt; bidders are billed
     // through the profile's billing admin (falls back to the creating admin)
     function.run "credits/check_sufficient_balance" {
-      input = {user_id: $auth.id, profile_id: $log.profile_id}
+      input = {user_id: $auth.id, profile_id: $log.profile_id, allow_free_trial: true}
     } as $billing_check
   
     precondition (!$billing_check.is_billable || $billing_check.has_sufficient_balance) {
@@ -59,6 +59,23 @@ query "resume/regenerate" verb=POST {
       if ($billing_check.low_balance) {
         var.update $credit_warning {
           value = {message: $billing_check.warning_message, balance: $billing_check.balance}
+        }
+      }
+    }
+
+    // Free trial (new admin accounts): null when not in trial, else remaining count after this request
+    var $free_trial_info {
+      value = null
+    }
+
+    conditional {
+      if ($billing_check.free_trial) {
+        function.run "credits/free_generation_allowance" {
+          input = {}
+        } as $free_allowance
+
+        var.update $free_trial_info {
+          value = {remaining: $billing_check.free_generations_remaining, total: $free_allowance}
         }
       }
     }
@@ -688,7 +705,7 @@ Remember today's year is 2026.
     }
 
     conditional {
-      if ($billing_check.is_billable) {
+      if ($billing_check.is_billable && !$billing_check.free_trial) {
         var.update $log_charged {
           value = null
         }
@@ -735,8 +752,22 @@ Remember today's year is 2026.
             related_log_table    : "generation_log"
             related_log_id       : $log.id
             allow_negative       : true
+            free_trial          : $billing_check.free_trial
           }
         } as $gen_charge
+
+        // Free trial: only a successfully produced resume consumes one free generation
+        conditional {
+          if ($billing_check.free_trial && $match_status == 1) {
+            function.run "credits/consume_free_generation" {
+              input = {admin_id: $billing_check.billing_admin_id}
+            } as $free_consumed
+
+            var.update $free_trial_info {
+              value = {remaining: $free_consumed.remaining, total: $free_allowance}
+            }
+          }
+        }
 
         // Record the final billed amount on the log row; a failure here must not undo the charge
         try_catch {
@@ -764,6 +795,7 @@ Remember today's year is 2026.
     resume_text    : $resume_text
     resume_filename: $resume_filename
     credit_warning       : $credit_warning
+    free_trial           : $free_trial_info
   }
   guid = "hAnQgUuQRN0X-UuBt8keYNolcJ8"
 }

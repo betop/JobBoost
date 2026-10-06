@@ -180,5 +180,19 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/consume_free_generation.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/credits/free_generation_allowance.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]
