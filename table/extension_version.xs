@@ -11,6 +11,21 @@ table extension_version {
     text changelog?
     text min_extension_version?
     timestamp updated_at?
+    text? status?
+    timestamp? released_at?
+    uuid? released_by? {
+      table = "users"
+    }
+  
+    uuid? created_by? {
+      table = "users"
+    }
+  
+    text? file_name?
+    int? file_size?
+    text? file_url?
+    text? file_path?
+    text? notes?
   }
 
   index = [

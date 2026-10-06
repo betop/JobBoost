@@ -29,6 +29,7 @@ query "dashboard/stats" verb=GET {
         } as $pending_profiles
       
         db.query users {
+          where = ($db.users.deleted == false || $db.users.deleted == null)
           return = {type: "count"}
         } as $total_bidders
       
@@ -46,7 +47,7 @@ query "dashboard/stats" verb=GET {
       else {
         // Admin: only see metrics for assigned/created bidders
         db.query users {
-          where = $db.users.type == "bidder"
+          where = $db.users.type == "bidder" && ($db.users.deleted == false || $db.users.deleted == null)
           return = {type: "list"}
         } as $all_bidders
       

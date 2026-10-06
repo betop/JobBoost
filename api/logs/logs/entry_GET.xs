@@ -35,7 +35,7 @@ query "logs/entry" verb=GET {
       field_value = $access.user_id
     } as $user
   
-    precondition ($user != null && $user.is_active) {
+    precondition ($user != null && $user.is_active && $user.deleted != true) {
       error_type = "accessdenied"
       error = "User not found or inactive"
     }

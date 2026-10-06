@@ -64,6 +64,7 @@ query "profiles/{id}" verb=DELETE {
   
     // Count bidder assignments using users.profile_ids (array)
     db.query users {
+      where = ($db.users.deleted == false || $db.users.deleted == null)
       return = {type: "list"}
     } as $users_list
 

@@ -19,7 +19,7 @@ query "dashboard/credits/admins" verb=GET {
     }
 
     db.query users {
-      where = $db.users.type == "admin"
+      where = $db.users.type == "admin" && ($db.users.deleted == false || $db.users.deleted == null)
       sort = {users.full_name: "asc"}
       return = {type: "list"}
     } as $admins

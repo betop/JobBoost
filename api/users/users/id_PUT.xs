@@ -27,6 +27,11 @@ query "users/{id}" verb=PUT {
       error = "User not found"
     }
   
+    precondition ($b.deleted != true) {
+      error_type = "badrequest"
+      error = "User has been deleted"
+    }
+  
     var $payload {
       value = {}
     }

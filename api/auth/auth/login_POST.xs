@@ -9,9 +9,10 @@ query "auth/login" verb=POST {
   }
 
   stack {
-    db.get users {
-      field_name = "email"
-      field_value = $input.email
+    // Soft-deleted users are ignored (their email may be reused by a new account)
+    db.query users {
+      where = $db.users.email == $input.email && ($db.users.deleted == false || $db.users.deleted == null)
+      return = {type: "single"}
     } as $user
   
     precondition ($user != null) {

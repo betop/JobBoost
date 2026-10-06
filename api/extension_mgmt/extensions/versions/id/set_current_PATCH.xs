@@ -1,4 +1,7 @@
-// PATCH /extensions/versions/{id}/set-current
+// PATCH /extensions/versions/{id}/set-current  (super_admin only)
+// Releases the version: is_current=true, status="live", released_at=now, released_by=caller.
+// The previously live version of the same extension becomes status "archived", is_current=false.
+// Releasing an archived version is a rollback. Returns {success, version, status}.
 query "extensions/versions/{id}/set-current" verb=PATCH {
   api_group = "extension_mgmt"
   auth = "users"
@@ -8,46 +11,20 @@ query "extensions/versions/{id}/set-current" verb=PATCH {
   }
 
   stack {
+    function.run "extension/assert_super_admin" {
+      input = {user_id: $auth.id}
+    } as $caller
+  
     precondition ($input.id != null) {
       error_type = "inputerror"
       error = "id is required"
     }
   
-    db.get extension_version {
-      field_name = "id"
-      field_value = $input.id
-    } as $version
-  
-    precondition ($version != null) {
-      error_type = "notfound"
-      error = "Version not found"
-    }
-  
-    // Unset ALL other versions for this extension
-    db.query extension_version {
-      where = $db.extension_version.extension_name == $version.extension_name && $db.extension_version.id != $input.id
-      return = {type: "list"}
-    } as $other_versions
-  
-    // Loop through and unset each one
-    foreach ($other_versions) {
-      each as $other {
-        db.patch extension_version {
-          field_name = "id"
-          field_value = $other.id
-          data = {is_current: false}
-        } as $patched
-      }
-    }
-  
-    // Set new current version
-    db.patch extension_version {
-      field_name = "id"
-      field_value = $input.id
-      data = {is_current: true}
+    function.run "extension/release_version" {
+      input = {version_id: $input.id, released_by: $auth.id}
     } as $updated
   }
 
-  response = {success: true, version: $updated.version}
+  response = {success: true, version: $updated.version, status: $updated.status}
   guid = "vjNxBfZkulxnoY8aemeQh-aVNYs"
 }

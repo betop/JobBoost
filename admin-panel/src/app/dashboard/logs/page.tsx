@@ -1037,7 +1037,7 @@ export default function LogsPage() {
   console.log(allUsers)
   // Extra name map for user IDs that appear in logs but are missing from allUsers
   // (i.e. deleted users). Populated lazily once cachedRows + allUsers are both ready.
-  const [extraUserNames, setExtraUserNames] = useState<Map<string, string | null>>(new Map());
+  const [extraUserNames, setExtraUserNames] = useState<Map<string, { name: string | null; deleted: boolean }>>(new Map());
 
   useEffect(() => {
     if (!cachedRows.length || !allUsers) return;
@@ -1060,13 +1060,13 @@ export default function LogsPage() {
     Promise.all(
       Array.from(missing).map((uid) =>
         userService.getById(uid)
-          .then((u): [string, string | null] => [uid, u.full_name])
-          .catch((): [string, string | null] => [uid, null]),
+          .then((u): [string, { name: string | null; deleted: boolean }] => [uid, { name: u.full_name, deleted: true }])
+          .catch((): [string, { name: string | null; deleted: boolean }] => [uid, { name: null, deleted: true }]),
       ),
     ).then((results) => {
       setExtraUserNames((prev) => {
         const next = new Map(prev);
-        for (const [uid, name] of results) next.set(uid, name);
+        for (const [uid, info] of results) next.set(uid, info);
         return next;
       });
     });
@@ -1201,8 +1201,8 @@ export default function LogsPage() {
         } else if (userMap.has(userId)) {
           resolvedName = userMap.get(userId) || "";
         } else if (extraUserNames.has(userId)) {
-          // null means the fetch returned 404 → user was deleted
-          resolvedName = extraUserNames.get(userId) ?? "";
+          // name null means the lookup failed → truly unknown user
+          resolvedName = extraUserNames.get(userId)?.name ?? "";
         }
         // else: still loading the extra fetch — leave empty for now
       }
@@ -1212,6 +1212,7 @@ export default function LogsPage() {
         user_id: userId || "",
         profile_name: log.profile_name || profileMap.get(log.profile_id) || "",
         user_name: resolvedName,
+        user_deleted: !isAdminUser && (!!log.user_deleted || (!userMap.has(userId) && extraUserNames.has(userId))),
       });
     }
 
@@ -1230,6 +1231,14 @@ export default function LogsPage() {
 
   const userOptions = useMemo(() => {
     const options = (allUsers ?? []).map((u) => ({ value: u.id, label: u.full_name }));
+    // Add deleted users that appear in logs so super_admin can still filter by them
+    const seen = new Set(options.map((o) => o.value));
+    for (const log of allRows) {
+      const uid = (log.user_id ?? "").trim();
+      if (!uid || uid === ADMIN_USER_ID || seen.has(uid) || !log.user_deleted) continue;
+      seen.add(uid);
+      options.push({ value: uid, label: `${log.user_name || "Unknown user"} (deleted)` });
+    }
     const hasAdminRows = allRows.some((log) => {
       const userId = (log.user_id ?? "").trim();
       return userId === "" || userId === ADMIN_USER_ID;
@@ -1830,8 +1839,14 @@ export default function LogsPage() {
                       <td className="px-4 py-3 font-medium text-gray-900">
                         {(() => {
                           const uid = (log.user_id ?? "").trim();
-                          if (log.user_name) return log.user_name;
-                          if (uid && extraUserNames.get(uid) === null)
+                          if (log.user_name)
+                            return log.user_deleted ? (
+                              <>
+                                {log.user_name}{" "}
+                                <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-normal text-gray-500">deleted</span>
+                              </>
+                            ) : log.user_name;
+                          if (uid && extraUserNames.get(uid)?.name === null)
                             return <span className="text-red-400 italic text-xs">Deleted user</span>;
                           return <span className="text-gray-400 italic">—</span>;
                         })()}

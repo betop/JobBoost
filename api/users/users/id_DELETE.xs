@@ -1,4 +1,4 @@
-// Delete user (also removes associated tokens)
+// Soft-delete user: row is kept (so logs can still show the name), flagged deleted + inactive; access keys are removed
 query "users/{id}" verb=DELETE {
   api_group = "users"
   auth = "users"
@@ -18,6 +18,16 @@ query "users/{id}" verb=DELETE {
       error = "User not found"
     }
   
+    precondition ($b.type != "super_admin") {
+      error_type = "badrequest"
+      error = "Super admin accounts cannot be deleted"
+    }
+  
+    precondition ($b.id != $auth.id) {
+      error_type = "badrequest"
+      error = "You cannot delete your own account"
+    }
+  
     // Delete associated tokens
     db.query access_token {
       where = $db.access_token.user_id == $input.id
@@ -33,10 +43,11 @@ query "users/{id}" verb=DELETE {
       }
     }
   
-    db.del users {
+    db.patch users {
       field_name = "id"
       field_value = $input.id
-    }
+      data = {deleted: true, is_active: false, updated_at: now}
+    } as $_
   }
 
   response = {success: true}

@@ -26,9 +26,9 @@ query "auth/change-password" verb=POST {
     }
   
     // Look up admin by email
-    db.get users {
-      field_name = "email"
-      field_value = $input.email
+    db.query users {
+      where = $db.users.email == $input.email && ($db.users.deleted == false || $db.users.deleted == null)
+      return = {type: "single"}
     } as $admin
   
     precondition ($admin != null) {

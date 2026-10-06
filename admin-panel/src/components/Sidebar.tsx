@@ -19,6 +19,8 @@ import {
   ChevronsRight,
   Ban,
   Wallet,
+  HelpCircle,
+  Download,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
@@ -26,7 +28,7 @@ import { authService } from "@/services/authService";
 import { creditsService } from "@/services/creditsService";
 import { cn } from "@/utils/cn";
 
-type NavItem = { name: string; href: string; icon: typeof Users; superOnly: boolean; adminOnly?: boolean };
+type NavItem = { name: string; href: string; icon: typeof Users; superOnly: boolean; adminOnly?: boolean; external?: boolean };
 type NavGroup = { label: string | null; items: NavItem[] };
 
 const navigationGroups: NavGroup[] = [
@@ -63,6 +65,13 @@ const navigationGroups: NavGroup[] = [
     items: [
       { name: "Mail Triage", href: "/dashboard/mail-triage", icon: Mail, superOnly: true },
       { name: "Extensions", href: "/dashboard/versions", icon: Package, superOnly: true },
+      { name: "Download", href: "/download", icon: Download, superOnly: false, external: true },
+    ],
+  },
+  {
+    label: "Support",
+    items: [
+      { name: "Help", href: "/dashboard/help", icon: HelpCircle, superOnly: false },
     ],
   },
 ];
@@ -180,22 +189,40 @@ export default function Sidebar() {
                   {group.items.map((item) => {
                       const Icon = item.icon;
                       const isActive =
-                        item.href === "/dashboard"
+                        !item.external && (item.href === "/dashboard"
                           ? pathname === "/dashboard"
-                          : pathname === item.href || pathname.startsWith(item.href + "/");
+                          : pathname === item.href || pathname.startsWith(item.href + "/"));
                       const showBalanceBadge = item.href === "/dashboard/credits" && admin?.type === "admin" && typeof balance === "number";
+
+                      const itemClass = cn(
+                        "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
+                        isActive
+                          ? "bg-primary-600 text-white"
+                          : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                      );
+
+                      if (item.external) {
+                        return (
+                          <a
+                            key={item.name}
+                            href={item.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={itemClass}
+                          >
+                            <Icon className="w-5 h-5 flex-shrink-0" />
+                            <span className={cn("text-sm font-medium flex-1", sidebarCollapsed && "lg:hidden")}>{item.name}</span>
+                          </a>
+                        );
+                      }
 
                       return (
                         <Link
                           key={item.name}
                           href={item.href}
                           onClick={() => setMobileMenuOpen(false)}
-                          className={cn(
-                            "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors",
-                            isActive
-                              ? "bg-primary-600 text-white"
-                              : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                          )}
+                          className={itemClass}
                         >
                           <Icon className="w-5 h-5 flex-shrink-0" />
                           <span className={cn("text-sm font-medium flex-1", sidebarCollapsed && "lg:hidden")}>{item.name}</span>

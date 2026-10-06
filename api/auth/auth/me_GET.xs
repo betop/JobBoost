@@ -12,7 +12,7 @@ query "auth/me" verb=GET {
       field_value = $auth.id
     } as $user
   
-    precondition ($user != null) {
+    precondition ($user != null && $user.deleted != true) {
       error_type = "notfound"
       error = "User not found"
     }

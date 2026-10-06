@@ -38,7 +38,7 @@ query "logs/list" verb=GET {
     // Lean projection: the heavy job_description text is NOT returned (it is fetched
     // on demand via logs/jd); has_job_description tells the UI whether one exists.
     var $query {
-      value = "SELECT id, created_at, updated_at, profile_id, user_id, job_url, job_description_snippet, ai_provider, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, resume_filename, cover_letter_filename, position_title, company_name, is_regenerated, original_log_id, is_matched, match_reason, is_applied, seniority, tech_scope, compensation, content_id, (job_description IS NOT NULL AND job_description <> '') AS has_job_description FROM x1_7"
+      value = "SELECT id, created_at, updated_at, profile_id, user_id, job_url, job_description_snippet, ai_provider, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, resume_filename, cover_letter_filename, position_title, company_name, is_regenerated, original_log_id, is_matched, match_reason, is_applied, seniority, tech_scope, compensation, content_id, COALESCE((SELECT u.deleted FROM x1_2 u WHERE u.id = x1_7.user_id), false) AS user_deleted, (job_description IS NOT NULL AND job_description <> '') AS has_job_description FROM x1_7"
     }
   
     var $has_where {

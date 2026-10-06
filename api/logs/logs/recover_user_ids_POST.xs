@@ -22,6 +22,7 @@ query "logs/recover-user-ids" verb=POST {
   
     // Get all users to build profile_id → user_id lookup
     db.query users {
+      where = $db.users.deleted == false || $db.users.deleted == null
       return = {type: "list"}
     } as $all_users
   

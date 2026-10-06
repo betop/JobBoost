@@ -46,7 +46,7 @@ function "credits/resolve_profile_billing_admin" {
             } as $designated
 
             conditional {
-              if ($designated != null && $designated.type != "super_admin") {
+              if ($designated != null && $designated.deleted != true && $designated.type != "super_admin") {
                 var.update $billing_admin_id {
                   value = $designated.id
                 }
@@ -71,7 +71,7 @@ function "credits/resolve_profile_billing_admin" {
             } as $creator
 
             conditional {
-              if ($creator != null && $creator.type == "admin") {
+              if ($creator != null && $creator.deleted != true && $creator.type == "admin") {
                 var.update $billing_admin_id {
                   value = $creator.id
                 }

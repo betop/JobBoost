@@ -75,6 +75,7 @@ export interface GenerationLog {
   profile_name: string;
   user_id: string;
   user_name: string;
+  user_deleted?: boolean;
   job_url: string;
   job_description_snippet: string;
   job_description: string;

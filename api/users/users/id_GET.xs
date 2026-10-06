@@ -53,6 +53,7 @@ query "users/{id}" verb=GET {
     is_approved        : $b.is_approved
     assigned_ip        : $b.assigned_ip
     created_at         : $b.created_at
+    deleted            : $b.deleted == true
   }
 
   guid = "jg38HDpPHunxO2wiRf122jXh2a0"

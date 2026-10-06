@@ -12,6 +12,7 @@ export interface User {
   is_active: boolean;
   is_approved: boolean;
   created_at: string;
+  deleted?: boolean;
 }
 
 export interface CreateUserInput {
@@ -25,8 +26,10 @@ export interface CreateUserInput {
 }
 
 export const userService = {
-  getAll: async (type?: UserType): Promise<User[]> => {
-    const params = type ? { type } : {};
+  getAll: async (type?: UserType, includeDeleted?: boolean): Promise<User[]> => {
+    const params: Record<string, unknown> = {};
+    if (type) params.type = type;
+    if (includeDeleted) params.include_deleted = true;
     const response = await api.get("/users", { params });
     return response.data;
   },

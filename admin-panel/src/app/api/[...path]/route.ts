@@ -14,7 +14,8 @@ const XANO_CANONICALS: Record<string, string> = {
   resume: "caf8Eo15",
   public: "W5ffWHW-",
   "extension-versions": "eqIK8vAt",
-  "extensions": "eqIK8vAt",
+  // Override with XANO_EXTENSION_MGMT_CANONICAL if the extension_mgmt API group has a different canonical id
+  "extensions": process.env.XANO_EXTENSION_MGMT_CANONICAL || "eqIK8vAt",
   mail_triage_allowlist: "weyKu-kg",
   blacklist: "YZl-BhQi",
 };
@@ -28,6 +29,7 @@ if (process.env.XANO_ALLOW_SELF_SIGNED === "true") {
 }
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 async function proxyRequest(req: NextRequest, segments: string[]) {
   const group = segments[0];
@@ -49,28 +51,37 @@ async function proxyRequest(req: NextRequest, segments: string[]) {
     headers.set(key, value);
   }
 
-  const init: RequestInit = {
+  const init: RequestInit & { duplex?: "half" } = {
     method: req.method,
     headers,
   };
 
-  if (!["GET", "HEAD"].includes(req.method)) {
-    const body = await req.arrayBuffer();
-    if (body.byteLength > 0) {
-      init.body = body;
+  if (!["GET", "HEAD"].includes(req.method) && req.body) {
+    const contentType = req.headers.get("content-type") || "";
+    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (contentType.toLowerCase().startsWith("multipart/") || contentLength > 1024 * 1024) {
+      // Large / file uploads: stream the raw body through untouched (keeps the multipart boundary
+      // and content-type header, never buffers the whole file in memory).
+      init.body = req.body as any;
+      init.duplex = "half";
+    } else {
+      const body = await req.arrayBuffer();
+      if (body.byteLength > 0) {
+        init.body = body;
+      }
     }
   }
 
   try {
     const upstream = await fetch(targetUrl, init);
-    const data = await upstream.arrayBuffer();
+    const resHeaders: Record<string, string> = {
+      "content-type": upstream.headers.get("content-type") ?? "application/json",
+    };
+    const disposition = upstream.headers.get("content-disposition");
+    if (disposition) resHeaders["content-disposition"] = disposition;
 
-    return new NextResponse(data, {
-      status: upstream.status,
-      headers: {
-        "content-type": upstream.headers.get("content-type") ?? "application/json",
-      },
-    });
+    // Stream the response body back (no buffering of large downloads)
+    return new NextResponse(upstream.body, { status: upstream.status, headers: resHeaders });
   } catch (err: any) {
     return NextResponse.json({ error: err.message, targetUrl }, { status: 502 });
   }

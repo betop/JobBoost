@@ -292,7 +292,7 @@ export default function UsersPage() {
         onClose={() => setDeleteId(null)}
         onConfirm={() => deleteId && handleDelete(deleteId)}
         title="Delete User"
-        message="Are you sure you want to delete this user? This action cannot be undone."
+        message="Are you sure you want to delete this user? The user will be deactivated and removed from lists. Their generation logs will keep their name."
         confirmText="Yes, Delete"
         cancelText="No, Cancel"
         variant="danger"

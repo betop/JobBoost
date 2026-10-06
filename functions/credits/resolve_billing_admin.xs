@@ -43,6 +43,13 @@ function "credits/resolve_billing_admin" {
         }
       }
 
+      elseif ($user.deleted == true) {
+        // deleted users are never billed (nor billed on behalf of)
+        var.update $is_billable {
+          value = false
+        }
+      }
+
       elseif ($user.type == "admin") {
         var.update $billing_admin_id {
           value = $user.id
@@ -61,6 +68,27 @@ function "credits/resolve_billing_admin" {
 
         var.update $is_billable {
           value = $user.created_by != null
+        }
+
+        conditional {
+          if ($user.created_by != null) {
+            db.get users {
+              field_name = "id"
+              field_value = $user.created_by
+            } as $creator
+
+            conditional {
+              if ($creator != null && $creator.deleted == true) {
+                var.update $billing_admin_id {
+                  value = null
+                }
+
+                var.update $is_billable {
+                  value = false
+                }
+              }
+            }
+          }
         }
       }
     }

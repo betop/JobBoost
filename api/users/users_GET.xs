@@ -7,6 +7,7 @@ query users verb=GET {
 
   input {
     text type?
+    bool include_deleted?
   }
 
   stack {
@@ -20,13 +21,21 @@ query users verb=GET {
     conditional {
       if ($auth_user.type == "super_admin") {
         var $super_admin_query {
-          value = "SELECT * FROM x1_2"
+          value = "SELECT * FROM x1_2 WHERE 1 = 1"
+        }
+      
+        conditional {
+          if ($input.include_deleted != true) {
+            var.update $super_admin_query {
+              value = $super_admin_query ~ " AND deleted IS NOT TRUE"
+            }
+          }
         }
       
         conditional {
           if ($input.type != null && $input.type != "") {
             var.update $super_admin_query {
-              value = $super_admin_query ~ " WHERE type = '" ~ ($input.type|replace:"'":"") ~ "'"
+              value = $super_admin_query ~ " AND type = '" ~ ($input.type|replace:"'":"") ~ "'"
             }
           }
         }
@@ -44,7 +53,15 @@ query users verb=GET {
     
       else {
         var $users_query {
-          value = "SELECT * FROM x1_2"
+          value = "SELECT * FROM x1_2 WHERE 1 = 1"
+        }
+      
+        conditional {
+          if ($input.include_deleted != true) {
+            var.update $users_query {
+              value = $users_query ~ " AND deleted IS NOT TRUE"
+            }
+          }
         }
       
         conditional {
@@ -54,7 +71,7 @@ query users verb=GET {
             }
           
             var.update $users_query {
-              value = $users_query ~ " WHERE id IN ('" ~ $assigned_ids_string ~ "')"
+              value = $users_query ~ " AND id IN ('" ~ $assigned_ids_string ~ "')"
             }
           }
         }

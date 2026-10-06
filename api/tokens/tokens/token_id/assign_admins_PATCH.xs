@@ -48,7 +48,7 @@ query "tokens/{token_id}/assign-admins" verb=PATCH {
             } as $admin
           
             conditional {
-              if ($admin != null && ($admin.type == "admin" || $admin.type == "super_admin")) {
+              if ($admin != null && $admin.deleted != true && ($admin.type == "admin" || $admin.type == "super_admin")) {
                 array.push $validated_ids {
                   value = $admin_id
                 }
