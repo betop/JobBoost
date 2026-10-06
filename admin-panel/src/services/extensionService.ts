@@ -47,6 +47,13 @@ export const VERSION_REGEX = /^\d+(\.\d+){1,2}$/;
 
 const BASE = "/api/extensions";
 
+// Setup files are up to 100 MB, but Vercel serverless functions (the /api proxy) reject request
+// bodies over ~4.5 MB (FUNCTION_PAYLOAD_TOO_LARGE). Uploads that carry a file therefore go
+// straight from the browser to the Xano API (CORS allows this origin); everything else uses the proxy.
+const DIRECT_UPLOAD_BASE = (
+  process.env.NEXT_PUBLIC_XANO_EXTENSION_API_URL || "https://api.shsws-solutions.com/api:eqIK8vAt/extensions"
+).replace(/\/+$/, "");
+
 function authHeader(): Record<string, string> {
   if (typeof window === "undefined") return {};
   const token = localStorage.getItem("admin_token");
@@ -88,7 +95,7 @@ function sendMultipart<T>(
     if (input.file) fd.append("file", input.file);
 
     const xhr = new XMLHttpRequest();
-    xhr.open(method, `${BASE}${path}`);
+    xhr.open(method, `${input.file ? DIRECT_UPLOAD_BASE : BASE}${path}`);
     const h = authHeader();
     if (h.Authorization) xhr.setRequestHeader("Authorization", h.Authorization);
     xhr.upload.onprogress = (e) => {
