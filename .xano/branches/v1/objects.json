@@ -215,5 +215,19 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/maintenance/backfill_creator_profile_assignment.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/profiles/assign_profile_to_user.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

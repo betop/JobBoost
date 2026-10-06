@@ -134,6 +134,24 @@ query profiles verb=POST {
       }
     }
   
+    // Admin creators get the new profile in their own users.profile_ids (never fails profile creation)
+    conditional {
+      if ($auth_user.type == "admin") {
+        try_catch {
+          try {
+            function.run "profiles/assign_profile_to_user" {
+              input = {user_id: $auth_user.id, profile_id: $p.id}
+            } as $assigned
+          }
+          catch {
+            debug.log {
+              value = "assign_profile_to_user failed for new profile " ~ $p.id
+            }
+          }
+        }
+      }
+    }
+  
     foreach ($input.education) {
       each as $e {
         db.add education {
