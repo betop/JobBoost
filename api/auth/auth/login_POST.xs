@@ -25,13 +25,7 @@ query "auth/login" verb=POST {
       error = "Invalid email or password"
     }
   
-    // Admin users require approval from super_admin before they can login
-    // super_admin users bypass this check
-    precondition ($user.type == "super_admin" || $user.is_approved) {
-      error_type = "accessdenied"
-      error = "Your account is pending approval"
-    }
-  
+    // Sign-ups are approved automatically, so login no longer waits for super admin approval.
     security.check_password {
       text_password = $input.password
       hash_password = $user.password_hash

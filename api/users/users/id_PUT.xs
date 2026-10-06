@@ -76,12 +76,9 @@ query "users/{id}" verb=PUT {
       }
     }
   
-    var $is_active_changed {
-      value = $input.is_active|json_encode
-    }
-  
+    // Only touch is_active when the caller sent it (e.g. approving a user sends only is_approved)
     conditional {
-      if ($is_active_changed != "") {
+      if ($input.is_active != null) {
         var.update $payload.is_active {
           value = $input.is_active
         }

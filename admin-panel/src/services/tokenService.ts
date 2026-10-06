@@ -38,6 +38,12 @@ export interface TokenRequest {
   created_at: string;
 }
 
+// Response of POST /tokens/request: admin requests are auto-approved and the key is issued immediately
+export interface CreatedTokenRequest extends TokenRequest {
+  token: string;
+  token_id: string;
+}
+
 export interface CreateTokenRequestInput {
   user_id: string;
   expiration_date?: string;
@@ -80,7 +86,7 @@ export const tokenService = {
   },
 
   // Token Request endpoints
-  createRequest: async (input: CreateTokenRequestInput): Promise<TokenRequest> => {
+  createRequest: async (input: CreateTokenRequestInput): Promise<CreatedTokenRequest> => {
     const response = await api.post("/tokens/request", input);
     return response.data;
   },

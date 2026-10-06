@@ -62,6 +62,6 @@ export const userService = {
   },
 
   approve: async (id: string): Promise<void> => {
-    await api.put(`/users/${id}`, { is_approved: true });
+    await api.put(`/users/${id}`, { is_approved: true, is_active: true });
   },
 };

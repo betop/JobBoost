@@ -1,4 +1,6 @@
-// Create profile with nested education + work
+// Create profile with nested education + work.
+// Every new profile is approved at creation regardless of the creator role (admin, super_admin, bidder).
+// Super admins can still revoke/approve later via profiles/{id}/approve.
 query profiles verb=POST {
   api_group = "profiles"
   auth = "users"
@@ -31,9 +33,9 @@ query profiles verb=POST {
       field_value = $auth.id
     } as $auth_user
   
-    // Super admins auto-approve; admins require super_admin approval
+    // All new profiles are approved at creation
     var $auto_approved {
-      value = $auth_user.type == "super_admin"
+      value = true
     }
   
     // Billing admin: admin -> self; bidder -> creating admin; super_admin -> must pick an active admin
@@ -113,6 +115,24 @@ query profiles verb=POST {
         default_compensation  : $input.default_compensation
       }
     } as $p
+  
+    // Auto-allowlist the profile email for Mail Triage (never fails profile creation)
+    conditional {
+      if ($p.email != null && $p.email != "") {
+        try_catch {
+          try {
+            function.run "mail_triage/ensure_allowlisted" {
+              input = {email: $p.email, notes: "Auto-added from profile " ~ ($p.full_name|first_notnull:"")}
+            } as $allowlisted
+          }
+          catch {
+            debug.log {
+              value = "ensure_allowlisted failed for new profile " ~ $p.id
+            }
+          }
+        }
+      }
+    }
   
     foreach ($input.education) {
       each as $e {

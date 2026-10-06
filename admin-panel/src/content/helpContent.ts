@@ -50,7 +50,7 @@ export const helpSections: HelpSection[] = [
     features: [
       { text: "1. Add credit: open Credits and deposit by crypto (minimum $15). Generation stops when the balance reaches $0. New accounts include 3 free resume generations, so you can try SwiftCV before depositing." },
       { text: "2. Create a profile: open Profiles, click create, and fill in the person's details, education, work experience, template and options." },
-      { text: "3. Get the profile approved: profiles created by admins stay pending until a super admin approves them. Unapproved profiles cannot generate." },
+      { text: "3. Profiles are approved automatically when they are created, no review step is needed. Only older profiles that are still pending cannot generate until a super admin approves them." },
       { text: "4. Create the bidder: open Users, add a user with the Bidder role and assign the profile(s) they will work with." },
       { text: "5. Request a key: open Keys and request a key for the bidder. A super admin reviews the request and generates the key (optionally with an expiry date and an IP whitelist)." },
       { text: "6. Share the extension: send the bidder the public Download page (/download) together with their key." },
@@ -100,11 +100,11 @@ export const helpSections: HelpSection[] = [
     features: [
       { text: "KPI cards for generations (30 days) and active keys." },
       { text: "Admins also see their credit balance, spend (30 days), their number of profiles and their number of bidders." },
-      { text: "Total profiles, pending approvals, admins and bidders counts, and admin spend (30 days).", superOnly: true },
+      { text: "Total profiles, legacy pending approvals, admins and bidders counts, and admin spend (30 days).", superOnly: true },
       { text: "Spend by app (resume generations, Assistant, Mail Triage) for the last 30 days." },
       { text: "Generation outcomes for the last 30 days (matched, mismatched, skipped, duplicated, not a JD, reposted, error) with a link to the logs." },
-      { text: "Admin balances panel, a banner when profiles are waiting for approval, and a banner when admins have low credit.", superOnly: true },
-      { text: "Quick actions: create a profile, add a user, generate or request a key, view logs, add credit (admins) or manage credits and review pending profiles (super admins)." },
+      { text: "Admin balances panel, a banner when old (legacy) profiles are still waiting for approval, and a banner when admins have low credit.", superOnly: true },
+      { text: "Quick actions: create a profile, add a user, generate or create a key, view logs, add credit (admins) or manage credits and review legacy pending profiles (super admins)." },
     ],
     tips: [
       { text: "Use the quick actions as your starting point; each one opens the matching page." },
@@ -126,7 +126,8 @@ export const helpSections: HelpSection[] = [
       { text: "Admin Template Visibility panel: choose which resume templates admins are allowed to pick. At least one must stay visible.", superOnly: true },
     ],
     tips: [
-      { text: "Profiles created by an admin start as pending and must be approved by a super admin. Profiles created by a super admin are approved automatically." },
+      { text: "Profiles are approved automatically at creation, whoever creates them (including duplicates). A super admin can still revoke approval later; only older profiles created before this change may still be pending." },
+      { text: "A profile's email is added to the Mail Triage allowlist automatically on creation and when the email changes." },
       { text: "Duplicating is the fastest way to create a similar profile (same background, different name or email)." },
       { text: "Deleting a profile may be refused by the server (for example when it is still in use); the error message is shown in a toast." },
     ],
@@ -234,7 +235,7 @@ export const helpSections: HelpSection[] = [
       { text: "Edit also lets a super admin change the role and assign bidders to an admin; the assigned bidders then appear on that admin's Users page.", superOnly: true },
       { text: "Deactivate or activate a user." },
       { text: "Delete a user: this is a soft delete. The user is deactivated and removed from the lists, but their generation logs are kept and still show their name." },
-      { text: "Approve a newly registered admin so they can log in and use the dashboard.", superOnly: true },
+      { text: "New admins who sign up on the register page are approved automatically and can sign in right away. The Approve button only appears for older accounts that are still pending.", superOnly: true },
     ],
     tips: [
       { text: "Deactivate a bidder who leaves; their key stops working (\"User account is inactive\")." },
@@ -248,12 +249,12 @@ export const helpSections: HelpSection[] = [
     group: "Admin panel",
     route: "/dashboard/tokens",
     purpose:
-      "A key is what a bidder types into the SwiftCV extension. Admins request keys and view the keys of their users; super admins generate and manage them.",
+      "A key is what a bidder types into the SwiftCV extension. Admins create keys for their users and view them; super admins generate and manage them.",
     features: [
-      { text: "Admins: request a key for one of their bidders or for themselves (optional expiration date and a note). Track the request status (pending, approved, declined) in My Requests." },
+      { text: "Admins: create a key for one of their bidders or for themselves (optional expiration date and a note). The key is created immediately and shown with a copy button; it also appears in the Keys list. My Requests keeps the history (shown as Approved)." },
       { text: "Admins: view their keys (My Keys) read-only. The table shows the user, issue date, expiry, allowed IPs and status. Copy the key with the copy button." },
       { text: "Generate a key directly for any user, with an optional expiration date and an optional list of allowed IPs.", superOnly: true },
-      { text: "Review key requests: approve (this generates the key) or decline, with an optional note back to the admin. A badge shows how many requests are pending.", superOnly: true },
+      { text: "Review legacy key requests: old requests that are still pending can be approved (this generates the key) or declined, with an optional note. New admin key requests are auto-approved.", superOnly: true },
       { text: "Extend or clear the expiration date (empty means never expires).", superOnly: true },
       { text: "Revoke and re-activate a key, or delete it.", superOnly: true },
       { text: "Assign a key to admins so they can see it read-only in their list.", superOnly: true },
@@ -296,10 +297,11 @@ export const helpSections: HelpSection[] = [
     features: [
       { text: "Logs tab: runs of the extension with period filter (Today, This week, This month, All time, custom), a search by email or profile, totals for runs, emails analyzed, unique accounts and cost, and a sortable table with Gmail account, profile, emails and tokens." },
       { text: "Test tab: paste an email body and click Check Category to see how the classifier would label it." },
-      { text: "Allowlist tab: add a Gmail address (with an optional note), edit or remove entries. Only allowlisted addresses can use Mail Triage." },
+      { text: "Allowlist tab: add a Gmail address (with an optional note), edit or remove entries. Only allowlisted addresses can use Mail Triage. Profile emails are added automatically (see tips); use this tab for extra Gmail accounts that are not a profile email." },
     ],
     tips: [
-      { text: "If a user reports \"This email is not authorized to use Mail Triage\", add their Gmail address to the allowlist." },
+      { text: "Profile emails are added to the allowlist automatically when a profile is created (including duplicates) and when a profile email is changed. Old emails are not removed when a profile email changes." },
+      { text: "If a user reports \"This email is not authorized to use Mail Triage\", check that the Gmail address is a profile email or add it here manually (extra Gmail accounts)." },
       { text: "The sidebar item is under Tools and is only visible to super admins." },
     ],
     keywords: ["gmail", "allowlist", "classifier", "email", "test"],
@@ -381,7 +383,7 @@ export const helpSections: HelpSection[] = [
       { text: "Low credit: when the billing admin's balance is below $5 a yellow notice appears, but the resume is still generated. At $0 the request is refused with \"Insufficient credit. The billing admin's credit balance is empty, please top up to continue.\"" },
       { text: "\"Generation is not allowed from this IP address\": the key has an IP whitelist and the bidder's current public IP is not on it. A super admin must add the IP (or clear the list)." },
       { text: "\"Extension version mismatch. Please update your extension to the latest version.\": the installed version is not the current release. The progress window shows \"Update required\". Download the latest version from /download, reinstall and try again." },
-      { text: "\"Profile is not approved. Please contact your admin.\": the profile is still pending. Unapproved profiles are not offered to the extension." },
+      { text: "\"Profile is not approved. Please contact your admin.\": the profile is an older one still pending approval. Unapproved profiles are not offered to the extension." },
       { text: "Keys of admin accounts get extra controls: a \"Resume only\" switch in the popup that skips the cover letter, and the option to Generate Anyway after a duplicate, not-a-JD, unfit, reposted or mismatch warning. AI errors can be retried." },
       { text: "A switch in the popup shows or hides the Assistant chat bubble." },
       { text: "Release notes: each release is uploaded and made current on the Extensions page. Bidders on older versions are blocked until they update. Unless a version is current, the version check fails.", superOnly: true },
@@ -429,7 +431,7 @@ export const helpSections: HelpSection[] = [
       { text: "Only the sender, subject, date, Gmail category hints and the first part of the body are sent to the backend for classification." },
       { text: "Reset Cache clears the list of processed emails so everything in the range is evaluated again. Emails already processed are skipped otherwise." },
       { text: "Billing: each batch is billed to the billing admin of the profile whose email matches the Gmail address being triaged. If no profile has that email, no credit is checked." },
-      { text: "Allowlist: the Gmail address must be on the allowlist, otherwise the run fails with \"This email is not authorized to use Mail Triage.\"" },
+      { text: "Allowlist: the Gmail address must be on the allowlist (profile emails are added automatically when the profile is created or its email changes), otherwise the run fails with \"This email is not authorized to use Mail Triage.\"" },
       { text: "Low credit: a warning appears under the status when the billing admin's balance is below $5; the run continues." },
       { text: "Insufficient credit: the run stops and the status turns red with the \"Insufficient credit\" message. The affected emails are left unprocessed, so they are picked up again on the next Check after a top-up." },
       { text: "\"Extension version outdated. Please update Mail-Triage to the latest version.\": the installed version is not the current release; download the latest from /download." },
@@ -472,7 +474,7 @@ export const faqItems: FaqItem[] = [
   {
     id: "faq-not-approved",
     q: "Why do I see \"Profile is not approved\"?",
-    a: "Profiles created by an admin wait for a super admin's approval. Ask a super admin to approve the profile on the Profiles page.",
+    a: "This only applies to old profiles that are still pending, because new profiles are approved automatically when created. Ask a super admin to approve the profile on the Profiles page.",
   },
   {
     id: "faq-invalid-key",
@@ -502,7 +504,7 @@ export const faqItems: FaqItem[] = [
   {
     id: "faq-mail-allowlist",
     q: "Mail Triage says \"This email is not authorized\".",
-    a: "The Gmail address is not on the allowlist. A super admin adds it on the Mail Triage page, Allowlist tab.",
+    a: "The Gmail address is not on the allowlist. Profile emails are added automatically, so this is usually an extra Gmail account or a profile created before the automation. A super admin adds it on the Mail Triage page, Allowlist tab.",
   },
   {
     id: "faq-mail-retry",

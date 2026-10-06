@@ -342,7 +342,9 @@ export default function ProfilesPage() {
       )}
 
       <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {(["approved", "pending"] as const).map((tab) => (
+        {(["approved", "pending"] as const)
+          .filter((tab) => tab === "approved" || pendingCount > 0 || activeTab === "pending")
+          .map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -397,7 +399,7 @@ export default function ProfilesPage() {
         title={approveId?.approve ? "Approve Profile" : "Revoke Approval"}
         message={
           approveId?.approve
-            ? "Are you sure you want to approve this profile? It will become active."
+            ? "Are you sure you want to approve this profile? It will become active (only needed for older profiles that are still pending)."
             : "Are you sure you want to revoke approval? The profile will be marked as pending."
         }
         confirmText={approveId?.approve ? "Approve" : "Revoke"}

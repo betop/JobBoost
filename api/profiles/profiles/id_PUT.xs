@@ -82,6 +82,10 @@ query "profiles/{id}" verb=PUT {
       }
     }
   
+    var $p_before_email {
+      value = $p.email
+    }
+  
     var $payload {
       value = {}
     }
@@ -336,6 +340,24 @@ query "profiles/{id}" verb=PUT {
       field_value = $p.id
       data = $payload
     } as $p
+  
+    // Auto-allowlist a changed profile email for Mail Triage (non-fatal; old emails stay on the list)
+    conditional {
+      if ($input.email != null && $input.email != "" && $input.email != $p_before_email) {
+        try_catch {
+          try {
+            function.run "mail_triage/ensure_allowlisted" {
+              input = {email: $input.email, notes: "Auto-added from profile " ~ ($p.full_name|first_notnull:"")}
+            } as $allowlisted
+          }
+          catch {
+            debug.log {
+              value = "ensure_allowlisted failed for profile " ~ $p.id
+            }
+          }
+        }
+      }
+    }
   
     conditional {
       if ($input.education != null) {

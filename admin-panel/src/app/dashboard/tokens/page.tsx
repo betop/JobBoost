@@ -169,7 +169,7 @@ export default function TokensPage() {
   const [hiddenTokens, setHiddenTokens] = useState<Set<string>>(new Set());
   const [reviewModalRequest, setReviewModalRequest] = useState<TokenRequest | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
-  const [requestTab, setRequestTab] = useSessionState<"pending" | "all">("tokens.requestTab", "pending");
+  const [requestTab, setRequestTab] = useSessionState<"pending" | "all">("tokens.requestTab", "all");
   const [activeTab, setActiveTab] = useSessionState<"keys" | "requests">("tokens.tab", "keys");
   const [assignModalToken, setAssignModalToken] = useState<Token | null>(null);
   const [ipToken, setIpToken] = useState<Token | null>(null);
@@ -336,13 +336,15 @@ export default function TokensPage() {
   // ── Mutations (admin request) ─────────────────────────────────────
   const createRequestMutation = useMutation({
     mutationFn: tokenService.createRequest,
-    onSuccess: () => {
-      showToast("Key request submitted successfully", "success");
-      setIsModalOpen(false);
+    onSuccess: (created) => {
+      showToast("Key created", "success");
+      setGeneratedToken(created.token);
       resetRequest();
       refetchRequests();
+      refetch();
     },
-    onError: () => showToast("Failed to submit key request", "error"),
+    onError: (err: any) =>
+      showToast(err?.response?.data?.message || "Failed to create key", "error"),
   });
 
   // ── Mutations (super_admin review) ────────────────────────────────
@@ -783,12 +785,12 @@ export default function TokensPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Access Keys</h1>
               <p className="text-gray-600 mt-2">
-                {isSuperAdmin ? "Manage user access keys" : "Request and view access keys"}
+                {isSuperAdmin ? "Manage user access keys" : "Create and view access keys"}
               </p>
             </div>
             <Button onClick={() => { setIsModalOpen(true); setGeneratedToken(null); }}>
               <Plus className="w-5 h-5" />
-              {isSuperAdmin ? "Generate Key" : "Request Key"}
+              {isSuperAdmin ? "Generate Key" : "Create Key"}
             </Button>
           </div>
 
@@ -850,6 +852,7 @@ export default function TokensPage() {
               {activeTab === "requests" && (
                 <>
                   <div className="flex items-center gap-2 mb-4">
+                    {isSuperAdmin && (pendingRequests.length > 0 || requestTab === "pending") && (
                     <button
                       onClick={() => setRequestTab("pending")}
                       className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
@@ -860,6 +863,7 @@ export default function TokensPage() {
                     >
                       Pending{pendingRequests.length > 0 && ` (${pendingRequests.length})`}
                     </button>
+                    )}
                     <button
                       onClick={() => setRequestTab("all")}
                       className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
@@ -874,7 +878,7 @@ export default function TokensPage() {
                   <DataTable
                     persistKey={`tokens:requests:${requestTab}`}
                     persistToUrl={false}
-                    data={requestTab === "pending" ? pendingRequests : requests}
+                    data={isSuperAdmin && requestTab === "pending" ? pendingRequests : requests}
                     columns={requestColumns}
                     searchable
                     searchPlaceholder="Search requests..."
@@ -888,7 +892,7 @@ export default function TokensPage() {
           <Modal
             isOpen={isModalOpen}
             onClose={() => { setIsModalOpen(false); setGeneratedToken(null); }}
-            title={isSuperAdmin ? "Generate Access Key" : "Request Access Key"}
+            title={isSuperAdmin ? "Generate Access Key" : generatedToken ? "Key Created" : "Create Access Key"}
           >
             {isSuperAdmin ? (
               generatedToken ? (
@@ -927,6 +931,19 @@ export default function TokensPage() {
                   </Button>
                 </form>
               )
+            ) : generatedToken ? (
+              <div className="p-6">
+                <p className="text-sm text-gray-600 mb-4">
+                  Key created successfully! Copy it now. Keys are shown in the Keys list too.
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
+                  <code className="text-sm break-all">{generatedToken}</code>
+                </div>
+                <Button onClick={() => copyToClipboard(generatedToken)} className="w-full">
+                  <Copy className="w-4 h-4" />
+                  Copy to Clipboard
+                </Button>
+              </div>
             ) : (
               <form onSubmit={handleSubmitRequest(onSubmitRequest)} className="p-6 space-y-4">
                 <UserSelect
@@ -942,12 +959,12 @@ export default function TokensPage() {
                     {...registerRequest("notes")}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
                     rows={3}
-                    placeholder="Reason for this key request..."
+                    placeholder="Reason for this key..."
                   />
                 </div>
                 <Button type="submit" loading={createRequestMutation.isPending} className="w-full">
                   <Send className="w-4 h-4" />
-                  Submit Request
+                  Create Key
                 </Button>
               </form>
             )}

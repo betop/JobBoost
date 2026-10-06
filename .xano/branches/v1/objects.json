@@ -194,5 +194,26 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/tokens/issue_access_token.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/mail_triage/ensure_allowlisted.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/maintenance/backfill_profile_emails_to_allowlist.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

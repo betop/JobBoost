@@ -53,28 +53,15 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
       error = "Bidder is inactive"
     }
   
-    // Generate a real token
-    security.create_uuid as $raw_token
-  
-    var $token_hash {
-      value = $raw_token|sha256
-    }
-  
-    db.add access_token {
-      enforce_hidden_fields = false
-      data = {
-        created_at         : now
-        token              : $raw_token
-        token_hash         : $token_hash
+    // Generate a real token (shared logic)
+    function.run "tokens/issue_access_token" {
+      input = {
         user_id            : $req.user_id
         created_by_admin_id: $req.requested_by
-        issued_at          : now
         expires_at         : $req.expiration_date
-        is_used            : false
-        is_active          : true
       }
-    } as $token
-  
+    } as $issued
+
     // Update the request status
     db.edit token_request {
       field_name = "id"
@@ -85,7 +72,7 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
         reviewed_by       : $auth_user.id
         reviewed_at       : now
         review_notes      : $input.review_notes
-        generated_token_id: $token.id
+        generated_token_id: $issued.token_id
       }
     }
   }
@@ -93,8 +80,8 @@ query "tokens/requests/{token_request_id}/approve" verb=PATCH {
   response = {
     id         : $req.id
     status     : "approved"
-    token      : $raw_token
-    token_id   : $token.id
+    token      : $issued.token
+    token_id   : $issued.token_id
     user_name  : $bidder.full_name
     reviewed_by: $auth_user.id
     reviewed_at: now

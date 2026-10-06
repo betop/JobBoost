@@ -1,5 +1,6 @@
-// Admin submits a key generation request
-// Fixed: split compound precondition
+// Admin requests a key: the key is issued IMMEDIATELY (no super-admin review needed).
+// The request row is stored as "approved" (auto-approved by the requesting admin) for audit/history.
+// Old pending requests are still handled by requests/{id}/approve and /decline.
 query "tokens/request" verb=POST {
   api_group = "tokens"
   auth = "users"
@@ -39,9 +40,45 @@ query "tokens/request" verb=POST {
       error = "Bidder not found"
     }
   
+    precondition ($bidder.deleted != true) {
+      error_type = "notfound"
+      error = "Bidder not found"
+    }
+
     precondition ($bidder.is_active) {
       error_type = "accessdenied"
       error = "Bidder is inactive"
+    }
+
+    // Admins with an assigned-bidder list may only issue keys for those bidders
+    // (same scope the admin sees in GET /users)
+    var $assigned_ids {
+      value = $auth_user.assigned_bidder_ids
+    }
+
+    conditional {
+      if ($assigned_ids != null && ($assigned_ids|count) > 0) {
+        var $in_scope {
+          value = false
+        }
+
+        foreach ($assigned_ids) {
+          each as $aid {
+            conditional {
+              if (($aid|to_text) == ($input.user_id|to_text)) {
+                var.update $in_scope {
+                  value = true
+                }
+              }
+            }
+          }
+        }
+
+        precondition ($in_scope) {
+          error_type = "accessdenied"
+          error = "You are not allowed to issue a key for this user"
+        }
+      }
     }
   
     // Normalize expiration_date: treat empty string as null
@@ -70,9 +107,16 @@ query "tokens/request" verb=POST {
       }
     }
   
-    // Create the request — must set ALL fields to avoid empty string uuid errors
-    // Xano db.add inserts all table columns; unset uuid fields get "" which is invalid
-    // Use placeholder values for reviewed_by/generated_token_id (will be overwritten on approve/decline)
+    // Issue the key right away (shared logic with approve)
+    function.run "tokens/issue_access_token" {
+      input = {
+        user_id            : $input.user_id
+        created_by_admin_id: $auth_user.id
+        expires_at         : $exp_date
+      }
+    } as $issued
+
+    // Store the request as auto-approved — ALL uuid fields set explicitly
     db.add token_request {
       enforce_hidden_fields = false
       data = {
@@ -80,12 +124,12 @@ query "tokens/request" verb=POST {
         requested_by      : $auth_user.id
         user_id           : $input.user_id
         expiration_date   : $exp_date
-        status            : "pending"
+        status            : "approved"
         admin_notes       : $admin_notes
         reviewed_by       : $auth_user.id
         reviewed_at       : now
-        review_notes      : ""
-        generated_token_id: $input.user_id
+        review_notes      : "Auto-approved"
+        generated_token_id: $issued.token_id
       }
     } as $req
   }
@@ -99,6 +143,11 @@ query "tokens/request" verb=POST {
     status         : $req.status
     admin_notes    : $req.admin_notes
     created_at     : $req.created_at
+    reviewed_by    : $req.reviewed_by
+    reviewed_at    : $req.reviewed_at
+    review_notes   : $req.review_notes
+    token_id       : $issued.token_id
+    token          : $issued.token
   }
 
   guid = "KB-QCWZqXC_CGnRqU56m7jt0Voc"

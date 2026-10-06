@@ -1,4 +1,4 @@
-// Admin registration — creates a new admin account pending super admin approval
+// Admin registration — creates a new admin account, approved automatically (no super admin approval needed)
 query "auth/register" verb=POST {
   api_group = "auth"
 
@@ -54,7 +54,7 @@ query "auth/register" verb=POST {
         type               : "admin"
         profile_ids        : []
         is_active          : true
-        is_approved        : false
+        is_approved        : true
         updated_at         : now
         created_by         : $new_user_id
         assigned_bidder_ids: []
@@ -64,7 +64,7 @@ query "auth/register" verb=POST {
   }
 
   response = {
-    message: "Your account has been created and is pending approval from a super admin."
+    message: "Your account has been created. You can now sign in."
   }
 
   guid = "lC3n2mnzcP7i4ITC8NgP0Gy9wvM"
