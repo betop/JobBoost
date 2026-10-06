@@ -11,8 +11,12 @@ function "credits/credit_charge_usage" {
       description = "users.id of the admin to bill (never a super_admin)"
     }
 
-    decimal raw_cost_usd {
-      description = "Actual provider cost in USD, before markup"
+    decimal raw_cost_usd? {
+      description = "LEGACY: provider cost in USD, only used when no token bucket is passed. When any token bucket is given the cost is computed from the tokens (ai/claude_haiku_cost)."
+    }
+
+    decimal usage_rate? {
+      description = "Rate in force when the usage happened (saved on the log row). When null the current rate (credits/get_usage_rate) is used."
     }
 
     text related_log_table? {
@@ -60,12 +64,53 @@ function "credits/credit_charge_usage" {
       error = "super_admin accounts are not billable"
     }
 
-    function.run "credits/get_usage_rate" {
-      input = {}
-    } as $rate_info
+    // Rate: explicit (saved on the log) wins, otherwise the current setting
+    var $rate {
+      value = $input.usage_rate
+    }
 
+    conditional {
+      if ($rate == null || $rate <= 0) {
+        function.run "credits/get_usage_rate" {
+          input = {}
+        } as $rate_info
+
+        var.update $rate {
+          value = $rate_info.usage_rate
+        }
+      }
+    }
+
+    // Raw cost: single source of truth is ai/claude_haiku_cost over the four token buckets.
+    // Legacy callers (no tokens) keep passing raw_cost_usd.
+    var $has_tokens {
+      value = $input.input_tokens != null || $input.output_tokens != null || $input.cache_creation_tokens != null || $input.cache_read_tokens != null
+    }
+
+    var $raw_cost {
+      value = $input.raw_cost_usd|first_notnull:0
+    }
+
+    conditional {
+      if ($has_tokens) {
+        function.run "ai/claude_haiku_cost" {
+          input = {
+            input_tokens         : $input.input_tokens|first_notnull:0
+            output_tokens        : $input.output_tokens|first_notnull:0
+            cache_creation_tokens: $input.cache_creation_tokens|first_notnull:0
+            cache_read_tokens    : $input.cache_read_tokens|first_notnull:0
+          }
+        } as $token_cost
+
+        var.update $raw_cost {
+          value = $token_cost
+        }
+      }
+    }
+
+    // billed = round(raw cost x rate, 8)
     var $charge_amount {
-      value = ($input.raw_cost_usd * $rate_info.usage_rate)|round:8
+      value = ($raw_cost * $rate)|round:8
     }
 
     var $current_balance {
@@ -98,9 +143,9 @@ function "credits/credit_charge_usage" {
         output_tokens    : $input.output_tokens|first_notnull:0
         cache_creation_tokens: $input.cache_creation_tokens|first_notnull:0
         cache_read_tokens: $input.cache_read_tokens|first_notnull:0
-        raw_cost_usd     : $input.raw_cost_usd
-        usage_rate       : $rate_info.usage_rate
-        note             : "AI usage charge (raw cost $" ~ $input.raw_cost_usd ~ " x" ~ $rate_info.usage_rate ~ ")"
+        raw_cost_usd     : $raw_cost
+        usage_rate       : $rate
+        note             : "AI usage charge (raw cost $" ~ $raw_cost ~ " x" ~ $rate ~ ")"
       }
     } as $txn
 
@@ -114,6 +159,8 @@ function "credits/credit_charge_usage" {
 
   response = {
     charged      : $charge_amount
+    raw_cost_usd : $raw_cost
+    usage_rate   : $rate
     new_balance  : $new_balance
     transaction  : $txn
   }

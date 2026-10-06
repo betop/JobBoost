@@ -38,6 +38,9 @@ table generation_log {
     uuid? content_id? {
       table = "resume_content"
     }
+    decimal? usage_rate?
+    decimal? charged_amount?
+    uuid? billing_admin_id?
   }
 
   index = [

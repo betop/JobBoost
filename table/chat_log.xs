@@ -12,6 +12,9 @@ table chat_log {
     int cache_creation_input_tokens?
     int cache_read_input_tokens?
     timestamp created_at?=now
+    decimal? usage_rate?
+    decimal? charged_amount?
+    uuid? billing_admin_id?
   }
 
   index = [

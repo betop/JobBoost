@@ -114,28 +114,13 @@ workflow_test "extension_release" {
       }
     }
     expect.to_be_false ($ok3)
-    var $ok4 { value = false }
-    try_catch {
-      try {
-        function.run "extension/validate_release_input" { input = {extension_name: "swiftcv", version: "7.7.7", file_name: "a.exe", file_size: 10} } as $bad3
-        var.update $ok4 { value = true }
-      }
-      catch {
-        debug.log { value = "rejected" }
-      }
-    }
-    expect.to_be_false ($ok4)
-    var $ok5 { value = false }
-    try_catch {
-      try {
-        function.run "extension/validate_release_input" { input = {extension_name: "swiftcv", version: "7.7.7", file_name: "a.zip", file_size: 104857601} } as $bad4
-        var.update $ok5 { value = true }
-      }
-      catch {
-        debug.log { value = "rejected" }
-      }
-    }
-    expect.to_be_false ($ok5)
+    // File checks live in extension/validate_release_file (returns {error}, never throws)
+    function.run "extension/validate_release_file" { input = {file_name: "a.exe", file_size: 10} } as $bad3
+    expect.to_not_be_null ($bad3.error)
+    function.run "extension/validate_release_file" { input = {file_name: "a.zip", file_size: 104857601} } as $bad4
+    expect.to_not_be_null ($bad4.error)
+    function.run "extension/validate_release_file" { input = {file_name: "Setup.ZIP", file_size: 1000} } as $good_file
+    expect.to_be_null ($good_file.error)
 
     // cleanup: remove test rows, restore previous live version(s)
     db.del extension_version {

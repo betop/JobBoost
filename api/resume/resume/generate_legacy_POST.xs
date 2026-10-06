@@ -1438,6 +1438,28 @@ query "resume/generate_legacy" verb=POST {
       value = ($main_usage|get:"cache_read_input_tokens"|first_notnull:0) + $extraction_cache_read_tokens
     }
   
+    // Usage rate in force right now: saved on the log row and used for the charge (log and ledger agree)
+    function.run "credits/get_usage_rate" {
+      input = {}
+    } as $log_rate_info
+
+    var $usage_rate {
+      value = $log_rate_info.usage_rate
+    }
+
+    // Non-billable usage is logged with charged_amount 0; billable rows stay null until the charge patches them
+    var $log_charged {
+      value = 0
+    }
+
+    conditional {
+      if ($billing_check.is_billable) {
+        var.update $log_charged {
+          value = null
+        }
+      }
+    }
+
     conditional {
       if ($input.force_generate) {
         db.edit generation_log {
@@ -1448,6 +1470,8 @@ query "resume/generate_legacy" verb=POST {
             output_tokens: $output_tokens
             cache_creation_input_tokens: $cache_creation_input_tokens
             cache_read_input_tokens    : $cache_read_input_tokens
+            usage_rate: $usage_rate
+            charged_amount: $log_charged
             content_id   : $resume_content_id
             is_applied   : true
           }
@@ -1465,6 +1489,8 @@ query "resume/generate_legacy" verb=POST {
             output_tokens        : $output_tokens
             cache_creation_input_tokens: $cache_creation_input_tokens
             cache_read_input_tokens    : $cache_read_input_tokens
+            usage_rate: $usage_rate
+            charged_amount: $log_charged
             resume_filename      : $resume_filename
             cover_letter_filename: $cover_letter_filename
             position_title       : $position_title
@@ -1483,28 +1509,36 @@ query "resume/generate_legacy" verb=POST {
     // Charge the billing admin for this AI usage (1.5x raw provider cost)
     conditional {
       if ($billing_check.is_billable) {
-        function.run "ai/claude_haiku_cost" {
+        function.run "credits/credit_charge_usage" {
           input = {
+            admin_id             : $billing_check.billing_admin_id
+            usage_rate           : $usage_rate
             input_tokens         : $input_tokens
             output_tokens        : $output_tokens
             cache_creation_tokens: $cache_creation_input_tokens
             cache_read_tokens    : $cache_read_input_tokens
+            related_log_table    : "generation_log"
+            related_log_id       : $log.id
+            allow_negative       : true
           }
-        } as $gen_raw_cost
+        } as $gen_charge
 
-        function.run "credits/credit_charge_usage" {
-          input = {
-            admin_id        : $billing_check.billing_admin_id
-            raw_cost_usd     : $gen_raw_cost
-            input_tokens: $input_tokens
-            output_tokens: $output_tokens
-            cache_creation_tokens: $cache_creation_input_tokens
-            cache_read_tokens: $cache_read_input_tokens
-            related_log_table: "generation_log"
-            related_log_id   : $log.id
-            allow_negative    : true
+        // Record the final billed amount on the log row; a failure here must not undo the charge
+        try_catch {
+          try {
+            db.patch generation_log {
+              field_name = "id"
+              field_value = $log.id
+              data = {charged_amount: $gen_charge.charged, billing_admin_id: $billing_check.billing_admin_id}
+            } as $_log_patch
           }
-        } as $_
+
+          catch {
+            debug.log {
+              value = "generation_log charged_amount patch failed"
+            }
+          }
+        }
       }
     }
   }

@@ -211,12 +211,50 @@ query "public/gmail-analyze" verb=POST {
       }
     }
   
+    var $cache_creation_tokens {
+      value = $resp_usage
+        |get:"cache_creation_input_tokens"
+        |first_notnull:0
+    }
+
+    var $cache_read_tokens {
+      value = $resp_usage
+        |get:"cache_read_input_tokens"
+        |first_notnull:0
+    }
+
+    // Usage rate in force right now: saved on the log row and used for the charge
+    function.run "credits/get_usage_rate" {
+      input = {}
+    } as $log_rate_info
+
+    var $usage_rate {
+      value = $log_rate_info.usage_rate
+    }
+
+    // Non-billable usage is logged with charged_amount 0; billable rows stay null until the charge patches them
+    var $log_charged {
+      value = 0
+    }
+
+    conditional {
+      if ($billing_admin_id != null) {
+        var.update $log_charged {
+          value = null
+        }
+      }
+    }
+
     db.add mail_triage_log {
       data = {
         gmail_email  : $input.gmail_email|first_notnull:""
         input_tokens : $input_tokens
         output_tokens: $output_tokens
+        cache_creation_input_tokens: $cache_creation_tokens
+        cache_read_input_tokens    : $cache_read_tokens
         email_count  : $email_count
+        usage_rate   : $usage_rate
+        charged_amount: $log_charged
       }
     } as $triage_log
 
@@ -225,32 +263,35 @@ query "public/gmail-analyze" verb=POST {
       if ($billing_admin_id != null) {
         try_catch {
           try {
-            var $usage_obj {
-              value = $resp_usage
-            }
-
-            function.run "ai/claude_haiku_cost" {
-              input = {
-                input_tokens         : $input_tokens
-                output_tokens        : $output_tokens
-                cache_creation_tokens: $usage_obj|get:"cache_creation_input_tokens"|first_notnull:0
-                cache_read_tokens    : $usage_obj|get:"cache_read_input_tokens"|first_notnull:0
-              }
-            } as $mt_raw_cost
-
             function.run "credits/credit_charge_usage" {
               input = {
-                admin_id         : $billing_admin_id
-                raw_cost_usd     : $mt_raw_cost
-                input_tokens: $input_tokens
-                output_tokens: $output_tokens
-                cache_creation_tokens: $usage_obj|get:"cache_creation_input_tokens"|first_notnull:0
-                cache_read_tokens: $usage_obj|get:"cache_read_input_tokens"|first_notnull:0
-                related_log_table: "mail_triage_log"
-                related_log_id   : $triage_log.id
-                allow_negative   : true
+                admin_id             : $billing_admin_id
+                usage_rate           : $usage_rate
+                input_tokens         : $input_tokens
+                output_tokens        : $output_tokens
+                cache_creation_tokens: $cache_creation_tokens
+                cache_read_tokens    : $cache_read_tokens
+                related_log_table    : "mail_triage_log"
+                related_log_id       : $triage_log.id
+                allow_negative       : true
               }
             } as $mt_charge
+
+            try_catch {
+              try {
+                db.patch mail_triage_log {
+                  field_name = "id"
+                  field_value = $triage_log.id
+                  data = {charged_amount: $mt_charge.charged, billing_admin_id: $billing_admin_id}
+                } as $_log_patch
+              }
+
+              catch {
+                debug.log {
+                  value = "mail_triage_log charged_amount patch failed"
+                }
+              }
+            }
           }
 
           catch {

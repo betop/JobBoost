@@ -507,6 +507,32 @@ No explanations needed, just answer the question based on the provided informati
       }
     }
   
+    // Usage rate in force right now: saved on the log row and used for the charge
+    function.run "credits/get_usage_rate" {
+      input = {}
+    } as $log_rate_info
+
+    var $usage_rate {
+      value = $log_rate_info.usage_rate
+    }
+
+    // Non-billable usage is logged with charged_amount 0; billable rows stay null until the charge patches them
+    var $log_charged {
+      value = 0
+    }
+
+    conditional {
+      if ($billing_check.is_billable) {
+        var.update $log_charged {
+          value = null
+        }
+      }
+    }
+
+    var $chat_log_id {
+      value = null
+    }
+
     conditional {
       if ($input.log_id != null && ($input.log_id|strlen) > 0) {
         db.add chat_log {
@@ -519,35 +545,54 @@ No explanations needed, just answer the question based on the provided informati
             output_tokens: $output_tokens
             cache_creation_input_tokens: $cache_creation_input_tokens
             cache_read_input_tokens     : $cache_read_input_tokens
+            usage_rate   : $usage_rate
+            charged_amount: $log_charged
           }
         } as $chat_record
+
+        var.update $chat_log_id {
+          value = $chat_record.id
+        }
       }
     }
 
-    // Charge the billing admin for this AI usage (1.5x raw provider cost)
+    // Charge the billing admin for this AI usage (raw token cost x saved usage rate)
     conditional {
       if ($billing_check.is_billable) {
-        function.run "ai/claude_haiku_cost" {
+        function.run "credits/credit_charge_usage" {
           input = {
+            admin_id             : $billing_check.billing_admin_id
+            usage_rate           : $usage_rate
             input_tokens         : $input_tokens
             output_tokens        : $output_tokens
             cache_creation_tokens: $cache_creation_input_tokens
             cache_read_tokens    : $cache_read_input_tokens
+            related_log_table    : "chat_log"
+            related_log_id       : $chat_log_id
+            allow_negative       : true
           }
-        } as $chat_raw_cost
+        } as $chat_charge
 
-        function.run "credits/credit_charge_usage" {
-          input = {
-            admin_id        : $billing_check.billing_admin_id
-            raw_cost_usd     : $chat_raw_cost
-            input_tokens: $input_tokens
-            output_tokens: $output_tokens
-            cache_creation_tokens: $cache_creation_input_tokens
-            cache_read_tokens: $cache_read_input_tokens
-            related_log_table: "chat_log"
-            allow_negative    : true
+        // Record the final billed amount on the log row; a failure here must not undo the charge
+        conditional {
+          if ($chat_log_id != null) {
+            try_catch {
+              try {
+                db.patch chat_log {
+                  field_name = "id"
+                  field_value = $chat_log_id
+                  data = {charged_amount: $chat_charge.charged, billing_admin_id: $billing_check.billing_admin_id}
+                } as $_log_patch
+              }
+
+              catch {
+                debug.log {
+                  value = "chat_log charged_amount patch failed"
+                }
+              }
+            }
           }
-        } as $_
+        }
       }
     }
   }

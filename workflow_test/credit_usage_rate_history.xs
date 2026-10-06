@@ -27,8 +27,8 @@ workflow_test "credit_usage_rate_history" {
       }
     }
 
-    function.call "credits/credit_charge_usage" { input = {admin_id: $adm.id, raw_cost_usd: 0.004, related_log_table: "generation_log", input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 0, cache_read_tokens: 0} } as $c1
-    expect.to_equal ($c1.charged) { value = 0.006 }
+    function.call "credits/credit_charge_usage" { input = {admin_id: $adm.id, related_log_table: "generation_log", input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 0, cache_read_tokens: 0} } as $c1
+    expect.to_equal ($c1.charged) { value = 0.00525 }
 
     db.patch billing_setting {
       field_name = "id"
@@ -36,8 +36,8 @@ workflow_test "credit_usage_rate_history" {
       data = {usage_rate: 2}
     } as $_p2
 
-    function.call "credits/credit_charge_usage" { input = {admin_id: $adm.id, raw_cost_usd: 0.003, related_log_table: "generation_log", input_tokens: 400, output_tokens: 300, cache_creation_tokens: 100, cache_read_tokens: 200} } as $c2
-    expect.to_equal ($c2.charged) { value = 0.006 }
+    function.call "credits/credit_charge_usage" { input = {admin_id: $adm.id, related_log_table: "generation_log", input_tokens: 400, output_tokens: 300, cache_creation_tokens: 100, cache_read_tokens: 200} } as $c2
+    expect.to_equal ($c2.charged) { value = 0.00409 }
 
     // Restore the original configuration
     conditional {
@@ -69,8 +69,8 @@ workflow_test "credit_usage_rate_history" {
     expect.to_equal ($rows|count) { value = 2 }
     expect.to_equal ($rows[0].usage_rate) { value = 1.5 }
     expect.to_equal ($rows[1].usage_rate) { value = 2 }
-    // 0.004*1.5 + 0.003*2 = 0.012 (a recompute at the current rate of 2 would give 0.014)
-    expect.to_equal ($tracked_amount) { value = 0.012 }
+    // 0.0035*1.5 + 0.002045*2 = 0.00934 (a recompute at the current rate of 2 would give 0.01109)
+    expect.to_equal ($tracked_amount) { value = 0.00934 }
     expect.to_equal ($total_tokens) { value = 2500 }
   }
   guid = "Rt9UsageRateHistoryQ3vNb7Kx"

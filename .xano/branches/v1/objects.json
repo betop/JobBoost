@@ -173,5 +173,12 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/maintenance/backfill_log_usage_rate.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

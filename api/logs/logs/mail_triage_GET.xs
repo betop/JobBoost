@@ -23,7 +23,7 @@ query "logs/mail-triage" verb=GET {
     }
   
     var $query {
-      value = "SELECT * FROM x1_11"
+      value = "SELECT * FROM x1_12"
     }
   
     var $has_where {
@@ -84,28 +84,77 @@ query "logs/mail-triage" verb=GET {
           response_type = "list"
         } as $raw_logs
       
-        // Enrich with profile_name
+        // Resolve profile from the log's gmail_email (no profile_id column on this table); cached per email
         var $out {
           value = []
         }
       
+        var $email_cache {
+          value = {}
+        }
+      
         foreach ($raw_logs) {
           each as $row {
+            var $profile_id {
+              value = null
+            }
+          
             var $profile_name {
               value = null
             }
           
+            var $email_key {
+              value = ($row.gmail_email|to_text|trim|to_lower)
+            }
+          
             conditional {
-              if ($row.profile_id != null) {
-                db.get profile {
-                  field_name = "id"
-                  field_value = $row.profile_id
-                } as $prof
+              if ($email_key != "") {
+                conditional {
+                  if (($email_cache|has:$email_key) == false) {
+                    var $lookup_sql {
+                      value = "SELECT id, full_name FROM x1_5 WHERE LOWER(TRIM(email)) = " ~ ($email_key|sql_esc) ~ " ORDER BY created_at ASC LIMIT 1"
+                    }
+                  
+                    db.direct_query {
+                      sql = "{{ $lookup_sql }};"
+                      parser = "template_engine"
+                      response_type = "list"
+                    } as $found
+                  
+                    var $match {
+                      value = null
+                    }
+                  
+                    conditional {
+                      if (($found|count) > 0) {
+                        var $first_row {
+                          value = $found|first
+                        }
+                      
+                        var.update $match {
+                          value = {id: $first_row.id, full_name: $first_row.full_name}
+                        }
+                      }
+                    }
+                  
+                    var.update $email_cache {
+                      value = $email_cache|set:$email_key:$match
+                    }
+                  }
+                }
+              
+                var $cached {
+                  value = $email_cache|get:$email_key
+                }
               
                 conditional {
-                  if ($prof != null) {
+                  if ($cached != null) {
+                    var.update $profile_id {
+                      value = $cached.id
+                    }
+                  
                     var.update $profile_name {
-                      value = $prof.full_name
+                      value = $cached.full_name
                     }
                   }
                 }
@@ -114,14 +163,19 @@ query "logs/mail-triage" verb=GET {
           
             array.push $out {
               value = {
-                id           : $row.id
-                created_at   : $row.created_at
-                gmail_email  : $row.gmail_email
-                profile_id   : $row.profile_id
-                profile_name : $profile_name
-                input_tokens : $row.input_tokens
-                output_tokens: $row.output_tokens
-                email_count  : $row.email_count
+                id                         : $row.id
+                created_at                 : $row.created_at
+                gmail_email                : $row.gmail_email
+                profile_id                 : $profile_id
+                profile_name               : $profile_name
+                input_tokens               : $row.input_tokens
+                output_tokens              : $row.output_tokens
+                cache_creation_input_tokens: $row.cache_creation_input_tokens
+                cache_read_input_tokens    : $row.cache_read_input_tokens
+                email_count                : $row.email_count
+                usage_rate                 : $row.usage_rate
+                charged_amount             : $row.charged_amount
+                billing_admin_id           : $row.billing_admin_id
               }
             }
           }
