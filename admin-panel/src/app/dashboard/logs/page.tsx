@@ -234,25 +234,45 @@ function JobDetailsModal({
   const [viewHtml, setViewHtml] = useState(isHtml);
   const [copied, setCopied] = useState(false);
 
-  function copyLink() {
-    const url = `${window.location.origin}/jd/${log.id}`;
+  const [textCopied, setTextCopied] = useState(false);
+
+  function writeToClipboard(value: string, onDone: () => void) {
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
+      navigator.clipboard.writeText(value).then(onDone);
     } else {
       // Fallback for non-HTTPS or unsupported browsers
       const el = document.createElement("textarea");
-      el.value = url;
+      el.value = value;
       el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0";
       document.body.appendChild(el);
       el.select();
       document.execCommand("copy");
       document.body.removeChild(el);
+      onDone();
+    }
+  }
+
+  function copyLink() {
+    writeToClipboard(`${window.location.origin}/jd/${log.id}`, () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  // Copies the job description as plain text (HTML is converted, keeping line breaks).
+  function copyText() {
+    let text = content;
+    if (isHtml) {
+      const doc = new DOMParser().parseFromString(content, "text/html");
+      doc.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+      doc.querySelectorAll("li").forEach((li) => li.prepend("• "));
+      doc.querySelectorAll("p, div, h1, h2, h3, h4, h5, h6, li, tr").forEach((el) => el.append("\n"));
+      text = (doc.body.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
     }
+    writeToClipboard(text, () => {
+      setTextCopied(true);
+      setTimeout(() => setTextCopied(false), 2000);
+    });
   }
 
   return (
@@ -272,6 +292,19 @@ function JobDetailsModal({
                 {viewHtml ? "Plain text" : "HTML view"}
               </button>
             )}
+            <button
+              onClick={copyText}
+              disabled={!content}
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 ${
+                textCopied
+                  ? "border-green-400 bg-green-50 text-green-700"
+                  : "border-gray-300 text-gray-600 hover:bg-gray-50"
+              }`}
+              title="Copy job description text"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              {textCopied ? "Copied!" : "Copy"}
+            </button>
             <button
               onClick={copyLink}
               className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border transition-colors ${

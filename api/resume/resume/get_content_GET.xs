@@ -25,6 +25,16 @@ query "resume/get_content" verb=GET {
       error = "Admin access required"
     }
   
+    // Same scope as logs/list: admins only for their profiles, hidden profiles excluded
+    function.run "logs/can_access_log" {
+      input = {user_id: $auth.id, content_id: $input.content_id}
+    } as $allowed
+  
+    precondition ($allowed) {
+      error_type = "accessdenied"
+      error = "Not allowed"
+    }
+  
     db.get resume_content {
       field_name = "id"
       field_value = $input.content_id

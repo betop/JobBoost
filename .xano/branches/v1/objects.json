@@ -166,5 +166,12 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/logs/can_access_log.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

@@ -10,11 +10,6 @@ query "logs/jd" verb=GET {
   }
 
   stack {
-    db.get users {
-      field_name = "id"
-      field_value = $auth.id
-    } as $auth_user
-  
     db.get generation_log {
       field_name = "id"
       field_value = $input.log_id
@@ -25,17 +20,9 @@ query "logs/jd" verb=GET {
       error = "Log entry not found"
     }
   
-    var $allowed {
-      value = $auth_user.type == "super_admin"
-    }
-  
-    conditional {
-      if ($allowed == false && $auth_user.type == "admin") {
-        var.update $allowed {
-          value = $auth_user.profile_ids != null && ($auth_user.profile_ids|contains:$log.profile_id)
-        }
-      }
-    }
+    function.run "logs/can_access_log" {
+      input = {user_id: $auth.id, log_id: $input.log_id}
+    } as $allowed
   
     precondition ($allowed) {
       error_type = "accessdenied"
