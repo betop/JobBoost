@@ -103,6 +103,18 @@ query tokens verb=GET {
               }
             }
           
+            var $allowed_ips_out {
+              value = []
+            }
+          
+            conditional {
+              if ($t.allowed_ips != null) {
+                var.update $allowed_ips_out {
+                  value = $t.allowed_ips
+                }
+              }
+            }
+          
             array.push $out {
               value = {
                 id                : $t.id
@@ -116,6 +128,7 @@ query tokens verb=GET {
                 is_active         : $t.is_active
                 assigned_admin_ids: $t.assigned_admin_ids
                 is_assigned       : $is_assigned
+                allowed_ips       : $allowed_ips_out
               }
             }
           }

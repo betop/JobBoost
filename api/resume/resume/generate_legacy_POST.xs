@@ -111,33 +111,18 @@ query "resume/generate_legacy" verb=POST {
       error = "User account is inactive"
     }
   
-    conditional {
-      if ($user.type == "bidder") {
-        var $assigned_ip {
-          value = $user.assigned_ip
-        }
-      
-        conditional {
-          if ($assigned_ip != null && $assigned_ip != "") {
-            var $assigned_ip_normalized {
-              value = (($assigned_ip|to_text)|trim)|replace:"::ffff:":""
-            }
+    // Per-key IP whitelist: empty/null whitelist = any IP allowed
+    function.run "security/get_client_ip" {
+      input = {}
+    } as $request_ip
 
-            function.run "security/get_client_ip" {
-              input = {}
-            } as $request_ip_raw
+    function.run "security/ip_in_whitelist" {
+      input = {ip: $request_ip, allowed_ips: $access.allowed_ips}
+    } as $ip_allowed
 
-            var $request_ip_normalized {
-              value = $request_ip_raw|replace:"::ffff:":""
-            }
-          
-            precondition ($assigned_ip_normalized == "" || $request_ip_normalized == $assigned_ip_normalized) {
-              error_type = "accessdenied"
-              error = "Generation is not allowed from this IP address"
-            }
-          }
-        }
-      }
+    precondition ($ip_allowed) {
+      error_type = "accessdenied"
+      error = "Generation is not allowed from this IP address"
     }
   
     conditional {

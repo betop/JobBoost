@@ -21,7 +21,6 @@ const userSchema = z
     password: z.string().optional(),
     profile_ids: z.array(z.string()).optional(),
     is_active: z.boolean(),
-    assigned_ip: z.string().optional(),
   })
   .refine(
     (data) => data.type !== "admin" || (data.password && data.password.length >= 8),
@@ -49,7 +48,7 @@ export default function NewUserPage() {
     formState: { errors },
   } = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: { type: "bidder", is_active: true, profile_ids: [], assigned_ip: "" },
+    defaultValues: { type: "bidder", is_active: true, profile_ids: [] },
   });
 
   const selectedType = watch("type");
@@ -63,7 +62,6 @@ export default function NewUserPage() {
         password: data.password,
         profile_ids: data.profile_ids ?? [],
         is_active: data.is_active,
-        assigned_ip: data.type === "bidder" ? (data.assigned_ip || "").trim() : "",
       }),
     onSuccess: () => {
       showToast("User created successfully", "success");
@@ -186,16 +184,6 @@ export default function NewUserPage() {
               )}
             />
           </div>
-        )}
-
-        {/* Assigned IP — only relevant for bidders */}
-        {selectedType === "bidder" && (
-          <Input
-            label="Assigned IP"
-            placeholder="e.g. 203.0.113.10"
-            error={errors.assigned_ip?.message}
-            {...register("assigned_ip")}
-          />
         )}
 
         <div className="flex items-center gap-3">

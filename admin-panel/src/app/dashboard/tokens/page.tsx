@@ -9,6 +9,8 @@ import DataTable from "@/components/DataTable";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Input from "@/components/Input";
+import Textarea from "@/components/Textarea";
+import { parseIpList, ALLOWED_IPS_HELP } from "@/utils/ipList";
 import PasswordConfirmModal from "@/components/PasswordConfirmModal";
 import {
   Plus,
@@ -25,6 +27,7 @@ import {
   Send,
   MessageSquare,
   UserPlus,
+  Globe,
 } from "lucide-react";
 import { formatDate } from "@/utils/dateUtils";
 import { useUIStore } from "@/store/uiStore";
@@ -155,7 +158,7 @@ export default function TokensPage() {
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [showActionConfirm, setShowActionConfirm] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
-    type: "generate" | "revoke" | "delete" | "extend" | "approve" | "decline" | "activate";
+    type: "generate" | "revoke" | "delete" | "extend" | "ips" | "approve" | "decline" | "activate";
     id?: string;
     data?: any;
   } | null>(null);
@@ -169,6 +172,11 @@ export default function TokensPage() {
   const [requestTab, setRequestTab] = useSessionState<"pending" | "all">("tokens.requestTab", "pending");
   const [activeTab, setActiveTab] = useSessionState<"keys" | "requests">("tokens.tab", "keys");
   const [assignModalToken, setAssignModalToken] = useState<Token | null>(null);
+  const [ipToken, setIpToken] = useState<Token | null>(null);
+  const [ipText, setIpText] = useState("");
+  const [ipError, setIpError] = useState<string | null>(null);
+  const [genIpText, setGenIpText] = useState("");
+  const [genIpError, setGenIpError] = useState<string | null>(null);
   const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -266,8 +274,11 @@ export default function TokensPage() {
       setGeneratedToken(data.token);
       refetch();
       reset();
+      setGenIpText("");
+      setGenIpError(null);
     },
-    onError: () => showToast("Failed to generate token", "error"),
+    onError: (err: any) =>
+      showToast(err?.response?.data?.message || "Failed to generate token", "error"),
   });
 
   const revokeMutation = useMutation({
@@ -307,6 +318,19 @@ export default function TokensPage() {
       refetch();
     },
     onError: () => showToast("Failed to extend token", "error"),
+  });
+
+  const allowedIpsMutation = useMutation({
+    mutationFn: ({ id, ips }: { id: string; ips: string[] }) => tokenService.updateAllowedIps(id, ips),
+    onSuccess: () => {
+      showToast("IP whitelist updated successfully", "success");
+      setIpToken(null);
+      setIpText("");
+      setIpError(null);
+      refetch();
+    },
+    onError: (err: any) =>
+      showToast(err?.response?.data?.message || "Failed to update IP whitelist", "error"),
   });
 
   // ── Mutations (admin request) ─────────────────────────────────────
@@ -363,6 +387,13 @@ export default function TokensPage() {
   const onSubmitGenerate = (data: any) => {
     const payload: any = { user_id: data.user_id };
     if (data.expiration_date) payload.expiration_date = data.expiration_date;
+    const parsed = parseIpList(genIpText);
+    if (parsed.error) {
+      setGenIpError(parsed.error);
+      return;
+    }
+    setGenIpError(null);
+    if (parsed.ips.length > 0) payload.allowed_ips = parsed.ips;
     if (isSuperAdmin) {
       setPendingAction({ type: "generate", data: payload });
       setShowActionConfirm(true);
@@ -401,6 +432,9 @@ export default function TokensPage() {
         break;
       case "extend":
         extendMutation.mutate({ id: pendingAction.id!, expiration_date: pendingAction.data });
+        break;
+      case "ips":
+        allowedIpsMutation.mutate({ id: pendingAction.id!, ips: pendingAction.data });
         break;
       case "approve":
         approveMutation.mutate({ id: pendingAction.id!, review_notes: pendingAction.data });
@@ -488,6 +522,24 @@ export default function TokensPage() {
       },
     },
     {
+      key: "allowed_ips",
+      label: "Allowed IPs",
+      render: (value: string[] | undefined) => {
+        const ips = value ?? [];
+        if (ips.length === 0) return <span className="text-gray-400 text-xs">Any IP</span>;
+        return (
+          <div className="flex flex-wrap items-center gap-1" title={ips.join("\n")}>
+            {ips.slice(0, 2).map((ip) => (
+              <span key={ip} className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-mono text-xs">
+                {ip}
+              </span>
+            ))}
+            {ips.length > 2 && <span className="text-xs text-gray-500">+{ips.length - 2}</span>}
+          </div>
+        );
+      },
+    },
+    {
       key: "is_active",
       label: "Status",
       filterOptions: [
@@ -520,6 +572,17 @@ export default function TokensPage() {
                   title="Assign to Admins"
                 >
                   <UserPlus className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setIpToken(row);
+                    setIpText((row.allowed_ips ?? []).join("\n"));
+                    setIpError(null);
+                  }}
+                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded"
+                  title="IP whitelist"
+                >
+                  <Globe className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => {
@@ -665,6 +728,8 @@ export default function TokensPage() {
         return "Please confirm your password to activate this key";
       case "extend":
         return "Please confirm your password to extend this key";
+      case "ips":
+        return "Please confirm your password to update this key's IP whitelist";
       case "approve":
         return "Please confirm your password to approve this request";
       case "decline":
@@ -848,6 +913,15 @@ export default function TokensPage() {
                     {...register("user_id")}
                   />
                   <Input label="Expiration Date (Optional)" type="date" {...register("expiration_date")} />
+                  <Textarea
+                    label="Allowed IPs (Optional)"
+                    rows={3}
+                    placeholder={"203.0.113.10\n2001:db8::1"}
+                    value={genIpText}
+                    onChange={(e) => { setGenIpText(e.target.value); setGenIpError(null); }}
+                    error={genIpError ?? undefined}
+                    helperText={`${ALLOWED_IPS_HELP} One per line or comma separated.`}
+                  />
                   <Button type="submit" loading={generateMutation.isPending} className="w-full">
                     Generate Token
                   </Button>
@@ -917,6 +991,53 @@ export default function TokensPage() {
                   </Button>
                 </div>
               </div>
+            </Modal>
+          )}
+
+          {/* IP whitelist modal (super_admin) */}
+          {isSuperAdmin && (
+            <Modal
+              isOpen={ipToken !== null}
+              onClose={() => { setIpToken(null); setIpText(""); setIpError(null); }}
+              title="IP Whitelist"
+              size="md"
+            >
+              {ipToken && (
+                <div className="p-6 space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Key for: <span className="font-medium text-gray-900">{ipToken.user_name}</span>
+                  </p>
+                  <Textarea
+                    label="Allowed IPs"
+                    rows={6}
+                    placeholder={"203.0.113.10\n2001:db8::1"}
+                    value={ipText}
+                    onChange={(e) => { setIpText(e.target.value); setIpError(null); }}
+                    error={ipError ?? undefined}
+                    helperText={`${ALLOWED_IPS_HELP} One per line or comma separated.`}
+                  />
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => {
+                        const parsed = parseIpList(ipText);
+                        if (parsed.error) {
+                          setIpError(parsed.error);
+                          return;
+                        }
+                        setPendingAction({ type: "ips", id: ipToken.id, data: parsed.ips });
+                        setShowActionConfirm(true);
+                      }}
+                      loading={allowedIpsMutation.isPending}
+                      className="flex-1"
+                    >
+                      Save
+                    </Button>
+                    <Button variant="ghost" onClick={() => { setIpToken(null); setIpText(""); setIpError(null); }} className="flex-1">
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Modal>
           )}
 

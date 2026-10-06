@@ -22,6 +22,7 @@ table access_token {
     bool is_used?
     bool is_active?=true
     text token_hash?
+    text[]? allowed_ips?
   }
 
   index = [

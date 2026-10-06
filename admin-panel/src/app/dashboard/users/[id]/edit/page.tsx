@@ -22,7 +22,6 @@ const userSchema = z.object({
   profile_ids: z.array(z.string()).optional(),
   assigned_bidder_ids: z.array(z.string()).optional(),
   is_active: z.boolean(),
-  assigned_ip: z.string().optional(),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -86,7 +85,6 @@ export default function EditUserPage() {
         profile_ids: parseProfileIds(user.profile_ids),
         assigned_bidder_ids: user.assigned_bidder_ids ?? [],
         is_active: user.is_active,
-        assigned_ip: user.assigned_ip ?? "",
       });
     }
   }, [user, reset]);
@@ -102,7 +100,6 @@ export default function EditUserPage() {
         profile_ids: data.profile_ids ?? [],
         assigned_bidder_ids: data.type === "admin" ? (data.assigned_bidder_ids ?? []) : undefined,
         is_active: data.is_active,
-        assigned_ip: data.type === "bidder" ? (data.assigned_ip || "").trim() : "",
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user", id] });
@@ -277,15 +274,6 @@ export default function EditUserPage() {
               )}
             />
           </div>
-        )}
-
-        {selectedType === "bidder" && (
-          <Input
-            label="Assigned IP"
-            placeholder="e.g. 203.0.113.10"
-            error={errors.assigned_ip?.message}
-            {...register("assigned_ip")}
-          />
         )}
 
         <div className="flex items-center gap-3">

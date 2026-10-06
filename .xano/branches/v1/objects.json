@@ -89,5 +89,26 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/security/ip_in_whitelist.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/security/normalize_ip_list.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/maintenance/migrate_assigned_ip_to_keys.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

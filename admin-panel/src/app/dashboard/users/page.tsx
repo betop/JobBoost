@@ -163,16 +163,6 @@ export default function UsersPage() {
       },
     },
     {
-      key: "assigned_ip",
-      label: "Assigned IP",
-      render: (value: string, row: User) =>
-        row.type === "bidder" ? (
-          <span className="font-mono text-xs text-gray-700">{value || "—"}</span>
-        ) : (
-          <span className="text-gray-400">—</span>
-        ),
-    },
-    {
       key: "is_active",
       label: "Status",
       filterOptions: [

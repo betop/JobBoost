@@ -6,9 +6,24 @@ query "tokens/generate" verb=POST {
   input {
     uuid user_id?
     timestamp expiration_date?
+    text[] allowed_ips?
   }
 
   stack {
+    db.get users {
+      field_name = "id"
+      field_value = $auth.id
+    } as $caller
+
+    var $ips_requested {
+      value = $input.allowed_ips != null && ($input.allowed_ips|count) > 0
+    }
+
+    precondition (!$ips_requested || ($caller != null && $caller.type == "super_admin")) {
+      error_type = "accessdenied"
+      error = "Only super_admin can change a key's IP whitelist"
+    }
+
     precondition ($input.user_id != null) {
       error_type = "badrequest"
       error = "user_id is required"
@@ -27,6 +42,20 @@ query "tokens/generate" verb=POST {
     precondition ($bid.is_active) {
       error_type = "accessdenied"
       error = "User is inactive"
+    }
+  
+    function.run "security/normalize_ip_list" {
+      input = {ips: $input.allowed_ips}
+    } as $norm
+  
+    precondition (!$norm.too_many) {
+      error_type = "badrequest"
+      error = "A key can have at most 50 allowed IP addresses"
+    }
+  
+    precondition ($norm.invalid_entry == null) {
+      error_type = "badrequest"
+      error = "Invalid IP address: " ~ $norm.invalid_entry ~ ". Use a plain IPv4 or IPv6 address (CIDR ranges are not supported)."
     }
   
     // Check if user already has an active key
@@ -65,6 +94,7 @@ query "tokens/generate" verb=POST {
         expires_at         : $input.expiration_date
         is_used            : false
         is_active          : true
+        allowed_ips        : $norm.entries
       }
     } as $t
   }
@@ -79,6 +109,7 @@ query "tokens/generate" verb=POST {
     expiration_date: $t.expires_at
     is_used        : $t.is_used
     is_active      : $t.is_active
+    allowed_ips    : $norm.entries
   }
 
   guid = "w7VfZBOhhYRoqm5u-Yn1Zg3wyEE"
