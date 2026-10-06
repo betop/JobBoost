@@ -19,7 +19,7 @@ export function renderOg(headline: string, sub: string) {
         }}
       >
         <div style={{ display: "flex", fontSize: 36, fontWeight: 700, opacity: 0.9, letterSpacing: 4 }}>HHQ</div>
-        <div style={{ display: "flex", fontSize: 84, fontWeight: 800, lineHeight: 1.05, marginTop: 24 }}>{headline}</div>
+        <div style={{ display: "flex", fontSize: 72, fontWeight: 800, lineHeight: 1.05, marginTop: 24 }}>{headline}</div>
         <div style={{ display: "flex", fontSize: 38, marginTop: 28, opacity: 0.92 }}>{sub}</div>
       </div>
     ),
