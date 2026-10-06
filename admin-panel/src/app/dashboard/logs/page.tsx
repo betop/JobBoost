@@ -990,12 +990,15 @@ export default function LogsPage() {
     setCachedRows(records);
   }, []);
 
-  async function doFetch(from?: number, to?: number) {
+  // `from` / `to`: a number = explicit bound, `null` = explicitly unbounded (the "All time" tab),
+  // `undefined` = use the current state. (Passing undefined for "All time" used to fall back to the
+  // stale state, e.g. the previous "Today" range, until the tab was clicked a second time.)
+  async function doFetch(from?: number | null, to?: number | null) {
     // Only the last 6 months are ever loaded or kept in the local cache
     const cutoffMs = logCache.getRetentionCutoffMs();
-    const requestedFrom = from !== undefined ? from : dateFrom;
+    const requestedFrom = from === undefined ? dateFrom : (from ?? undefined);
     const effectiveFrom = Math.max(requestedFrom ?? 0, cutoffMs);
-    const effectiveTo   = to   !== undefined ? to   : dateTo;
+    const effectiveTo   = to === undefined ? dateTo : (to ?? undefined);
     setLogsLoading(true);
     await logCache.pruneOldRecords();
     const lastSync = await logCache.getLastSyncAt();
@@ -1186,7 +1189,7 @@ export default function LogsPage() {
       setDateTo(undefined);
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
       logCache.setDateFilter({ period, dateFrom: "", dateTo: "" });
-      doFetch(undefined, undefined);
+      doFetch(null, null);
     } else if (range) {
       const fromMs = new Date(toStartOfDayEST(range.from)).getTime();
       const toMs = new Date(toEndOfDayEST(range.to)).getTime();
