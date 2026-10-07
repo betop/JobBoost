@@ -271,6 +271,7 @@ query "public/gmail-analyze" verb=POST {
                 output_tokens        : $output_tokens
                 cache_creation_tokens: $cache_creation_tokens
                 cache_read_tokens    : $cache_read_tokens
+                profile_id           : $billing_profile.id
                 related_log_table    : "mail_triage_log"
                 related_log_id       : $triage_log.id
                 allow_negative       : true

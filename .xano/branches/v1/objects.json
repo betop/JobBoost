@@ -229,5 +229,12 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/maintenance/backfill_ledger_profile_id.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

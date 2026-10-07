@@ -2,6 +2,7 @@
 // Active admin: always their own usage (admin_id ignored).
 // super_admin: pass admin_id for one admin, omit for all admins combined.
 // total_tokens / tracked_amount / raw_cost.total come only from stored ledger values (tracked rows), so they never change when the usage rate or prices change.
+// Each by_app entry also has by_profile (per profile: name, count, total_tokens, tracked_amount, amount; sorted by amount desc; profile_id null = rows without a profile).
 // Amounts are returned as positive "spent" values (usage rows are stored negative).
 query "dashboard/credits/usage-summary" verb=GET {
   api_group = "dashboard"
@@ -248,6 +249,11 @@ query "dashboard/credits/usage-summary" verb=GET {
       value = 0
     }
 
+    // Per (app, profile) accumulator, keyed "<app>:<profile_id|none>". Amounts stay negative (ledger sign) until output.
+    var $pacc {
+      value = {}
+    }
+
     // Page through matching usage rows (1000 per page, hard cap 300 pages)
     foreach ((1..300)) {
       each as $page_no {
@@ -434,6 +440,72 @@ query "dashboard/credits/usage-summary" verb=GET {
           value = $other_traw + ($other_rows|filter:$$.input_tokens != null|map:($$.raw_cost_usd|first_notnull:0)|sum)
         }
 
+        // Per-profile aggregation (rows without profile_id go to the "none" bucket)
+        foreach ($rows) {
+          each as $r {
+            var $r_app {
+              value = "other"
+            }
+
+            conditional {
+              if ($r.related_log_table == "generation_log") {
+                var.update $r_app {
+                  value = "resume_generation"
+                }
+              }
+              elseif ($r.related_log_table == "chat_log") {
+                var.update $r_app {
+                  value = "assistant"
+                }
+              }
+              elseif ($r.related_log_table == "mail_triage_log") {
+                var.update $r_app {
+                  value = "mail_triage"
+                }
+              }
+            }
+
+            var $r_key {
+              value = $r_app ~ ":" ~ ($r.profile_id|first_notnull:"none")
+            }
+
+            var $r_cur {
+              value = $pacc|get:$r_key
+            }
+
+            conditional {
+              if ($r_cur == null) {
+                var.update $r_cur {
+                  value = {app: $r_app, profile_id: $r.profile_id, count: 0, total_tokens: 0, tracked_amount: 0, amount: 0}
+                }
+              }
+            }
+
+            var $r_tracked {
+              value = $r.input_tokens != null
+            }
+
+            var $r_tokens {
+              value = ($r.input_tokens|first_notnull:0) + ($r.output_tokens|first_notnull:0) + ($r.cache_creation_tokens|first_notnull:0) + ($r.cache_read_tokens|first_notnull:0)
+            }
+
+            var $r_next {
+              value = {
+                app           : $r_app
+                profile_id    : $r_cur.profile_id
+                count         : $r_cur.count + 1
+                total_tokens  : $r_cur.total_tokens + ($r_tracked ? $r_tokens : 0)
+                tracked_amount: $r_cur.tracked_amount + ($r_tracked ? $r.amount : 0)
+                amount        : $r_cur.amount + $r.amount
+              }
+            }
+
+            var.update $pacc {
+              value = $pacc|set:$r_key:$r_next
+            }
+          }
+        }
+
         conditional {
           if ($row_count < 1000) {
             break
@@ -450,6 +522,92 @@ query "dashboard/credits/usage-summary" verb=GET {
       input = {}
     } as $rate_info
 
+    // ---- Per-profile breakdown: ONE db.get per distinct profile id, after aggregation ----
+    var $pentries {
+      value = $pacc|values
+    }
+
+    var $distinct_pids {
+      value = $pentries|map:$$.profile_id|filter:$$ != null|unique
+    }
+
+    var $pnames {
+      value = {}
+    }
+
+    foreach ($distinct_pids) {
+      each as $pid {
+        db.get profile {
+          field_name = "id"
+          field_value = $pid
+        } as $pf
+
+        var $pf_name {
+          value = "Deleted profile"
+        }
+
+        conditional {
+          if ($pf != null) {
+            var.update $pf_name {
+              value = $pf.full_name|first_notnull:"Deleted profile"
+            }
+          }
+        }
+
+        var.update $pnames {
+          value = $pnames|set:$pid:$pf_name
+        }
+      }
+    }
+
+    var $plist {
+      value = []
+    }
+
+    foreach ($pentries) {
+      each as $pe {
+        var $pe_name {
+          value = "Unknown profile"
+        }
+
+        conditional {
+          if ($pe.profile_id != null) {
+            var.update $pe_name {
+              value = $pnames|get:$pe.profile_id
+            }
+          }
+        }
+
+        array.push $plist {
+          value = {
+            app           : $pe.app
+            profile_id    : $pe.profile_id
+            profile_name  : $pe_name
+            count         : $pe.count
+            total_tokens  : $pe.total_tokens
+            tracked_amount: ((0 - $pe.tracked_amount)|round:6)
+            amount        : ((0 - $pe.amount)|round:6)
+          }
+        }
+      }
+    }
+
+    var $bp_gen {
+      value = $plist|filter:$$.app == "resume_generation"|sort:"amount":"number":false
+    }
+
+    var $bp_chat {
+      value = $plist|filter:$$.app == "assistant"|sort:"amount":"number":false
+    }
+
+    var $bp_mail {
+      value = $plist|filter:$$.app == "mail_triage"|sort:"amount":"number":false
+    }
+
+    var $bp_other {
+      value = $plist|filter:$$.app == "other"|sort:"amount":"number":false
+    }
+
     // usage rows are negative -> spent = -amount. Token/raw_cost cover tracked rows only.
     var $by_app {
       value = [
@@ -463,6 +621,7 @@ query "dashboard/credits/usage-summary" verb=GET {
         total_tokens: ($gen_in + $gen_out + $gen_cw + $gen_cr)
         tracked_amount: ((0 - $gen_tamt)|round:6)
         tokens: {input: $gen_in, output: $gen_out, cache_write: $gen_cw, cache_read: $gen_cr}
+        by_profile: $bp_gen
         raw_cost: {input: (($gen_in * $rates.input_per_million / 1000000)|round:6), output: (($gen_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($gen_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($gen_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($gen_traw|round:6)}
       }
       {
@@ -475,6 +634,7 @@ query "dashboard/credits/usage-summary" verb=GET {
         total_tokens: ($chat_in + $chat_out + $chat_cw + $chat_cr)
         tracked_amount: ((0 - $chat_tamt)|round:6)
         tokens: {input: $chat_in, output: $chat_out, cache_write: $chat_cw, cache_read: $chat_cr}
+        by_profile: $bp_chat
         raw_cost: {input: (($chat_in * $rates.input_per_million / 1000000)|round:6), output: (($chat_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($chat_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($chat_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($chat_traw|round:6)}
       }
       {
@@ -487,6 +647,7 @@ query "dashboard/credits/usage-summary" verb=GET {
         total_tokens: ($mail_in + $mail_out + $mail_cw + $mail_cr)
         tracked_amount: ((0 - $mail_tamt)|round:6)
         tokens: {input: $mail_in, output: $mail_out, cache_write: $mail_cw, cache_read: $mail_cr}
+        by_profile: $bp_mail
         raw_cost: {input: (($mail_in * $rates.input_per_million / 1000000)|round:6), output: (($mail_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($mail_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($mail_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($mail_traw|round:6)}
       }
       ]
@@ -505,6 +666,7 @@ query "dashboard/credits/usage-summary" verb=GET {
         total_tokens: ($other_in + $other_out + $other_cw + $other_cr)
         tracked_amount: ((0 - $other_tamt)|round:6)
         tokens: {input: $other_in, output: $other_out, cache_write: $other_cw, cache_read: $other_cr}
+        by_profile: $bp_other
         raw_cost: {input: (($other_in * $rates.input_per_million / 1000000)|round:6), output: (($other_out * $rates.output_per_million / 1000000)|round:6), cache_write: (($other_cw * $rates.cache_write_per_million / 1000000)|round:6), cache_read: (($other_cr * $rates.cache_read_per_million / 1000000)|round:6), total: ($other_traw|round:6)}
       }
         }

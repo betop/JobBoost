@@ -517,6 +517,7 @@ query "resume/regenerate_legacy" verb=POST {
             output_tokens        : $output_tokens
             cache_creation_tokens: $cache_creation_input_tokens
             cache_read_tokens    : $cache_read_input_tokens
+            profile_id           : $prof.id
             related_log_table    : "generation_log"
             related_log_id       : $log.id
             allow_negative       : true

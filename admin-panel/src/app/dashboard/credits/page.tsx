@@ -285,6 +285,60 @@ function UsageSection({
                   {item && (() => {
                     const totalTokens = item.total_tokens ?? sumTokens(item.tokens);
                     const tracked = item.tracked_amount;
+                    const profiles = item.by_profile;
+                    if (profiles) {
+                      const sumCount = profiles.reduce((s, p) => s + (p.count ?? 0), 0);
+                      const sumTok = profiles.reduce((s, p) => s + (p.total_tokens ?? 0), 0);
+                      const sumAmt = profiles.reduce((s, p) => s + (p.amount ?? 0), 0);
+                      const tCount = item.count ?? sumCount;
+                      const tTok = item.total_tokens ?? sumTok;
+                      const tAmt = item.amount ?? sumAmt;
+                      return (
+                        <details className="mt-3 text-sm">
+                          <summary className="cursor-pointer text-primary-600 text-xs font-medium">
+                            Details
+                          </summary>
+                          {profiles.length === 0 ? (
+                            <p className="mt-2 text-xs text-gray-500">No usage in this period</p>
+                          ) : (
+                            <div className="mt-2 max-h-64 overflow-auto border border-gray-100 rounded">
+                              <table className="w-full text-xs">
+                                <thead className="sticky top-0 bg-gray-50 text-gray-600">
+                                  <tr>
+                                    <th className="text-left font-medium px-2 py-1">Profile</th>
+                                    <th className="text-right font-medium px-2 py-1">Requests</th>
+                                    <th className="text-right font-medium px-2 py-1">Tokens</th>
+                                    <th className="text-right font-medium px-2 py-1">Cost</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {profiles.map((p, i) => (
+                                    <tr key={p.profile_id ?? `${p.profile_name}-${i}`} className="border-t border-gray-100">
+                                      <td className="px-2 py-1 text-gray-800 break-words">{p.profile_name}</td>
+                                      <td className="px-2 py-1 text-right tabular-nums">{(p.count ?? 0).toLocaleString("en-US")}</td>
+                                      <td className="px-2 py-1 text-right tabular-nums">
+                                        {p.total_tokens > 0 ? p.total_tokens.toLocaleString("en-US") : "-"}
+                                      </td>
+                                      <td className="px-2 py-1 text-right tabular-nums">{formatCost(p.amount ?? 0)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot className="sticky bottom-0">
+                                  <tr className="bg-primary-50 font-semibold text-gray-900 border-t border-gray-200">
+                                    <td className="px-2 py-1">Total</td>
+                                    <td className="px-2 py-1 text-right tabular-nums">{tCount.toLocaleString("en-US")}</td>
+                                    <td className="px-2 py-1 text-right tabular-nums">
+                                      {tTok > 0 ? tTok.toLocaleString("en-US") : "-"}
+                                    </td>
+                                    <td className="px-2 py-1 text-right tabular-nums">{formatCost(tAmt)}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          )}
+                        </details>
+                      );
+                    }
                     if (totalTokens === undefined && tracked === undefined) return null;
                     return (
                       <details className="mt-3 text-sm">

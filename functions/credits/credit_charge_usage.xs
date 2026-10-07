@@ -43,6 +43,10 @@ function "credits/credit_charge_usage" {
       description = "Cache-read tokens behind raw_cost_usd"
     }
 
+    uuid profile_id? {
+      description = "Profile the usage belongs to (stored on the ledger row for per-profile reporting; null when unknown)"
+    }
+
     bool free_trial?=false {
       description = "Free trial generation: billed amount is 0, users.credit_balance is untouched, the ledger row is still written"
     }
@@ -151,6 +155,7 @@ function "credits/credit_charge_usage" {
         related_log_table: $input.related_log_table
         related_log_id   : $input.related_log_id
         related_deposit_id: null
+        profile_id       : $input.profile_id
         input_tokens     : $input.input_tokens|first_notnull:0
         output_tokens    : $input.output_tokens|first_notnull:0
         cache_creation_tokens: $input.cache_creation_tokens|first_notnull:0

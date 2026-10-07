@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build:extensions": "node scripts/build-minified-extensions.mjs"
+    "build:extensions": "node scripts/build-minified-extensions.mjs",
+    "build:extensions:minified": "node scripts/build-minified-extensions.mjs --minify"
   },
   "devDependencies": {
     "archiver": "^7.0.1",

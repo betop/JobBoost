@@ -57,7 +57,17 @@ export interface UsageTokens {
   cache_read: number;
 }
 
+export interface UsageByProfile {
+  profile_id: string | null;
+  profile_name: string;
+  count: number;
+  total_tokens: number;
+  tracked_amount: number;
+  amount: number;
+}
+
 export interface UsageByApp {
+  by_profile?: UsageByProfile[];
   key: UsageAppKey;
   label: string;
   amount: number;

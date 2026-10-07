@@ -26,6 +26,7 @@ table credit_transaction {
     int? cache_read_tokens?
     decimal? raw_cost_usd?
     decimal? usage_rate?
+    uuid? profile_id?
   }
 
   index = [

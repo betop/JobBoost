@@ -567,6 +567,7 @@ No explanations needed, just answer the question based on the provided informati
             output_tokens        : $output_tokens
             cache_creation_tokens: $cache_creation_input_tokens
             cache_read_tokens    : $cache_read_input_tokens
+            profile_id           : $billing_profile_id
             related_log_table    : "chat_log"
             related_log_id       : $chat_log_id
             allow_negative       : true
