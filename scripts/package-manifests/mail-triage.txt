@@ -1,0 +1,16 @@
+# Runtime allowlist for the mail-triage extension (paths relative to mail-triage/).
+# manifest.json -> src/service_worker.js (ES module) -> ./storage ./config ./gmail ./ai ./mailCache
+# options_page options.html -> styles.css ; popup.html -> styles.css, popup.js (module)
+# src/config.js fetches config.json via chrome.runtime.getURL, so config.json is required.
+manifest.json
+config.json
+options.html
+popup.html
+popup.js
+styles.css
+src/service_worker.js
+src/storage.js
+src/config.js
+src/gmail.js
+src/ai.js
+src/mailCache.js

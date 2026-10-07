@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, Copy, Check, Puzzle, PackageX } from "lucide-react";
+import { Download, Copy, Check, Puzzle, PackageX, ShieldQuestion } from "lucide-react";
 import { PublicDownload, extensionService, formatBytes, formatDate } from "@/services/extensionService";
 
 export default function DownloadPage() {
@@ -125,6 +125,38 @@ export default function DownloadPage() {
             Download the new zip, replace the contents of your existing folder with the new files, then click the reload
             icon on the extension in <code className="px-1 bg-gray-100 rounded">chrome://extensions</code>. The extension
             must match the latest version to keep working.
+          </p>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 mt-6" id="chrome-blocked-help">
+          <div className="flex items-center gap-3 mb-3">
+            <ShieldQuestion className="w-6 h-6 text-amber-600" />
+            <h2 className="text-xl font-bold text-gray-900">Chrome blocked the download?</h2>
+          </div>
+          <p className="text-sm text-gray-700">
+            This is a common warning. Chrome is cautious with zip files that contain scripts and come from a site it has
+            not seen much before, so it may show &quot;suspicious download&quot; or &quot;blocked&quot;. You can keep the
+            file and continue:
+          </p>
+          <ol className="list-decimal pl-5 space-y-1.5 text-sm text-gray-700 mt-3">
+            <li>
+              Open <code className="px-1 bg-white rounded">chrome://downloads</code> (or click the download icon in the
+              Chrome toolbar).
+            </li>
+            <li>
+              Find the zip file, then click the three dots next to it and choose <b>Keep</b>. On newer versions of Chrome
+              you may need to expand the warning and choose <b>Keep anyway</b> or <b>Keep dangerous file</b>.
+            </li>
+            <li>Unzip the file, then follow the install steps above (Developer mode, then Load unpacked).</li>
+          </ol>
+          <h3 className="text-sm font-semibold text-gray-800 mt-4 mb-1">On Windows</h3>
+          <p className="text-sm text-gray-700">
+            If Windows blocks the extracted files, right-click the downloaded zip file, choose <b>Properties</b>, tick{" "}
+            <b>Unblock</b> at the bottom, click OK, and then unzip it again.
+          </p>
+          <p className="text-sm text-gray-600 mt-4">
+            The extension is installed unpacked in Developer mode, which is why it is delivered as a zip file rather than
+            from the Chrome Web Store. If you are unsure about a download, ask the person who sent you this link.
           </p>
         </div>
       </div>

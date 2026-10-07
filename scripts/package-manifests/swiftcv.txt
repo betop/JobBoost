@@ -1,0 +1,30 @@
+# Runtime allowlist for the swiftcv extension (paths relative to swiftcv/).
+# Derived by static analysis: manifest.json -> background.js / content_scripts / action popup /
+# icons / web_accessible_resources -> <script src>/<link href> in each HTML page.
+# Lines starting with '@slim-lato ' copy the file but keep ONLY the Lato regular+bold entries
+# (pdfGenerator._newDoc() hard-codes const chosen = "Lato"; same extraction as
+# admin-panel/scripts/sync-swiftcv-generator.sh). Everything else is copied byte-for-byte
+# (no minification) except the EXTENSION_ENV staging->prod switch done by the packager.
+manifest.json
+background.js
+content.js
+chat-bubble.js
+styles.css
+popup.html
+popup.js
+progress.html
+progress.js
+confirm.html
+confirm.js
+setup.html
+setup.js
+select_profile.html
+select_profile.js
+offscreen.html
+offscreen.js
+jspdf.umd.min.js
+pdfGenerator.js
+@slim-lato resume_fonts.js
+icons/icon16.png
+icons/icon48.png
+icons/icon128.png

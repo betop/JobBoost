@@ -343,8 +343,10 @@ export const helpSections: HelpSection[] = [
     tips: [
       { text: "Send the bidder their key separately; the page does not contain keys." },
       { text: "If someone installed an old copy, have them download again from this page and reinstall." },
+      { text: "If Chrome says the download is blocked or suspicious: this is a normal warning for zip files that contain scripts from a site Chrome has not seen much. Open chrome://downloads (or the download icon), click the three dots next to the file and choose Keep (on newer Chrome: expand the warning and choose Keep anyway / Keep dangerous file). Then unzip and use Load unpacked in chrome://extensions with Developer mode on. The page shows these steps in a \"Chrome blocked the download?\" box." },
+      { text: "On Windows, if the extracted files are blocked, right-click the zip, choose Properties, tick Unblock, click OK and unzip it again." },
     ],
-    keywords: ["install", "share", "public", "link", "extension"],
+    keywords: ["install", "share", "public", "link", "extension", "blocked", "suspicious", "keep", "unblock", "chrome"],
   },
   {
     id: "help",
@@ -374,6 +376,7 @@ export const helpSections: HelpSection[] = [
       "A Chrome extension that turns a job description into a tailored resume and cover letter, created as PDFs in the browser.",
     features: [
       { text: "Get it: the bidder downloads the extension from the public Download page (/download) and installs it in Chrome. On first install a setup window asks for the key." },
+      { text: "If Chrome blocks the zip as suspicious, keep it from chrome://downloads (three dots, then Keep / Keep anyway), unzip it and use Load unpacked. See the Download page help box or the FAQ \"Chrome says the extension download is blocked\"." },
       { text: "Sign in: paste the key and click Validate & Save. The key is checked and the profiles assigned to the user are loaded." },
       { text: "Choose a profile: with one profile it is confirmed in a window; with several, a picker appears. The toolbar popup shows the active profile, offers Switch Profile and shows \"Pending Confirmation\" or \"Not Configured\" when setup is incomplete." },
       { text: "Generate: open a job posting, select the job description text, right-click and choose \"Generate Resume and Cover Letter\"." },
@@ -470,6 +473,11 @@ export const faqItems: FaqItem[] = [
     id: "faq-version",
     q: "Why do I see \"Extension version mismatch\" or \"Update required\"?",
     a: "The installed extension is not the current release; the version must match exactly. Download the latest version from the Download page (/download), reinstall it and try again.",
+  },
+  {
+    id: "faq-download-blocked",
+    q: "Chrome says the extension download is blocked or suspicious. What do I do?",
+    a: "This is a normal warning for zip files that contain scripts from a site Chrome has not seen much. Open chrome://downloads (or click the download icon), click the three dots next to the file and choose Keep. On newer Chrome, expand the warning and choose Keep anyway or Keep dangerous file. Then unzip the file, open chrome://extensions, turn on Developer mode and click Load unpacked. On Windows, if the extracted files are blocked, right-click the zip, choose Properties, tick Unblock and unzip again. The extension is installed unpacked in Developer mode, which is why it comes as a zip file.",
   },
   {
     id: "faq-not-approved",

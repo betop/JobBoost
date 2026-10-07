@@ -1,3 +1,6 @@
 # Extension publish artifacts
 /build/
 /node_modules
+
+# Packaged extension zips (scripts/package-extension.sh)
+/dist/
