@@ -1,7 +1,8 @@
 // Resolves which admin account should be billed for an AI usage event, given the
 // acting user record (bidder / admin / super_admin).
-// - bidder  -> billed to the admin who created them (created_by), or the first
-//              admin in their chain if created_by is not an admin (fallback to created_by as-is)
+// - bidder  -> billed to the admin who created them (created_by), but only when that creator is an
+//              existing, non-deleted admin. Bidders created by a super_admin (or whose creator is gone)
+//              are not billable here (the profile's billing admin is resolved first elsewhere).
 // - admin   -> billed to themselves
 // - super_admin -> no billing (returns billing_admin_id = null, is_billable = false)
 function "credits/resolve_billing_admin" {
@@ -61,15 +62,8 @@ function "credits/resolve_billing_admin" {
       }
 
       else {
-        // bidder — bill the admin that created them
-        var.update $billing_admin_id {
-          value = $user.created_by
-        }
-
-        var.update $is_billable {
-          value = $user.created_by != null
-        }
-
+        // bidder — bill the admin that created them, but only when that creator is an existing,
+        // non-deleted ADMIN. Bidders created by a super_admin (or whose creator is gone) are not billable.
         conditional {
           if ($user.created_by != null) {
             db.get users {
@@ -78,13 +72,13 @@ function "credits/resolve_billing_admin" {
             } as $creator
 
             conditional {
-              if ($creator != null && $creator.deleted == true) {
+              if ($creator != null && $creator.deleted != true && $creator.type == "admin") {
                 var.update $billing_admin_id {
-                  value = null
+                  value = $creator.id
                 }
 
                 var.update $is_billable {
-                  value = false
+                  value = true
                 }
               }
             }
