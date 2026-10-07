@@ -208,7 +208,8 @@ export default function TokensPage() {
       if (isSuperAdmin) {
         return await userService.getAll();
       }
-      const bidders = await userService.getAll("bidder");
+      // Defensive: keep only bidders even if an older backend returns everyone
+      const bidders = (await userService.getAll("bidder")).filter((u) => u.type === "bidder");
       // Add self (admin) if not already in the list
       if (admin && !bidders.find((b) => b.id === admin.id)) {
         bidders.unshift({ id: admin.id, full_name: admin.name, email: admin.email, type: "admin" as const } as any);

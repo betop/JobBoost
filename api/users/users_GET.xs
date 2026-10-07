@@ -64,16 +64,64 @@ query users verb=GET {
           }
         }
       
+        // Scope: self + bidders created by or assigned to this admin
+        var $self_id {
+          value = $auth_user.id|to_text|replace:"'":""
+        }
+      
+        var $scope_bidders {
+          value = "(type = 'bidder' AND (created_by = '" ~ $self_id ~ "'"
+        }
+      
         conditional {
           if ($auth_user.assigned_bidder_ids != null && ($auth_user.assigned_bidder_ids|count) > 0) {
-            var $assigned_ids_string {
-              value = $auth_user.assigned_bidder_ids|join:"', '"
+            var $assigned_ids_clean {
+              value = ($auth_user.assigned_bidder_ids|map:($$|to_text|replace:"'":"")|join:"','")
             }
           
-            var.update $users_query {
-              value = $users_query ~ " AND id IN ('" ~ $assigned_ids_string ~ "')"
+            var.update $scope_bidders {
+              value = $scope_bidders ~ " OR id IN ('" ~ $assigned_ids_clean ~ "')"
             }
           }
+        }
+      
+        var.update $scope_bidders {
+          value = $scope_bidders ~ "))"
+        }
+      
+        var $admin_type {
+          value = ($input.type != null ? $input.type : "")
+        }
+      
+        conditional {
+          if ($admin_type == "bidder") {
+            var.update $users_query {
+              value = $users_query ~ " AND " ~ $scope_bidders
+            }
+          }
+        
+          elseif ($admin_type == "admin") {
+            var.update $users_query {
+              value = $users_query ~ " AND id = '" ~ $self_id ~ "'"
+            }
+          }
+        
+          elseif ($admin_type == "") {
+            var.update $users_query {
+              value = $users_query ~ " AND (id = '" ~ $self_id ~ "' OR " ~ $scope_bidders ~ ")"
+            }
+          }
+        
+          else {
+            // Any other type: nothing visible to admins
+            var.update $users_query {
+              value = $users_query ~ " AND 1 = 0"
+            }
+          }
+        }
+      
+        var.update $users_query {
+          value = $users_query ~ " ORDER BY created_at DESC"
         }
       
         db.direct_query {
