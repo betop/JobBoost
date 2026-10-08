@@ -50,37 +50,16 @@ query "tokens/request" verb=POST {
       error = "Bidder is inactive"
     }
 
-    // Admins with an assigned-bidder list may only issue keys for those bidders
-    // (same scope the admin sees in GET /users)
-    var $assigned_ids {
-      value = $auth_user.assigned_bidder_ids
+    // Shared scope rule: admin may issue keys for self and own bidders only
+    function.run "tokens/can_manage_user_keys" {
+      input = {caller_id: $auth_user.id, target_user_id: $input.user_id}
+    } as $scope
+
+    precondition ($scope.allowed) {
+      error_type = "accessdenied"
+      error = "You can only manage keys for yourself and your own bidders"
     }
 
-    conditional {
-      if ($assigned_ids != null && ($assigned_ids|count) > 0) {
-        var $in_scope {
-          value = false
-        }
-
-        foreach ($assigned_ids) {
-          each as $aid {
-            conditional {
-              if (($aid|to_text) == ($input.user_id|to_text)) {
-                var.update $in_scope {
-                  value = true
-                }
-              }
-            }
-          }
-        }
-
-        precondition ($in_scope) {
-          error_type = "accessdenied"
-          error = "You are not allowed to issue a key for this user"
-        }
-      }
-    }
-  
     // Normalize expiration_date: treat empty string as null
     var $exp_date {
       value = null

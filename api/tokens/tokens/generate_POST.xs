@@ -39,6 +39,15 @@ query "tokens/generate" verb=POST {
       error = "Bidder not found"
     }
   
+    function.run "tokens/can_manage_user_keys" {
+      input = {caller_id: $auth.id, target_user_id: $input.user_id}
+    } as $scope
+
+    precondition ($scope.allowed) {
+      error_type = "accessdenied"
+      error = "You can only manage keys for yourself and your own bidders"
+    }
+
     precondition ($bid.is_active) {
       error_type = "accessdenied"
       error = "User is inactive"

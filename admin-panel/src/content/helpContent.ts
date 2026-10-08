@@ -52,7 +52,7 @@ export const helpSections: HelpSection[] = [
       { text: "2. Create a profile: open Profiles, click create, and fill in the person's details, education, work experience, template and options." },
       { text: "3. Profiles are approved automatically when they are created, no review step is needed. Only older profiles that are still pending cannot generate until a super admin approves them." },
       { text: "4. Create the bidder: open Users, add a user with the Bidder role and assign the profile(s) they will work with." },
-      { text: "5. Request a key: open Keys and request a key for the bidder. A super admin reviews the request and generates the key (optionally with an expiry date and an IP whitelist)." },
+      { text: "5. Create a key: open Keys and create a key for the bidder (optionally with an expiry date). The key is created immediately; no approval is needed." },
       { text: "6. Share the extension: send the bidder the public Download page (/download) together with their key." },
       { text: "7. The bidder installs SwiftCV, enters the key, picks the profile and generates resumes from job descriptions." },
       { text: "8. Watch the results in Generation Logs and keep an eye on your balance in Credits." },
@@ -249,20 +249,20 @@ export const helpSections: HelpSection[] = [
     group: "Admin panel",
     route: "/dashboard/tokens",
     purpose:
-      "A key is what a bidder types into the SwiftCV extension. Admins create keys for their users and view them; super admins generate and manage them.",
+      "A key is what a bidder types into the SwiftCV extension. Admins create and manage keys for themselves and their own bidders; super admins generate and manage all keys.",
     features: [
       { text: "Admins: create a key for one of their bidders or for themselves (optional expiration date and a note). The key is created immediately and shown with a copy button; it also appears in the Keys list. My Requests keeps the history (shown as Approved)." },
-      { text: "Admins: view their keys (My Keys) read-only. The table shows the user, issue date, expiry, allowed IPs and status. Copy the key with the copy button." },
+      { text: "Admins: see their keys under Your Keys (their own and their bidders' keys). The table shows the user, issue date, expiry, allowed IPs and status. Copy the key with the copy button." },
+      { text: "Admins: extend or clear the expiration, revoke, re-activate or delete the keys they can manage. Keys shared read-only by a super admin show \"Read-only\"." },
       { text: "Generate a key directly for any user, with an optional expiration date and an optional list of allowed IPs.", superOnly: true },
       { text: "Review legacy key requests: old requests that are still pending can be approved (this generates the key) or declined, with an optional note. New admin key requests are auto-approved.", superOnly: true },
-      { text: "Extend or clear the expiration date (empty means never expires).", superOnly: true },
-      { text: "Revoke and re-activate a key, or delete it.", superOnly: true },
+      { text: "Extend or clear the expiration date (empty means never expires), revoke and re-activate a key, or delete it, for any key.", superOnly: true },
       { text: "Assign a key to admins so they can see it read-only in their list.", superOnly: true },
       { text: "IP whitelist per key: one plain IPv4 or IPv6 address per line (or comma separated). CIDR ranges are not supported and a key can have at most 50 addresses. When the list is empty the key works from any IP.", superOnly: true },
     ],
     tips: [
       { text: "A user can only have one active key at a time; users who already have one are disabled in the picker." },
-      { text: "If a bidder gets \"Generation is not allowed from this IP address\", their current public IP is not in the key's whitelist. Ask a super admin to update the list." },
+      { text: "If a bidder gets \"Generation is not allowed from this IP address\", their current public IP is not in the key's whitelist. Ask a super admin to update the list (only super admins can edit IP whitelists)." },
       { text: "The Allowed IPs column shows \"Any IP\" when no whitelist is set." },
       { text: "The Keys page asks super admins to confirm their password on entry, and again for sensitive actions.", superOnly: true },
     ],
@@ -487,7 +487,7 @@ export const faqItems: FaqItem[] = [
   {
     id: "faq-invalid-key",
     q: "The extension says \"Invalid key\". What now?",
-    a: "The key is mistyped, revoked or expired. Check its status on the Keys page, and request a new key if needed. A user can only have one active key.",
+    a: "The key is mistyped, revoked or expired. Check its status on the Keys page, and create a new key if needed. A user can only have one active key.",
   },
   {
     id: "faq-inactive",

@@ -418,36 +418,58 @@ export default function TokensPage() {
     createRequestMutation.mutate(payload);
   };
 
+  // Super admins confirm with their password; admins get a plain confirm dialog
+  const requestAction = (action: NonNullable<typeof pendingAction>) => {
+    if (isSuperAdmin) {
+      setPendingAction(action);
+      setShowActionConfirm(true);
+      return;
+    }
+    const labels: Record<string, string> = {
+      revoke: "Revoke this key?",
+      activate: "Activate this key?",
+      delete: "Delete this key? This cannot be undone.",
+      extend: "Save the new expiration for this key?",
+    };
+    if (window.confirm(labels[action.type] ?? "Are you sure?")) {
+      runAction(action);
+    }
+  };
+
   const executePendingAction = async () => {
     if (!pendingAction) return;
-    switch (pendingAction.type) {
-      case "generate":
-        generateMutation.mutate(pendingAction.data);
-        break;
-      case "revoke":
-        revokeMutation.mutate(pendingAction.id!);
-        break;
-      case "activate":
-        activateMutation.mutate(pendingAction.id!);
-        break;
-      case "delete":
-        deleteMutation.mutate(pendingAction.id!);
-        break;
-      case "extend":
-        extendMutation.mutate({ id: pendingAction.id!, expiration_date: pendingAction.data });
-        break;
-      case "ips":
-        allowedIpsMutation.mutate({ id: pendingAction.id!, ips: pendingAction.data });
-        break;
-      case "approve":
-        approveMutation.mutate({ id: pendingAction.id!, review_notes: pendingAction.data });
-        break;
-      case "decline":
-        declineMutation.mutate({ id: pendingAction.id!, review_notes: pendingAction.data });
-        break;
-    }
+    runAction(pendingAction);
     setPendingAction(null);
     setShowActionConfirm(false);
+  };
+
+  const runAction = (act: NonNullable<typeof pendingAction>) => {
+    switch (act.type) {
+      case "generate":
+        generateMutation.mutate(act.data);
+        break;
+      case "revoke":
+        revokeMutation.mutate(act.id!);
+        break;
+      case "activate":
+        activateMutation.mutate(act.id!);
+        break;
+      case "delete":
+        deleteMutation.mutate(act.id!);
+        break;
+      case "extend":
+        extendMutation.mutate({ id: act.id!, expiration_date: act.data });
+        break;
+      case "ips":
+        allowedIpsMutation.mutate({ id: act.id!, ips: act.data });
+        break;
+      case "approve":
+        approveMutation.mutate({ id: act.id!, review_notes: act.data });
+        break;
+      case "decline":
+        declineMutation.mutate({ id: act.id!, review_notes: act.data });
+        break;
+    }
   };
 
   const copyToClipboard = (token: string) => {
@@ -559,13 +581,17 @@ export default function TokensPage() {
         </span>
       ),
     },
-    ...(isSuperAdmin
+    ...(isSuperAdmin || tokens.some((t) => t.can_manage)
       ? [
           {
             key: "id",
             label: "Actions",
-            render: (_: any, row: Token) => (
+            render: (_: any, row: Token) => {
+              const canManage = isSuperAdmin || row.can_manage === true;
+              if (!canManage) return <span className="text-gray-400 text-xs">Read-only</span>;
+              return (
               <div className="flex items-center gap-2">
+                {isSuperAdmin && (
                 <button
                   onClick={() => {
                     setAssignModalToken(row);
@@ -576,6 +602,8 @@ export default function TokensPage() {
                 >
                   <UserPlus className="w-4 h-4" />
                 </button>
+                )}
+                {isSuperAdmin && (
                 <button
                   onClick={() => {
                     setIpToken(row);
@@ -587,6 +615,7 @@ export default function TokensPage() {
                 >
                   <Globe className="w-4 h-4" />
                 </button>
+                )}
                 <button
                   onClick={() => {
                     setExtendToken(row);
@@ -599,10 +628,7 @@ export default function TokensPage() {
                 </button>
                 {row.is_active ? (
                   <button
-                    onClick={() => {
-                      setPendingAction({ type: "revoke", id: row.id });
-                      setShowActionConfirm(true);
-                    }}
+                    onClick={() => requestAction({ type: "revoke", id: row.id })}
                     className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded"
                     title="Revoke"
                   >
@@ -610,10 +636,7 @@ export default function TokensPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => {
-                      setPendingAction({ type: "activate", id: row.id });
-                      setShowActionConfirm(true);
-                    }}
+                    onClick={() => requestAction({ type: "activate", id: row.id })}
                     className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"
                     title="Activate"
                   >
@@ -621,17 +644,15 @@ export default function TokensPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => {
-                    setPendingAction({ type: "delete", id: row.id });
-                    setShowActionConfirm(true);
-                  }}
+                  onClick={() => requestAction({ type: "delete", id: row.id })}
                   className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                   title="Delete"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-            ),
+              );
+            },
           },
         ]
       : []),
@@ -786,7 +807,7 @@ export default function TokensPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Access Keys</h1>
               <p className="text-gray-600 mt-2">
-                {isSuperAdmin ? "Manage user access keys" : "Create and view access keys"}
+                {isSuperAdmin ? "Manage user access keys" : "Create and manage keys for yourself and your bidders"}
               </p>
             </div>
             <Button onClick={() => { setIsModalOpen(true); setGeneratedToken(null); }}>
@@ -817,7 +838,7 @@ export default function TokensPage() {
                       : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                   }`}
                 >
-                  {isSuperAdmin ? "All Keys" : "My Keys"}
+                  {isSuperAdmin ? "All Keys" : "Your Keys"}
                 </button>
                 <button
                   onClick={() => setActiveTab("requests")}
@@ -935,7 +956,7 @@ export default function TokensPage() {
             ) : generatedToken ? (
               <div className="p-6">
                 <p className="text-sm text-gray-600 mb-4">
-                  Key created successfully! Copy it now. Keys are shown in the Keys list too.
+                  Key created successfully! Copy it now. You can also find it in Your Keys.
                 </p>
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
                   <code className="text-sm break-all">{generatedToken}</code>
@@ -971,8 +992,8 @@ export default function TokensPage() {
             )}
           </Modal>
 
-          {/* Extend modal (super_admin) */}
-          {isSuperAdmin && (
+          {/* Extend modal (super admin or admin managing an in-scope key) */}
+          {(
             <Modal
               isOpen={extendToken !== null}
               onClose={() => { setExtendToken(null); setExtendDate(""); }}
@@ -996,8 +1017,7 @@ export default function TokensPage() {
                 <div className="flex gap-3">
                   <Button
                     onClick={() => {
-                      setPendingAction({ type: "extend", id: extendToken!.id, data: extendDate || undefined });
-                      setShowActionConfirm(true);
+                      requestAction({ type: "extend", id: extendToken!.id, data: extendDate || undefined });
                     }}
                     loading={extendMutation.isPending}
                     className="flex-1"

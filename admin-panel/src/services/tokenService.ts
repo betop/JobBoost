@@ -13,6 +13,7 @@ export interface Token {
   assigned_admin_ids?: string[];
   is_assigned?: boolean;
   allowed_ips?: string[];
+  can_manage?: boolean;
 }
 
 export interface GenerateTokenInput {

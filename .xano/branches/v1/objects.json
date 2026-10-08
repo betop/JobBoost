@@ -236,5 +236,19 @@
     "status": "new",
     "type": "function",
     "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/tokens/can_manage_key.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
+  },
+  {
+    "id": 0,
+    "path": "functions/tokens/can_manage_user_keys.xs",
+    "status": "new",
+    "type": "function",
+    "staged": false
   }
 ]

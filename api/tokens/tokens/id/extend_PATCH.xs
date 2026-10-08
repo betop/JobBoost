@@ -18,6 +18,15 @@ query "tokens/{id}/extend" verb=PATCH {
       error_type = "notfound"
       error = "Token not found"
     }
+
+    function.run "tokens/can_manage_user_keys" {
+      input = {caller_id: $auth.id, target_user_id: $t.user_id}
+    } as $scope
+
+    precondition ($t.user_id != null && $scope.allowed) {
+      error_type = "accessdenied"
+      error = "You can only manage keys for yourself and your own bidders"
+    }
   
     // Also re-activate in case the token was still marked active but expired
     db.patch access_token {

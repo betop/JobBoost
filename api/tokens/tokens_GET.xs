@@ -1,6 +1,6 @@
 // List all tokens with user names
 // Super admins see all tokens
-// Admins see tokens they created OR tokens assigned to them (view-only)
+// Admins see only keys they can manage (own + own bidders', see tokens/can_manage_user_keys)
 query tokens verb=GET {
   api_group = "tokens"
   auth = "users"
@@ -26,52 +26,39 @@ query tokens verb=GET {
   
     foreach ($tokens) {
       each as $t {
-        // Determine if this token should be included
+        // Included only when the caller may manage the key's owner (super_admin: all)
         var $should_include {
           value = false
         }
-      
+
         var $is_assigned {
           value = false
         }
-      
+
+        var $can_manage {
+          value = false
+        }
+
         conditional {
-          if ($auth_user.type == "super_admin") {
+          if ($t.user_id != null) {
+            function.run "tokens/can_manage_user_keys" {
+              input = {caller_id: $auth.id, target_user_id: $t.user_id}
+            } as $scope
+
+            var.update $can_manage {
+              value = $scope.allowed
+            }
+          }
+        }
+
+        conditional {
+          if ($can_manage || $auth_user.type == "super_admin") {
             var.update $should_include {
               value = true
             }
           }
         }
-      
-        conditional {
-          if ($auth_user.type == "admin" && $t.created_by_admin_id == $auth.id) {
-            var.update $should_include {
-              value = true
-            }
-          }
-        }
-      
-        // Check if token is assigned to this admin
-        conditional {
-          if ($auth_user.type == "admin" && $t.assigned_admin_ids != null) {
-            foreach ($t.assigned_admin_ids) {
-              each as $assigned_id {
-                conditional {
-                  if ($assigned_id == $auth.id) {
-                    var.update $should_include {
-                      value = true
-                    }
-                  
-                    var.update $is_assigned {
-                      value = true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      
+
         conditional {
           if ($should_include) {
             var $user_name_val {
@@ -129,6 +116,7 @@ query tokens verb=GET {
                 assigned_admin_ids: $t.assigned_admin_ids
                 is_assigned       : $is_assigned
                 allowed_ips       : $allowed_ips_out
+                can_manage        : $can_manage
               }
             }
           }

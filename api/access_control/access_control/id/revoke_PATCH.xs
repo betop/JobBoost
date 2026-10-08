@@ -17,6 +17,15 @@ query "access-control/{id}/revoke" verb=PATCH {
       error_type = "notfound"
       error = "Access control record not found"
     }
+
+    function.run "tokens/can_manage_user_keys" {
+      input = {caller_id: $auth.id, target_user_id: $t.user_id}
+    } as $scope
+
+    precondition ($t.user_id != null && $scope.allowed) {
+      error_type = "accessdenied"
+      error = "You can only manage keys for yourself and your own bidders"
+    }
   
     db.patch access_token {
       field_name = "id"
