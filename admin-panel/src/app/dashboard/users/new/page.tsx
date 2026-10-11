@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -31,6 +31,7 @@ type UserFormData = z.infer<typeof userSchema>;
 
 export default function NewUserPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const showToast = useUIStore((state) => state.showToast);
   const admin = useAuthStore((state) => state.admin);
   const isSuperAdmin = admin?.type === "super_admin";
@@ -63,7 +64,8 @@ export default function NewUserPage() {
         profile_ids: data.profile_ids ?? [],
         is_active: data.is_active,
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users"] });
       showToast("User created successfully", "success");
       router.push("/dashboard/users");
     },

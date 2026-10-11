@@ -26,7 +26,7 @@ query "resume/chat" verb=POST {
   
     // Validate token
     db.query access_token {
-      where = $db.access_token.token == $input.token && $db.access_token.is_active == true && $db.access_token.expires_at < now && $db.access_token.user_id != null
+      where = $db.access_token.token == $input.token && $db.access_token.is_active == true && ($db.access_token.expires_at == null || $db.access_token.expires_at > now) && $db.access_token.user_id != null
       return = {type: "single"}
     } as $access
   
