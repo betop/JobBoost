@@ -57,13 +57,29 @@ query "resume/generate" verb=POST {
     }
   
     db.query access_token {
-      where = $db.access_token.token == $input.token && $db.access_token.is_active == true && ($db.access_token.expires_at == null || $db.access_token.expires_at > now) && $db.access_token.user_id != null
+      where = $db.access_token.token == $input.token
       return = {type: "single"}
     } as $access
   
     precondition ($access != null) {
       error_type = "accessdenied"
       error = "Invalid key"
+    }
+
+    precondition ($access.is_active == true) {
+      error_type = "accessdenied"
+      error = "Key has been revoked"
+    }
+
+    precondition ($access.user_id != null) {
+      error_type = "accessdenied"
+      error = "Token has no associated user"
+    }
+
+    // expires_at is optional: null means the key never expires
+    precondition ($access.expires_at == null || $access.expires_at > now) {
+      error_type = "accessdenied"
+      error = "Key has expired"
     }
   
     precondition ($access.user_id != null && $access.user_id != "") {
