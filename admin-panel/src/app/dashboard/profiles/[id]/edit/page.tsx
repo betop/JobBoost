@@ -186,6 +186,15 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-8">
+      <div className="sticky top-16 z-20 -mx-6 -mt-6 px-6 py-3 bg-white/95 backdrop-blur border-b border-gray-200 rounded-t-lg flex items-center justify-end gap-3">
+        <Button type="button" variant="ghost" onClick={handleBack}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={updateMutation.isPending}>
+          Save Changes
+        </Button>
+      </div>
+
       <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Basic Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
