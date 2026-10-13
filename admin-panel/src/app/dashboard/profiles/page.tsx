@@ -136,6 +136,7 @@ export default function ProfilesPage() {
         tailor_job_title: full.tailor_job_title,
         allowed_languages: full.allowed_languages,
         default_compensation: full.default_compensation,
+        billing_admin_id: full.billing_admin_id ?? undefined,
       });
     },
     onSuccess: () => {
