@@ -747,31 +747,28 @@ query "resume/generate" verb=POST {
                                           if ($extraction_json.is_freelancer_marketplace_similar_to_toptal == "false") {
                                             conditional {
                                               if ($extraction_json.clearance_required == "false") {
-                                                var $possible_seniorities {
-                                                  value = ["mid", "senior", "lead", "staff"]
+                                                // All seniority levels are allowed by default. Only when this profile
+                                                // has lead roles blocked are lead-level and higher jobs rejected.
+                                                var $blocked_seniorities {
+                                                  value = ["lead", "staff", "principal", "director", "vice_president", "c_level", "founder"]
                                                 }
 
                                                 var $has_seniority {
-                                                  value = false
+                                                  value = true
                                                 }
 
-                                                foreach ($possible_seniorities) {
-                                                  each as $s {
-                                                    conditional {
-                                                      if ($extraction_json.seniority == $s) {
-                                                        var.update $has_seniority {
-                                                          value = true
+                                                conditional {
+                                                  if ($prof.block_lead_roles == true) {
+                                                    foreach ($blocked_seniorities) {
+                                                      each as $s {
+                                                        conditional {
+                                                          if (($extraction_json.seniority|to_text|to_lower|trim) == $s) {
+                                                            var.update $has_seniority {
+                                                              value = false
+                                                            }
+                                                          }
                                                         }
                                                       }
-                                                    }
-                                                  }
-                                                }
-
-                                                // Per-profile opt-in: reject lead-level jobs if this profile has lead roles blocked
-                                                conditional {
-                                                  if ($extraction_json.seniority == "lead" && $prof.block_lead_roles == true) {
-                                                    var.update $has_seniority {
-                                                      value = false
                                                     }
                                                   }
                                                 }
@@ -878,7 +875,7 @@ query "resume/generate" verb=POST {
                                                     }
                                                   
                                                     var.update $error_msg {
-                                                      value = "This job's seniority level (" ~ $extraction_json.seniority ~ ") does not match the candidate's profile. Try with another job."
+                                                      value = "This job's seniority level (" ~ $extraction_json.seniority ~ ") is lead-level or higher, which is blocked for this profile. Try with another job."
                                                     }
                                                   }
                                                 }
