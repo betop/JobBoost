@@ -3,6 +3,8 @@ const xanoBranch = process.env.XANO_BRANCH || (process.env.VERCEL_GIT_COMMIT_REF
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Lets a second dev server (e.g. NEXT_DIST_DIR=.next-staging) run next to the main one
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Expose the Xano target to browser code (direct extension-file upload)
   env: {
     NEXT_PUBLIC_XANO_HOST: process.env.XANO_HOST || "",

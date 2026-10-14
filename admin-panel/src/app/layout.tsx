@@ -3,10 +3,13 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION } from "./site";
+import EnvBanner from "@/components/EnvBanner";
+import { XANO_BRANCH } from "@/config/xano";
 
 const inter = Inter({ subsets: ["latin"] });
 
-const TITLE = SITE_TITLE;
+const IS_STAGING = XANO_BRANCH !== "";
+const TITLE = IS_STAGING ? `[STAGING] ${SITE_TITLE}` : SITE_TITLE;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -49,7 +52,8 @@ export const metadata: Metadata = {
   },
   icons: { icon: "/favicon.png", shortcut: "/favicon.png", apple: "/favicon.png" },
   manifest: "/manifest.webmanifest",
-  robots: { index: true, follow: true },
+  // Staging must never be indexed
+  robots: IS_STAGING ? { index: false, follow: false } : { index: true, follow: true },
 };
 
 export const viewport: Viewport = {
@@ -66,6 +70,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
+        <EnvBanner />
         <Providers>{children}</Providers>
       </body>
     </html>
