@@ -8,6 +8,7 @@ query "resume/generate_legacy" verb=POST {
   api_group = "resume"
 
   input {
+    text ai_model?
     uuid profile_id?
     text job_description?
     text token?
@@ -18,6 +19,11 @@ query "resume/generate_legacy" verb=POST {
   }
 
   stack {
+    // Model picked in the extension (Haiku 4.5 default; 5.5 cheaper); validated against the selectable list
+    function.run "ai/resolve_model" {
+      input = {ai_model: $input.ai_model}
+    } as $ai_model_id
+
     precondition ($input.profile_id != null) {
       error_type = "badrequest"
       error = "profile_id is required"
@@ -327,7 +333,7 @@ query "resume/generate_legacy" verb=POST {
                   url = "https://api.anthropic.com/v1/messages"
                   method = "POST"
                   params = {}
-                    |set:"model":"claude-haiku-4-5"
+                    |set:"model":$ai_model_id
                     |set:"max_tokens":400
                     |set:"messages":([]
                       |push:({}
@@ -1306,7 +1312,7 @@ query "resume/generate_legacy" verb=POST {
               url = "https://api.anthropic.com/v1/messages"
               method = "POST"
               params = {}
-                |set:"model":"claude-haiku-4-5"
+                |set:"model":$ai_model_id
                 |set:"max_tokens":6000
                 |set:"system":$system_prompt
                 |set:"messages":([]
@@ -1470,7 +1476,7 @@ query "resume/generate_legacy" verb=POST {
   
     // Usage rate in force right now: saved on the log row and used for the charge (log and ledger agree)
     function.run "credits/get_usage_rate" {
-      input = {}
+      input = {admin_id: $billing_check.billing_admin_id}
     } as $log_rate_info
 
     var $usage_rate {
@@ -1541,6 +1547,7 @@ query "resume/generate_legacy" verb=POST {
       if ($billing_check.is_billable) {
         function.run "credits/credit_charge_usage" {
           input = {
+            model                : $ai_model_id
             admin_id             : $billing_check.billing_admin_id
             usage_rate           : $usage_rate
             input_tokens         : $input_tokens

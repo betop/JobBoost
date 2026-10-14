@@ -14,6 +14,13 @@ query "users/{id}" verb=PUT {
     bool is_active?
     bool is_approved?
     text assigned_ip?
+    decimal usage_rate? {
+      description = "Personal price rate multiplier for this admin (1-10); super_admin only"
+    }
+
+    bool clear_usage_rate? {
+      description = "Remove the personal price rate so the global default applies; super_admin only"
+    }
   }
 
   stack {
@@ -34,6 +41,45 @@ query "users/{id}" verb=PUT {
   
     var $payload {
       value = {}
+    }
+
+    // Personal price rate: only a super_admin may change it, and only on admin accounts (the billed party)
+    conditional {
+      if ($input.usage_rate != null || $input.clear_usage_rate == true) {
+        db.get users {
+          field_name = "id"
+          field_value = $auth.id
+        } as $rate_caller
+
+        precondition ($rate_caller != null && $rate_caller.type == "super_admin") {
+          error_type = "accessdenied"
+          error = "Only super_admin can set a price rate"
+        }
+
+        precondition ($b.type == "admin") {
+          error_type = "badrequest"
+          error = "A price rate can only be set on admin accounts"
+        }
+
+        conditional {
+          if ($input.clear_usage_rate == true) {
+            var.update $payload.usage_rate {
+              value = null
+            }
+          }
+
+          elseif ($input.usage_rate != null) {
+            precondition ($input.usage_rate >= 1 && $input.usage_rate <= 10) {
+              error_type = "badrequest"
+              error = "usage_rate must be between 1 and 10"
+            }
+
+            var.update $payload.usage_rate {
+              value = $input.usage_rate
+            }
+          }
+        }
+      }
     }
   
     conditional {
@@ -144,6 +190,7 @@ query "users/{id}" verb=PUT {
     is_active    : $b.is_active
     is_approved  : $b.is_approved
     assigned_ip  : $b.assigned_ip
+    usage_rate   : $b.usage_rate
     created_at   : $b.created_at
   }
 

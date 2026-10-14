@@ -1,14 +1,18 @@
-// Single source of truth for the raw provider cost (USD) of one Claude Haiku 4.5 call.
-// List prices per 1M tokens (https://platform.claude.com/docs/en/about-claude/pricing):
-//   input $1.00 | output $5.00 | 5-minute cache write $1.25 (1.25x input) | cache read $0.10 (0.1x input)
+// Single source of truth for the raw provider cost (USD) of one Claude Haiku call (any model).
+// Prices per 1M tokens live in ai/claude_haiku_rates (per model; cache writes at the 1-hour rate,
+// Haiku 5.5 tiered at 100K prompt tokens). The formula is identical for every model:
+//   input*input_price + output*output_price + cache_write*cache_write_price + cache_read*cache_read_price
 // Anthropic reports input_tokens EXCLUDING cached tokens, so the four buckets never overlap
-// and are simply summed. Used by resume generation, regeneration, the SwiftCV chat assistant.
-// If the model or its prices change, update the rates here (and admin-panel/src/utils/aiPricing.ts,
-// and api/dashboard/dashboard/usage_pricing_POST.xs).
+// and are simply summed. The price rate (multiplier) is applied by credits/credit_charge_usage.
+// Used by resume generation, regeneration, the SwiftCV chat assistant.
 function "ai/claude_haiku_cost" {
-  description = "Raw USD cost of a Claude Haiku 4.5 call from its token usage"
+  description = "Raw USD cost of a Claude Haiku call from its model and token usage"
 
   input {
+    text model? {
+      description = "Anthropic model id; empty = claude-haiku-4-5"
+    }
+
     int input_tokens?=0 {
       description = "usage.input_tokens (uncached input)"
     }
@@ -18,17 +22,22 @@ function "ai/claude_haiku_cost" {
     }
 
     int cache_creation_tokens?=0 {
-      description = "usage.cache_creation_input_tokens (billed at 1.25x input)"
+      description = "usage.cache_creation_input_tokens (billed at the 1h cache-write price)"
     }
 
     int cache_read_tokens?=0 {
-      description = "usage.cache_read_input_tokens (billed at 0.1x input)"
+      description = "usage.cache_read_input_tokens (billed at the cache-read price)"
     }
   }
 
   stack {
+    // Prompt size of the request selects the price tier (Haiku 5.5: >100K prompt tokens)
+    var $prompt_tokens {
+      value = ($input.input_tokens|first_notnull:0) + ($input.cache_creation_tokens|first_notnull:0) + ($input.cache_read_tokens|first_notnull:0)
+    }
+
     function.run "ai/claude_haiku_rates" {
-      input = {}
+      input = {model: $input.model, prompt_tokens: $prompt_tokens}
     } as $rates
 
     var $cost {

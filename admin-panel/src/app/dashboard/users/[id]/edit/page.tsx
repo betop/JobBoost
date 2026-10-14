@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { userService, type UserType } from "@/services/userService";
 import { profileService } from "@/services/profileService";
+import { creditsService } from "@/services/creditsService";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import Input from "@/components/Input";
@@ -22,6 +23,12 @@ const userSchema = z.object({
   profile_ids: z.array(z.string()).optional(),
   assigned_bidder_ids: z.array(z.string()).optional(),
   is_active: z.boolean(),
+  usage_rate: z
+    .string()
+    .optional()
+    .refine((v) => !v || (!Number.isNaN(Number(v)) && Number(v) >= 1 && Number(v) <= 10), {
+      message: "Price rate must be a number between 1 and 10",
+    }),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -39,6 +46,13 @@ export default function EditUserPage() {
     queryFn: () => userService.getById(id),
     staleTime: 0,
     gcTime: 0,
+  });
+
+  // Global default rate, shown as the placeholder for the personal price rate
+  const { data: creditSettings } = useQuery({
+    queryKey: ["credit-settings"],
+    queryFn: creditsService.getSettings,
+    enabled: isSuperAdmin,
   });
 
   const { data: profiles = [] } = useQuery({
@@ -85,6 +99,7 @@ export default function EditUserPage() {
         profile_ids: parseProfileIds(user.profile_ids),
         assigned_bidder_ids: user.assigned_bidder_ids ?? [],
         is_active: user.is_active,
+        usage_rate: user.usage_rate != null ? String(user.usage_rate) : "",
       });
     }
   }, [user, reset]);
@@ -100,6 +115,12 @@ export default function EditUserPage() {
         profile_ids: data.profile_ids ?? [],
         assigned_bidder_ids: data.type === "admin" ? (data.assigned_bidder_ids ?? []) : undefined,
         is_active: data.is_active,
+        // Personal price rate (super_admin, admin accounts only): blank = use the global default
+        ...(isSuperAdmin && data.type === "admin"
+          ? data.usage_rate && data.usage_rate.trim() !== ""
+            ? { usage_rate: Number(data.usage_rate) }
+            : { clear_usage_rate: true }
+          : {}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user", id] });
@@ -184,6 +205,25 @@ export default function EditUserPage() {
             required
           />
         </div>
+
+        {/* Personal price rate — super_admin only, admin accounts (the billed party) */}
+        {isSuperAdmin && selectedType === "admin" && (
+          <div>
+            <Input
+              label="Price rate (×)"
+              type="number"
+              step="0.01"
+              min="1"
+              max="10"
+              placeholder={creditSettings ? `Default (${creditSettings.usage_rate}×)` : "Default"}
+              error={errors.usage_rate?.message}
+              {...register("usage_rate")}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Multiplier applied to the raw AI cost when this admin is billed. Leave empty to use the global default.
+            </p>
+          </div>
+        )}
 
         {/* Assign Profiles — for both bidders and admins */}
         <div>

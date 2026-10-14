@@ -19,6 +19,7 @@ let extensionState = {
   resumeTemplate: 11,
   isAdmin: false,
   resumeOnly: false,
+  aiModel: "claude-haiku-4-5",
   versionOk: true,
   versionError: "",
 };
@@ -63,6 +64,7 @@ async function loadExtensionState() {
       "lastProfilesSyncAt",
       "isAdmin",
       "resumeOnly",
+      "aiModel",
       "versionOk",
       "versionError",
     ]);
@@ -77,6 +79,7 @@ async function loadExtensionState() {
     if (stored.lastProfilesSyncAt) lastProfilesSyncAt = stored.lastProfilesSyncAt;
     extensionState.isAdmin   = stored.isAdmin === true;
     extensionState.resumeOnly   = stored.resumeOnly === true;
+    extensionState.aiModel      = stored.aiModel || "claude-haiku-4-5";
     extensionState.versionOk    = stored.versionOk !== false;
     extensionState.versionError = stored.versionError || "";
   } catch (error) {
@@ -562,6 +565,7 @@ async function generateResume(jobDescription, jobUrl = "") {
       job_description: jd,
       token: extensionState.token,
       ai_provider: "claude",
+      ai_model: extensionState.aiModel,
       job_url: url,
       force_generate: true,
       log_id: logId || undefined,
@@ -640,14 +644,16 @@ async function generateResume(jobDescription, jobUrl = "") {
     const isAdmin = extensionState.isAdmin;
 
     // Reload resumeOnly from storage so it reflects latest toggle state
-    const { resumeOnly } = await chrome.storage.local.get(["resumeOnly"]);
+    const { resumeOnly, aiModel } = await chrome.storage.local.get(["resumeOnly", "aiModel"]);
     extensionState.resumeOnly = resumeOnly === true;
+    extensionState.aiModel = aiModel || "claude-haiku-4-5";
 
     const generateBody = {
       profile_id: extensionState.profileId,
       job_description: jobDescription,
       token: extensionState.token,
       ai_provider: "claude",
+      ai_model: extensionState.aiModel,
       job_url: jobUrl,
       extension_version: extensionVersion || undefined,
       skip_cover_letter: extensionState.isAdmin && extensionState.resumeOnly ? true : undefined,

@@ -5,11 +5,17 @@ query "resume/regenerate" verb=POST {
   auth = "users"
 
   input {
+    text ai_model?
     uuid log_id?
     bool force_generate?
   }
 
   stack {
+    // Model picked in the extension (Haiku 4.5 default; 5.5 cheaper); validated against the selectable list
+    function.run "ai/resolve_model" {
+      input = {ai_model: $input.ai_model}
+    } as $ai_model_id
+
     precondition ($input.log_id != null) {
       error_type = "badrequest"
       error = "log_id is required"
@@ -522,13 +528,13 @@ Remember today's year is 2026.
           url = "https://api.anthropic.com/v1/messages"
           method = "POST"
           params = {}
-            |set:"model":"claude-haiku-4-5"
+            |set:"model":$ai_model_id
             |set:"max_tokens":6000
             |set:"system":([]
               |push:({}
                 |set:"type":"text"
                 |set:"text":$system_prompt
-                |set:"cache_control":({}|set:"type":"ephemeral")
+                |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
               )
             )
             |set:"messages":([]
@@ -538,7 +544,7 @@ Remember today's year is 2026.
                   |push:({}
                     |set:"type":"text"
                     |set:"text":"Generate a full tailored resume only.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $resume_schema
-                    |set:"cache_control":({}|set:"type":"ephemeral")
+                    |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
                   )
                   |push:({}
                     |set:"type":"text"
@@ -692,7 +698,7 @@ Remember today's year is 2026.
 
     // Usage rate in force right now: saved on the log row and used for the charge (log and ledger agree)
     function.run "credits/get_usage_rate" {
-      input = {}
+      input = {admin_id: $billing_check.billing_admin_id}
     } as $log_rate_info
 
     var $usage_rate {
@@ -743,6 +749,7 @@ Remember today's year is 2026.
       if ($billing_check.is_billable) {
         function.run "credits/credit_charge_usage" {
           input = {
+            model                : $ai_model_id
             admin_id             : $billing_check.billing_admin_id
             usage_rate           : $usage_rate
             input_tokens         : $input_tokens

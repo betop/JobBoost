@@ -70,7 +70,7 @@ workflow_test "per_profile_billing" {
     // Check 5
     function.call "ai/claude_haiku_cost" { input = {input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 200, cache_read_tokens: 3000} } as $c5
     debug.log { value = {check5: $c5} }
-    expect.to_equal ($c5) { value = 0.00405 }
+    expect.to_equal ($c5) { value = 0.0042 }
 
     // Check 6
     db.add profile { data = {full_name: "LEGACY", created_by: $tau.id, billing_admin_id: $nil} } as $legacy

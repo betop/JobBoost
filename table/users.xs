@@ -26,6 +26,7 @@ table users {
   
     text assigned_ip?
     decimal credit_balance?=0
+    decimal? usage_rate?
     bool? deleted?
     int? free_generations_remaining?
   }

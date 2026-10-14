@@ -13,6 +13,7 @@ export interface User {
   is_approved: boolean;
   created_at: string;
   deleted?: boolean;
+  usage_rate?: number | null;
 }
 
 export interface CreateUserInput {
@@ -23,6 +24,8 @@ export interface CreateUserInput {
   profile_ids?: string[];
   assigned_bidder_ids?: string[];
   is_active: boolean;
+  usage_rate?: number;
+  clear_usage_rate?: boolean;
 }
 
 export const userService = {

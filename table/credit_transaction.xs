@@ -27,6 +27,7 @@ table credit_transaction {
     decimal? raw_cost_usd?
     decimal? usage_rate?
     uuid? profile_id?
+    text? ai_model?
   }
 
   index = [

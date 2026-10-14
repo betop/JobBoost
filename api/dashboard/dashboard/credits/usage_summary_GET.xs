@@ -519,7 +519,7 @@ query "dashboard/credits/usage-summary" verb=GET {
     } as $rates
 
     function.run "credits/get_usage_rate" {
-      input = {}
+      input = {admin_id: $filter_admin_id}
     } as $rate_info
 
     // ---- Per-profile breakdown: ONE db.get per distinct profile id, after aggregation ----

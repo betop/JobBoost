@@ -5,6 +5,7 @@ query "resume/generate" verb=POST {
   api_group = "resume"
 
   input {
+    text ai_model?
     uuid profile_id?
     text job_description?
     text token?
@@ -16,6 +17,11 @@ query "resume/generate" verb=POST {
   }
 
   stack {
+    // Model picked in the extension (Haiku 4.5 default; 5.5 cheaper); validated against the selectable list
+    function.run "ai/resolve_model" {
+      input = {ai_model: $input.ai_model}
+    } as $ai_model_id
+
     precondition ($input.profile_id != null) {
       error_type = "badrequest"
       error = "profile_id is required"
@@ -275,8 +281,14 @@ query "resume/generate" verb=POST {
       if ($use_legacy_api) {
         // Profile has legacy mode enabled — proxy this request to the legacy generation
         // endpoint (rule-table-driven prompt) instead of running the logic below.
+        // Call the legacy endpoint on the SAME branch/data source this request runs on
+        // (staging must never proxy into the live branch).
+        var $legacy_url {
+          value = "https://api.shsws-solutions.com/api:caf8Eo15:" ~ $env.$branch ~ "/resume/generate_legacy"
+        }
+
         api.request {
-          url = "https://api.shsws-solutions.com/api:caf8Eo15/resume/generate_legacy"
+          url = $legacy_url
           method = "POST"
           params = {}
             |set:"profile_id":$input.profile_id
@@ -286,8 +298,10 @@ query "resume/generate" verb=POST {
             |set:"extension_version":$input.extension_version
             |set:"force_generate":$input.force_generate
             |set:"log_id":$input.log_id
+            |set:"ai_model":$input.ai_model
           headers = []
             |push:"Content-Type: application/json"
+            |push:("X-Data-Source: " ~ $env.$datasource)
           timeout = 300
         } as $legacy_resp
       
@@ -411,7 +425,7 @@ query "resume/generate" verb=POST {
                       url = "https://api.anthropic.com/v1/messages"
                       method = "POST"
                       params = {}
-                        |set:"model":"claude-haiku-4-5"
+                        |set:"model":$ai_model_id
                         |set:"max_tokens":400
                         |set:"messages":([]
                           |push:({}
@@ -1671,13 +1685,13 @@ Regenerate if violated.
                   url = "https://api.anthropic.com/v1/messages"
                   method = "POST"
                   params = {}
-                    |set:"model":"claude-haiku-4-5"
+                    |set:"model":$ai_model_id
                     |set:"max_tokens":6000
                     |set:"system":([]
                       |push:({}
                         |set:"type":"text"
                         |set:"text":$system_prompt
-                        |set:"cache_control":({}|set:"type":"ephemeral")
+                        |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
                       )
                     )
                     |set:"messages":([]
@@ -1687,7 +1701,7 @@ Regenerate if violated.
                           |push:({}
                             |set:"type":"text"
                             |set:"text":"Generate a full tailored resume and cover letter.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ $profile_contact_section ~ " (keep it empty for missing fields )\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $result_schema ~ $omit_instruction
-                            |set:"cache_control":({}|set:"type":"ephemeral")
+                            |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
                           )
                           |push:({}
                             |set:"type":"text"
@@ -1855,7 +1869,7 @@ Regenerate if violated.
       
         // Usage rate in force right now: saved on the log row and used for the charge (log and ledger agree)
         function.run "credits/get_usage_rate" {
-          input = {}
+          input = {admin_id: $billing_check.billing_admin_id}
         } as $log_rate_info
 
         var $usage_rate {
@@ -1931,6 +1945,7 @@ Regenerate if violated.
       if (!$use_legacy_api && $billing_check.is_billable) {
         function.run "credits/credit_charge_usage" {
           input = {
+            model                : $ai_model_id
             admin_id             : $billing_check.billing_admin_id
             usage_rate           : $usage_rate
             input_tokens         : $input_tokens

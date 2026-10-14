@@ -233,3 +233,15 @@ body {
 .toggle-slider:before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
 .toggle-switch input:checked + .toggle-slider { background: #667eea; }
 .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+/* AI model picker */
+.model-section { padding: 8px 0; border-top: 1px solid #f0f0f0; }
+.model-title { margin-bottom: 6px; font-weight: 500; }
+.model-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 4px; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 13px; color: #374151; }
+.model-option:hover { background: #f9fafb; }
+.model-option input { margin: 0; }
+.model-name { flex: 1; }
+.model-tag { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.model-tag-rec { background: #dbeafe; color: #1d4ed8; }
+.model-tag-cheap { background: #dcfce7; color: #15803d; }
+.model-hint { font-size: 11px; color: #94a3b8; margin: 4px 0 0; }

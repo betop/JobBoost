@@ -52,6 +52,7 @@ query "users/{id}" verb=GET {
     is_active          : $b.is_active
     is_approved        : $b.is_approved
     assigned_ip        : $b.assigned_ip
+    usage_rate         : $b.usage_rate
     created_at         : $b.created_at
     deleted            : $b.deleted == true
   }

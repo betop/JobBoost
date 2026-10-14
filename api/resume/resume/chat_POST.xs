@@ -5,6 +5,7 @@ query "resume/chat" verb=POST {
   api_group = "resume"
 
   input {
+    text ai_model?
     text token?
     text question?
     text log_id?
@@ -14,6 +15,11 @@ query "resume/chat" verb=POST {
   }
 
   stack {
+    // Model picked in the extension (Haiku 4.5 default; 5.5 cheaper); validated against the selectable list
+    function.run "ai/resolve_model" {
+      input = {ai_model: $input.ai_model}
+    } as $ai_model_id
+
     precondition ($input.token != null) {
       error_type = "accessdenied"
       error = "Missing authorization key"
@@ -267,7 +273,7 @@ No explanations needed, just answer the question based on the provided informati
           value = {}
             |set:"type":"text"
             |set:"text":"The documents above are the candidate's current resume and/or cover letter. Treat them as the authoritative source of the candidate's facts."
-            |set:"cache_control":({}|set:"type":"ephemeral")
+            |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
         }
 
         var $doc_user_msg {
@@ -370,7 +376,7 @@ No explanations needed, just answer the question based on the provided informati
       value = {}
         |set:"type":"text"
         |set:"text":$input.question
-        |set:"cache_control":({}|set:"type":"ephemeral")
+        |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
     }
   
     var.update $user_content {
@@ -462,14 +468,14 @@ No explanations needed, just answer the question based on the provided informati
           url = "https://api.anthropic.com/v1/messages"
           method = "POST"
           params = {}
-            |set:"model":"claude-haiku-4-5"
+            |set:"model":$ai_model_id
             |set:"max_tokens":600
             |set:"temperature":0.5
             |set:"system":([]
               |push:({}
                 |set:"type":"text"
                 |set:"text":$system_content
-                |set:"cache_control":({}|set:"type":"ephemeral")
+                |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
               )
             )
             |set:"messages":$messages
@@ -525,7 +531,7 @@ No explanations needed, just answer the question based on the provided informati
   
     // Usage rate in force right now: saved on the log row and used for the charge
     function.run "credits/get_usage_rate" {
-      input = {}
+      input = {admin_id: $billing_check.billing_admin_id}
     } as $log_rate_info
 
     var $usage_rate {
@@ -577,6 +583,7 @@ No explanations needed, just answer the question based on the provided informati
       if ($billing_check.is_billable) {
         function.run "credits/credit_charge_usage" {
           input = {
+            model                : $ai_model_id
             admin_id             : $billing_check.billing_admin_id
             usage_rate           : $usage_rate
             input_tokens         : $input_tokens

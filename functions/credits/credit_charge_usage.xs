@@ -1,4 +1,5 @@
-// Charges an admin's credit_balance for an AI usage event at the configured multiplier (default 1.5x) of the raw provider cost.
+// Charges an admin's credit_balance for an AI usage event at the price rate (default 1.5x, overridable per admin) of the raw provider cost.
+// charge = (input*in_price + output*out_price + cache_write*write_price + cache_read*read_price) x price rate, using the model's prices.
 // Amounts keep sub-cent precision (rounded to 8 decimals, never to cents).
 // Call this AFTER the AI call completes (so the real token-based cost is known).
 // Throws accessdenied if the billing admin has insufficient balance — callers that need
@@ -16,7 +17,11 @@ function "credits/credit_charge_usage" {
     }
 
     decimal usage_rate? {
-      description = "Rate in force when the usage happened (saved on the log row). When null the current rate (credits/get_usage_rate) is used."
+      description = "Rate in force when the usage happened (saved on the log row). When null the admin's current rate (credits/get_usage_rate) is used."
+    }
+
+    text model? {
+      description = "Anthropic model id the tokens were billed on (default claude-haiku-4-5); saved on the ledger row"
     }
 
     text related_log_table? {
@@ -80,7 +85,7 @@ function "credits/credit_charge_usage" {
     conditional {
       if ($rate == null || $rate <= 0) {
         function.run "credits/get_usage_rate" {
-          input = {}
+          input = {admin_id: $input.admin_id}
         } as $rate_info
 
         var.update $rate {
@@ -103,6 +108,7 @@ function "credits/credit_charge_usage" {
       if ($has_tokens) {
         function.run "ai/claude_haiku_cost" {
           input = {
+            model                : $input.model
             input_tokens         : $input.input_tokens|first_notnull:0
             output_tokens        : $input.output_tokens|first_notnull:0
             cache_creation_tokens: $input.cache_creation_tokens|first_notnull:0
@@ -162,6 +168,7 @@ function "credits/credit_charge_usage" {
         cache_read_tokens: $input.cache_read_tokens|first_notnull:0
         raw_cost_usd     : $raw_cost
         usage_rate       : $rate
+        ai_model         : $input.model|first_notnull:"claude-haiku-4-5"
         note             : $input.free_trial ? ("Free trial generation (raw cost $" ~ $raw_cost ~ ")") : ("AI usage charge (raw cost $" ~ $raw_cost ~ " x" ~ $rate ~ ")")
       }
     } as $txn
