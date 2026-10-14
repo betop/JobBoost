@@ -18,6 +18,16 @@
 * Inside Xano code, `$env.$branch` / `$env.$datasource` give the current branch / data source. The legacy-generate
   proxy and the payment webhook URL use them so staging never calls into the live branch.
 
+## Test data source (created 2026-10-14)
+A Xano data source named `test` exists (amber in the Xano footer). Select it per request with the header
+`X-Data-Source: test` (the admin panel does this when `XANO_DATA_SOURCE=test`). It has the same schema as `live`
+but starts EMPTY: copy live data with Xano's own tool - dashboard -> status footer -> data source indicator ->
+**Manage Data Sources -> Migrate** -> source `live`, destination `test`, select all tables -> confirm. The Meta API has
+no migrate endpoint, and the credential tables (`users` password hashes, `access_token` keys) should be copied
+server-side by that tool rather than through a client. Re-run Migrate whenever staging data should be refreshed.
+Never run Migrate in the test -> live direction. `XANO_DATA_SOURCE` set to a name that does not exist makes every
+request fail with "Invalid data source."
+
 ## Config (env vars, nothing hard-coded)
 Admin panel — server side, read in `admin-panel/src/config/xano.ts`:
 
