@@ -28,6 +28,12 @@ server-side by that tool rather than through a client. Re-run Migrate whenever s
 Never run Migrate in the test -> live direction. `XANO_DATA_SOURCE` set to a name that does not exist makes every
 request fail with "Invalid data source."
 
+Seeded staging login (test data source only; not present in live): `staging-admin@fo-star.com`, type `super_admin`,
+password known to the project owner (not stored in the repo). Its email differs from every live account so a later
+Migrate cannot collide on the unique email. When inserting users through the Meta API, send the same fields as
+`auth/register` does (note the column is `password_hash`, and `profile_ids` / `assigned_bidder_ids` must be sent,
+even empty) - otherwise Postgres rejects the row with `22P02 INVALID TEXT REPRESENTATION`.
+
 ## Config (env vars, nothing hard-coded)
 Admin panel — server side, read in `admin-panel/src/config/xano.ts`:
 
