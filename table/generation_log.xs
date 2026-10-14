@@ -41,6 +41,7 @@ table generation_log {
     decimal? usage_rate?
     decimal? charged_amount?
     uuid? billing_admin_id?
+    text? ai_model?
   }
 
   index = [

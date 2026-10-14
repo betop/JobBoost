@@ -730,6 +730,7 @@ Remember today's year is 2026.
         cache_creation_input_tokens: $cache_creation_input_tokens
         cache_read_input_tokens     : $cache_read_input_tokens
         usage_rate: $usage_rate
+        ai_model: $ai_model_id
         charged_amount: $log_charged
         resume_filename      : $resume_filename
         cover_letter_filename: ""

@@ -83,6 +83,17 @@ export interface GenerationLog {
   ai_provider: string;
   input_tokens: number;
   output_tokens: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+  // Billing fields — returned to super_admin only. est_cost_usd = raw provider cost x price rate,
+  // computed server-side with the same logic as billing (model prices, 1h cache write, rate).
+  ai_model?: string | null;
+  usage_rate?: number | string | null;
+  charged_amount?: number | string | null;
+  billing_admin_id?: string | null;
+  raw_cost_usd?: number | string | null;
+  usage_rate_applied?: number | string | null;
+  est_cost_usd?: number | string | null;
   resume_filename: string;
   cover_letter_filename: string;
   position_title: string;

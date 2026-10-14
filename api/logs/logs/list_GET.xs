@@ -41,6 +41,15 @@ query "logs/list" verb=GET {
       value = "SELECT id, created_at, updated_at, profile_id, user_id, job_url, job_description_snippet, ai_provider, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, resume_filename, cover_letter_filename, position_title, company_name, is_regenerated, original_log_id, is_matched, match_reason, is_applied, seniority, tech_scope, compensation, content_id, COALESCE((SELECT u.deleted FROM x1_2 u WHERE u.id = x1_7.user_id), false) AS user_deleted, (job_description IS NOT NULL AND job_description <> '') AS has_job_description FROM x1_7"
     }
   
+    // Billing columns (rate, charged amount, billing admin, model) are for super_admin only
+    conditional {
+      if ($auth_user.type == "super_admin") {
+        var.update $query {
+          value = $query|replace:"AS has_job_description FROM x1_7":"AS has_job_description, usage_rate, charged_amount, billing_admin_id, ai_model FROM x1_7"
+        }
+      }
+    }
+
     var $has_where {
       value = false
     }
@@ -169,6 +178,85 @@ query "logs/list" verb=GET {
           parser = "template_engine"
           response_type = "list"
         } as $logs
+      }
+    }
+
+    // Estimated cost per log (super_admin only) = SAME pricing logic as billing:
+    // ai/claude_haiku_cost (model prices, 1h cache write, 5.5 tiers) x price rate
+    // (the rate stored on the log, else the billing admin's personal rate, else the global rate).
+    conditional {
+      if ($input.count_only != true && $auth_user.type == "super_admin") {
+        function.run "credits/get_usage_rate" {
+          input = {}
+        } as $default_rate_info
+
+        var $rate_cache {
+          value = {}
+        }
+
+        var $cache_key {
+          value = ""
+        }
+
+        var $enriched {
+          value = []
+        }
+
+        foreach ($logs) {
+          each as $lg {
+            function.run "ai/claude_haiku_cost" {
+              input = {
+                model                : $lg.ai_model
+                input_tokens         : $lg.input_tokens|first_notnull:0
+                output_tokens        : $lg.output_tokens|first_notnull:0
+                cache_creation_tokens: $lg.cache_creation_input_tokens|first_notnull:0
+                cache_read_tokens    : $lg.cache_read_input_tokens|first_notnull:0
+              }
+            } as $lg_raw
+
+            var $lg_rate {
+              value = $default_rate_info.usage_rate
+            }
+
+            conditional {
+              if ($lg.usage_rate != null && $lg.usage_rate > 0) {
+                var.update $lg_rate {
+                  value = $lg.usage_rate
+                }
+              }
+
+              elseif ($lg.billing_admin_id != null) {
+                var.update $cache_key {
+                  value = $lg.billing_admin_id|to_text
+                }
+
+                conditional {
+                  if (!($rate_cache|has:$cache_key)) {
+                    function.run "credits/get_usage_rate" {
+                      input = {admin_id: $lg.billing_admin_id}
+                    } as $adm_rate
+
+                    var.update $rate_cache {
+                      value = $rate_cache|set:$cache_key:$adm_rate.usage_rate
+                    }
+                  }
+                }
+
+                var.update $lg_rate {
+                  value = $rate_cache|get:$cache_key
+                }
+              }
+            }
+
+            var.update $enriched {
+              value = $enriched|push:($lg|set:"raw_cost_usd":$lg_raw|set:"usage_rate_applied":$lg_rate|set:"est_cost_usd":(($lg_raw * $lg_rate)|round:8))
+            }
+          }
+        }
+
+        var.update $logs {
+          value = $enriched
+        }
       }
     }
   }

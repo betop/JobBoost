@@ -16,7 +16,7 @@
 import type { GenerationLog } from "./logsService";
 
 const DB_NAME    = "jobboost_logs";
-const DB_VERSION = 3;          // v3: drop created_at index, use updated_at only
+const DB_VERSION = 4;          // v4: rows now carry server-computed est_cost_usd (flush cached rows without it)
 const STORE_LOGS = "logs";
 const STORE_META = "meta";
 

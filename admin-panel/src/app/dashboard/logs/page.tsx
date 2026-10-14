@@ -131,12 +131,6 @@ function CheckboxDropdown({
   );
 }
 
-// Pricing per 1M tokens (USD)
-const PRICING = {
-  claude: { input: 1.0, output: 5.0 },
-  openai: { input: 0.15, output: 0.6 },
-};
-
 function RefreshDropdown({
   disabled,
   isRefreshing,
@@ -201,10 +195,22 @@ function RefreshDropdown({
 
 const ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000";
 
-function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
-  // const rates = provider === "claude" ? PRICING.claude : PRICING.openai;
-  const rates = PRICING.claude;
-  return (inputTokens * rates.input + outputTokens * rates.output) / 1_000_000;
+/** Server-computed estimated cost of a log (raw provider cost x price rate); null when not provided. */
+function logCost(log: GenerationLog): number | null {
+  if (log.est_cost_usd == null) return null;
+  const n = Number(log.est_cost_usd);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sumCost(rows: GenerationLog[]): number {
+  return rows.reduce((s, l) => s + (logCost(l) ?? 0), 0);
+}
+
+function costTooltip(log: GenerationLog): string {
+  const raw = Number(log.raw_cost_usd ?? 0);
+  const rate = Number(log.usage_rate_applied ?? 0);
+  const model = log.ai_model || "claude-haiku-4-5";
+  return `Raw $${raw.toFixed(6)} × ${rate}x rate · ${model}`;
 }
 
 function formatCost(usd: number): string {
@@ -1369,17 +1375,8 @@ export default function LogsPage() {
     };
   }, [filtered]);
 
-  // ── Cost estimation from client-side stats ──
-  const totalProviders = stats.claude_count + stats.openai_count;
-  const claudeInputEst = totalProviders > 0
-    ? Math.round(stats.total_input_tokens * stats.claude_count / totalProviders)
-    : stats.total_input_tokens;
-  const claudeOutputEst = totalProviders > 0
-    ? Math.round(stats.total_output_tokens * stats.claude_count / totalProviders)
-    : stats.total_output_tokens;
-  const openaiInputEst = stats.total_input_tokens - claudeInputEst;
-  const openaiOutputEst = stats.total_output_tokens - claudeOutputEst;
-  const periodCost = calcCost("claude", claudeInputEst, claudeOutputEst) + calcCost("openai", openaiInputEst, openaiOutputEst);
+  // ── Estimated cost: sum of the server-computed per-log costs (same logic as billing) ──
+  const periodCost = sumCost(filtered);
 
   const totalTokens = stats.total_input_tokens + stats.total_output_tokens;
 
@@ -2046,7 +2043,7 @@ export default function LogsPage() {
                       {/* Est. Cost */}
                       {isSuperAdmin && (
                       <td className="px-4 py-3 text-right font-mono text-xs text-emerald-700 font-semibold">
-                        {formatCost(calcCost(log.ai_provider, log.input_tokens ?? 0, log.output_tokens ?? 0))}
+                        {logCost(log) == null ? "—" : <span title={costTooltip(log)}>{formatCost(logCost(log) as number)}</span>}
                       </td>
                       )}
 
@@ -2164,11 +2161,7 @@ export default function LogsPage() {
                   <>
                     <span className="text-gray-300">·</span>
                     <span className="font-semibold text-emerald-700">
-                      {formatCost(
-                        allRows.reduce(
-                          (s: number, l: GenerationLog) => s + calcCost(l.ai_provider, l.input_tokens ?? 0, l.output_tokens ?? 0), 0
-                        )
-                      )}
+                      {formatCost(sumCost(allRows))}
                     </span>
                   </>
                 )}

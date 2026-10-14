@@ -1507,6 +1507,7 @@ query "resume/generate_legacy" verb=POST {
             cache_creation_input_tokens: $cache_creation_input_tokens
             cache_read_input_tokens    : $cache_read_input_tokens
             usage_rate: $usage_rate
+            ai_model: $ai_model_id
             charged_amount: $log_charged
             content_id   : $resume_content_id
             is_applied   : true
@@ -1526,6 +1527,7 @@ query "resume/generate_legacy" verb=POST {
             cache_creation_input_tokens: $cache_creation_input_tokens
             cache_read_input_tokens    : $cache_read_input_tokens
             usage_rate: $usage_rate
+            ai_model: $ai_model_id
             charged_amount: $log_charged
             resume_filename      : $resume_filename
             cover_letter_filename: $cover_letter_filename
