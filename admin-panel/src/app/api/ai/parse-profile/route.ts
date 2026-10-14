@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { xanoGroupBase, xanoExtraHeaders } from "@/config/xano";
 
 interface ParsedEducation {
   university?: string;
@@ -189,10 +190,11 @@ Resume text:
 ${text.slice(0, 20000)}`;
 
     // Use Xano's Claude integration (which has working API key)
-    const xanoResponse = await fetch("https://api.shsws-solutions.com/api:caf8Eo15/resume/parse-text", {
+    const xanoResponse = await fetch(`${xanoGroupBase("resume")}/resume/parse-text`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...xanoExtraHeaders(),
       },
       body: JSON.stringify({
         system_prompt: systemPrompt,

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a CLEAN, runtime-only zip of a browser extension into dist/ (thin wrapper).
 #
-#   scripts/package-extension.sh swiftcv|mail-triage|all [--out dist] [--minify]
+#   scripts/package-extension.sh swiftcv|mail-triage|all [--out dist] [--minify] [--env prod|staging]
 #
 # All logic (allowlist scripts/package-manifests/<name>.txt, Lato-only font slimming,
 # EXTENSION_ENV staging->prod, reference verification, size/forbidden-file guards) lives in
@@ -12,11 +12,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/dist"
 TARGET=""
 EXTRA=()
-usage() { echo "Usage: $0 swiftcv|mail-triage|all [--out dir] [--minify]" >&2; exit 2; }
+usage() { echo "Usage: $0 swiftcv|mail-triage|all [--out dir] [--minify] [--env prod|staging]" >&2; exit 2; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) [ $# -ge 2 ] || usage; OUT="$2"; shift 2 ;;
     --minify) EXTRA+=(--minify); shift ;;
+    --env) [ $# -ge 2 ] || usage; EXTRA+=(--env "$2"); shift 2 ;;
     swiftcv|mail-triage|all) TARGET="$1"; shift ;;
     *) usage ;;
   esac

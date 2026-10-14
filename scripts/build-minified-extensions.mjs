@@ -7,6 +7,10 @@
 //                   likely to trigger antivirus / Chrome Web Store suspicion than mangled code.
 //   --out <dir>     Zip output dir (default build/zips). Unpacked files go to <build>/extensions
 //                   unless --out is given, in which case to <out>/unpacked.
+//   --env <prod|staging>  Target Xano environment (default prod). "staging" rewrites every Xano API URL
+//                   (https://api.shsws-solutions.com/api:<group>) to the Xano "staging" branch
+//                   (.../api:<group>:staging), labels the extension "(Staging)" and names the zip
+//                   <name>-staging-v<ver>.zip. Source files always hold the PROD urls.
 //   --plain-zip     Emit only <name>-v<ver>.zip (one top-level folder). Used by package-extension.sh.
 //
 // What ships is decided ONLY by the allowlists in scripts/package-manifests/<name>.txt
@@ -40,8 +44,18 @@ const opt = (n) => {
 };
 const MINIFY = flag("--minify");
 const PLAIN_ZIP = flag("--plain-zip");
+const ENV = opt("--env") || "prod";
+if (!["prod", "staging"].includes(ENV)) {
+  console.error(`Unknown --env "${ENV}". Use prod|staging`);
+  process.exit(2);
+}
+const STAGING = ENV === "staging";
+const XANO_BRANCH = "staging";
+const NAME_SUFFIX = STAGING ? "-staging" : "";
+// https://api.shsws-solutions.com/api:<canonical id>   (the id may contain - and _; a branch is ":<label>")
+const XANO_API_URL_RE = /(https:\/\/api\.shsws-solutions\.com\/api:[A-Za-z0-9_-]+)(?![A-Za-z0-9_:-])/g;
 const outOpt = opt("--out");
-const positional = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--out");
+const positional = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--out" && args[i - 1] !== "--env");
 const wanted = positional[0] || "all";
 if (wanted !== "all" && !ALL_TARGETS.includes(wanted)) {
   console.error(`Unknown target "${wanted}". Use swiftcv|mail-triage|all`);
@@ -162,6 +176,13 @@ async function verifyTree(dir) {
       for (const x of txt.matchAll(/getURL\(\s*["']([^"']+)["']/g)) if (isLocal(x[1])) refs.add(x[1].replace(/^\//, ""));
       for (const x of txt.matchAll(/\burl:\s*["']([\w\-./]+\.(?:html|js))["']/g)) refs.add(rel(x[1]));
     }
+    if (f.endsWith(".js") || f.endsWith(".json") || f.endsWith(".html")) {
+      for (const m of txt.matchAll(/https:\/\/api\.shsws-solutions\.com\/api:[A-Za-z0-9_-]+(:[A-Za-z0-9_.-]+)?/g)) {
+        const hasBranch = !!m[1];
+        if (STAGING && m[1] !== `:${XANO_BRANCH}`) errors.push(`staging build has non-staging API url in ${f}: ${m[0]}`);
+        if (!STAGING && hasBranch) errors.push(`prod build has a branch-specific API url in ${f}: ${m[0]}`);
+      }
+    }
     if (/const EXTENSION_ENV\s*=\s*"staging"/.test(txt) || /EXTENSION_ENV\s*=\s*"staging"/.test(txt))
       errors.push(`EXTENSION_ENV still "staging" in ${f}`);
   }
@@ -196,6 +217,14 @@ async function stage(name) {
     let text = await fs.readFile(from, "utf8");
     if (slimLato) text = slimLatoFonts(text, `${name}/${file}`);
     if (ext === ".js") text = text.replace(/const EXTENSION_ENV\s*=\s*"staging"/g, 'const EXTENSION_ENV = "prod"');
+    if (STAGING) {
+      text = text.replace(XANO_API_URL_RE, `$1:${XANO_BRANCH}`);
+      if (file === "manifest.json") {
+        const m = JSON.parse(text);
+        m.name = `${m.name} (Staging)`;
+        text = JSON.stringify(m, null, 2) + "\n";
+      }
+    }
     if (MINIFY && !file.endsWith(".min.js")) {
       try {
         text = await minifyContent(file, text);
@@ -244,7 +273,7 @@ async function guardZip(name, zipPath, dir) {
 async function zipTarget(name, dir) {
   const version = JSON.parse(await fs.readFile(path.join(dir, "manifest.json"), "utf8")).version || "unknown";
   await fs.mkdir(zipRoot, { recursive: true });
-  const folder = `${name}-v${version}`;
+  const folder = `${name}${NAME_SUFFIX}-v${version}`;
   const jobs = PLAIN_ZIP
     ? [[`${folder}.zip`, folder]]
     : [

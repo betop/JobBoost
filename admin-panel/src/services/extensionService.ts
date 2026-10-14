@@ -50,8 +50,14 @@ const BASE = "/api/extensions";
 // Setup files are up to 100 MB, but Vercel serverless functions (the /api proxy) reject request
 // bodies over ~4.5 MB (FUNCTION_PAYLOAD_TOO_LARGE). Uploads that carry a file therefore go
 // straight from the browser to the Xano API (CORS allows this origin); everything else uses the proxy.
+// The browser needs the environment too: next.config.js mirrors XANO_HOST / XANO_BRANCH / XANO_DATA_SOURCE
+// into NEXT_PUBLIC_* (branch = ":<branch>" appended to the API group id; empty = live/production).
+const XANO_HOST_PUBLIC = process.env.NEXT_PUBLIC_XANO_HOST || "https://api.shsws-solutions.com";
+const XANO_BRANCH_PUBLIC = process.env.NEXT_PUBLIC_XANO_BRANCH || "";
+const XANO_DATA_SOURCE_PUBLIC = process.env.NEXT_PUBLIC_XANO_DATA_SOURCE || "";
 const DIRECT_UPLOAD_BASE = (
-  process.env.NEXT_PUBLIC_XANO_EXTENSION_API_URL || "https://api.shsws-solutions.com/api:eqIK8vAt/extensions"
+  process.env.NEXT_PUBLIC_XANO_EXTENSION_API_URL ||
+  `${XANO_HOST_PUBLIC}/api:eqIK8vAt${XANO_BRANCH_PUBLIC ? `:${XANO_BRANCH_PUBLIC}` : ""}/extensions`
 ).replace(/\/+$/, "");
 
 function authHeader(): Record<string, string> {
@@ -98,6 +104,7 @@ function sendMultipart<T>(
     xhr.open(method, `${input.file ? DIRECT_UPLOAD_BASE : BASE}${path}`);
     const h = authHeader();
     if (h.Authorization) xhr.setRequestHeader("Authorization", h.Authorization);
+    if (input.file && XANO_DATA_SOURCE_PUBLIC) xhr.setRequestHeader("X-Data-Source", XANO_DATA_SOURCE_PUBLIC);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     };

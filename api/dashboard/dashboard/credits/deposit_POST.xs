@@ -68,11 +68,16 @@ query "dashboard/credits/deposit" verb=POST {
       }
     }
 
+    // Payment webhook lands on the same branch that created the deposit (staging stays on staging)
+    var $ipn_callback_url {
+      value = "https://api.shsws-solutions.com/api:5kArnPy5:" ~ $env.$branch ~ "/dashboard/credits/webhook-nowpayments"
+    }
+
     function.run "credits/provider_nowpayments_create_invoice" {
       input = {
         amount_usd      : $input.amount_usd
         order_id        : $deposit.id
-        ipn_callback_url: "https://api.shsws-solutions.com/api:5kArnPy5/dashboard/credits/webhook-nowpayments"
+        ipn_callback_url: $ipn_callback_url
         return_url      : $safe_return_url
       }
     } as $invoice

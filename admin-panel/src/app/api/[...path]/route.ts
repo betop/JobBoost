@@ -1,28 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const XANO_HOST = process.env.XANO_HOST || "https://api.shsws-solutions.com";
-
-const XANO_CANONICALS: Record<string, string> = {
-  auth: "Vbfe5lun",
-  profiles: "YZl-BhQi",
-  users: "I8ZiQ9Me",
-  rules: "99AB050c",
-  tokens: "KWCAt72v",
-  "access-control": "Ucs3etMr",
-  dashboard: "5kArnPy5",
-  logs: "fMYNj_1_",
-  resume: "caf8Eo15",
-  public: "W5ffWHW-",
-  "extension-versions": "eqIK8vAt",
-  // Override with XANO_EXTENSION_MGMT_CANONICAL if the extension_mgmt API group has a different canonical id
-  "extensions": process.env.XANO_EXTENSION_MGMT_CANONICAL || "eqIK8vAt",
-  mail_triage_allowlist: "weyKu-kg",
-  blacklist: "YZl-BhQi",
-};
-
-const XANO_BASES: Record<string, string> = Object.fromEntries(
-  Object.entries(XANO_CANONICALS).map(([group, canonical]) => [group, `${XANO_HOST}/api:${canonical}`])
-) as Record<string, string>;
+import { xanoGroupBase, xanoExtraHeaders } from "@/config/xano";
 
 if (process.env.XANO_ALLOW_SELF_SIGNED === "true") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -33,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 async function proxyRequest(req: NextRequest, segments: string[]) {
   const group = segments[0];
-  const base = XANO_BASES[group];
+  const base = xanoGroupBase(group);
 
   if (!base) {
     return NextResponse.json({ error: `Unknown API group: ${group}` }, { status: 404 });
@@ -50,6 +27,10 @@ async function proxyRequest(req: NextRequest, segments: string[]) {
     if (["host", "connection", "transfer-encoding"].includes(key.toLowerCase())) continue;
     headers.set(key, value);
   }
+  // The environment, not the browser, decides the Xano data source (and the branch via the base URL)
+  headers.delete("x-data-source");
+  headers.delete("x-branch");
+  for (const [key, value] of Object.entries(xanoExtraHeaders())) headers.set(key, value);
 
   const init: RequestInit & { duplex?: "half" } = {
     method: req.method,

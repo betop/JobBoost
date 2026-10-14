@@ -1,7 +1,8 @@
 import { Briefcase, Building2, ExternalLink } from "lucide-react";
 import { notFound } from "next/navigation";
+import { xanoGroupBase, xanoExtraHeaders } from "@/config/xano";
 
-const XANO_PUBLIC_BASE = "https://api.shsws-solutions.com/api:W5ffWHW-";
+const XANO_PUBLIC_BASE = xanoGroupBase("public") ?? "";
 
 interface JDData {
   id: string;
@@ -17,6 +18,7 @@ interface JDData {
 async function fetchJD(id: string): Promise<JDData | null> {
   try {
     const res = await fetch(`${XANO_PUBLIC_BASE}/public/jd/${id}`, {
+      headers: xanoExtraHeaders(),
       next: { revalidate: 3600 },
     });
     if (!res.ok) return null;
