@@ -56,8 +56,13 @@ function "logs/can_access_log" {
           value = "SELECT COUNT(*) AS total FROM x1_7 WHERE " ~ $where ~ " AND (profile_id IS NULL OR profile_id NOT IN (SELECT id FROM x1_5 WHERE hide = true))"
         }
       
+        // Raw SQL ignores the request data source: point it at that data source's tables
+        function.run "db/sql_for_datasource" {
+          input = {sql: $sql}
+        } as $sql_ds
+
         db.direct_query {
-          sql = "{{ $sql }};"
+          sql = "{{ $sql_ds }};"
           parser = "template_engine"
           response_type = "single"
         } as $res

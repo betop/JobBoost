@@ -119,8 +119,13 @@ query "dashboard/usage-pricing" verb=POST {
       }
     }
   
+    // Raw SQL ignores the request data source: point it at that data source's tables
+    function.run "db/sql_for_datasource" {
+      input = {sql: $gen_query}
+    } as $gen_query_ds
+
     db.direct_query {
-      sql = "{{ $gen_query }};"
+      sql = "{{ $gen_query_ds }};"
       parser = "template_engine"
       response_type = "single"
     } as $gen_result
@@ -204,8 +209,13 @@ query "dashboard/usage-pricing" verb=POST {
       }
     }
   
+    // Raw SQL ignores the request data source: point it at that data source's tables
+    function.run "db/sql_for_datasource" {
+      input = {sql: $chat_query}
+    } as $chat_query_ds
+
     db.direct_query {
-      sql = "{{ $chat_query }};"
+      sql = "{{ $chat_query_ds }};"
       parser = "template_engine"
       response_type = "single"
     } as $chat_result
@@ -243,8 +253,13 @@ query "dashboard/usage-pricing" verb=POST {
       }
     }
   
+    // Raw SQL ignores the request data source: point it at that data source's tables
+    function.run "db/sql_for_datasource" {
+      input = {sql: $mail_query}
+    } as $mail_query_ds
+
     db.direct_query {
-      sql = "{{ $mail_query }};"
+      sql = "{{ $mail_query_ds }};"
       parser = "template_engine"
       response_type = "single"
     } as $mail_result

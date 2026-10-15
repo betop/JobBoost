@@ -163,8 +163,13 @@ query "logs/list" verb=GET {
           value = "SELECT COUNT(*) as total FROM (" ~ $query ~ ") AS sub"
         }
       
+        // Raw SQL ignores the request data source: point it at that data source's tables
+        function.run "db/sql_for_datasource" {
+          input = {sql: $count_query}
+        } as $count_query_ds
+
         db.direct_query {
-          sql = "{{ $count_query }};"
+          sql = "{{ $count_query_ds }};"
           parser = "template_engine"
           response_type = "single"
         } as $count_result
@@ -173,8 +178,13 @@ query "logs/list" verb=GET {
   
     conditional {
       if ($input.count_only != true) {
+        // Raw SQL ignores the request data source: point it at that data source's tables
+        function.run "db/sql_for_datasource" {
+          input = {sql: $query}
+        } as $query_ds
+
         db.direct_query {
-          sql = "{{ $query }};"
+          sql = "{{ $query_ds }};"
           parser = "template_engine"
           response_type = "list"
         } as $logs

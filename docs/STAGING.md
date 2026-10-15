@@ -34,6 +34,13 @@ Migrate cannot collide on the unique email. When inserting users through the Met
 `auth/register` does (note the column is `password_hash`, and `profile_ids` / `assigned_bidder_ids` must be sent,
 even empty) - otherwise Postgres rejects the row with `22P02 INVALID TEXT REPRESENTATION`.
 
+**Raw SQL ignores the data source.** `db.direct_query` always runs against the table names written in the SQL and
+ignores `X-Data-Source`. Live tables are `x1_<table id>`, other data sources `x1_<data source>_<table id>`
+(`x1_test_7`). Every raw query must therefore go through `function.run "db/sql_for_datasource"` first (it rewrites the
+prefix from `$env.$datasource`); otherwise staging endpoints silently read/write LIVE data. Currently used by
+logs/list, logs/mail_triage(_logs), users list, dashboard/usage_pricing and functions/logs/can_access_log.
+Check any new endpoint with the `test` data source: it must return `test` data, not live data.
+
 ## Config (env vars, nothing hard-coded)
 Admin panel — server side, read in `admin-panel/src/config/xano.ts`:
 

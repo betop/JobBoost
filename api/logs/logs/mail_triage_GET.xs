@@ -64,8 +64,13 @@ query "logs/mail-triage" verb=GET {
           value = "SELECT COUNT(*) as total FROM (" ~ $query ~ ") AS sub"
         }
       
+        // Raw SQL ignores the request data source: point it at that data source's tables
+        function.run "db/sql_for_datasource" {
+          input = {sql: $count_query}
+        } as $count_query_ds
+
         db.direct_query {
-          sql = "{{ $count_query }};"
+          sql = "{{ $count_query_ds }};"
           parser = "template_engine"
           response_type = "single"
         } as $count_result
@@ -78,8 +83,13 @@ query "logs/mail-triage" verb=GET {
           value = $query ~ " LIMIT " ~ $page_limit ~ " OFFSET " ~ $page_offset
         }
       
+        // Raw SQL ignores the request data source: point it at that data source's tables
+        function.run "db/sql_for_datasource" {
+          input = {sql: $paged_query}
+        } as $paged_query_ds
+
         db.direct_query {
-          sql = "{{ $paged_query }};"
+          sql = "{{ $paged_query_ds }};"
           parser = "template_engine"
           response_type = "list"
         } as $raw_logs
@@ -115,8 +125,13 @@ query "logs/mail-triage" verb=GET {
                       value = "SELECT id, full_name FROM x1_5 WHERE LOWER(TRIM(email)) = " ~ ($email_key|sql_esc) ~ " ORDER BY created_at ASC LIMIT 1"
                     }
                   
+                    // Raw SQL ignores the request data source: point it at that data source's tables
+                    function.run "db/sql_for_datasource" {
+                      input = {sql: $lookup_sql}
+                    } as $lookup_sql_ds
+
                     db.direct_query {
-                      sql = "{{ $lookup_sql }};"
+                      sql = "{{ $lookup_sql_ds }};"
                       parser = "template_engine"
                       response_type = "list"
                     } as $found

@@ -44,8 +44,13 @@ query users verb=GET {
           value = $super_admin_query ~ " ORDER BY created_at DESC"
         }
       
+        // Raw SQL ignores the request data source: point it at that data source's tables
+        function.run "db/sql_for_datasource" {
+          input = {sql: $super_admin_query}
+        } as $super_admin_query_ds
+
         db.direct_query {
-          sql = "{{ $super_admin_query }};"
+          sql = "{{ $super_admin_query_ds }};"
           parser = "template_engine"
           response_type = "list"
         } as $users
@@ -124,8 +129,13 @@ query users verb=GET {
           value = $users_query ~ " ORDER BY created_at DESC"
         }
       
+        // Raw SQL ignores the request data source: point it at that data source's tables
+        function.run "db/sql_for_datasource" {
+          input = {sql: $users_query}
+        } as $users_query_ds
+
         db.direct_query {
-          sql = "{{ $users_query }};"
+          sql = "{{ $users_query_ds }};"
           parser = "template_engine"
           response_type = "list"
         } as $users
