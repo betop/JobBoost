@@ -17,7 +17,7 @@ query "resume/chat" verb=POST {
   stack {
     // Model picked in the extension (Haiku 4.5 default; 5.5 cheaper); validated against the selectable list
     function.run "ai/resolve_model" {
-      input = {ai_model: $input.ai_model}
+      input = {ai_model: null}
     } as $ai_model_id
 
     precondition ($input.token != null) {
@@ -91,6 +91,24 @@ query "resume/chat" verb=POST {
       }
     }
   
+    // Model of the profile this chat belongs to (per-profile setting); default Haiku 4.5
+    conditional {
+      if ($billing_profile_id != null) {
+        db.get profile {
+          field_name = "id"
+          field_value = $billing_profile_id
+        } as $chat_profile
+
+        function.run "ai/resolve_model" {
+          input = {ai_model: $chat_profile.ai_model}
+        } as $chat_profile_model
+
+        var.update $ai_model_id {
+          value = $chat_profile_model
+        }
+      }
+    }
+
     function.run "credits/check_sufficient_balance" {
       input = {user_id: $user.id, profile_id: $billing_profile_id}
     } as $billing_check
@@ -462,6 +480,7 @@ No explanations needed, just answer the question based on the provided informati
     //   }
     // }
   
+    // Haiku 5.5 rejects the temperature parameter (set_conditional below); Haiku 4.5 keeps 0.5
     try_catch {
       try {
         api.request {
@@ -469,8 +488,9 @@ No explanations needed, just answer the question based on the provided informati
           method = "POST"
           params = {}
             |set:"model":$ai_model_id
+            |set:"thinking":({}|set:"type":"disabled")
             |set:"max_tokens":600
-            |set:"temperature":0.5
+            |set_conditional:"temperature":0.5:($ai_model_id != "claude-haiku-5-5")
             |set:"system":([]
               |push:({}
                 |set:"type":"text"
@@ -511,7 +531,7 @@ No explanations needed, just answer the question based on the provided informati
         }
 
         var.update $reply {
-          value = $anthropic_resp.response.result.content
+          value = ($anthropic_resp.response.result.content|filter:($$.type == "text"))
             |first
             |get:"text"
             |trim

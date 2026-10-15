@@ -24,6 +24,7 @@ query "profiles/{id}" verb=PUT {
     bool block_lead_roles?
     bool tailor_job_title?
     text allowed_languages?
+    text ai_model?
     text default_compensation?
     uuid billing_admin_id?
   }
@@ -300,6 +301,18 @@ query "profiles/{id}" verb=PUT {
       }
     }
   
+    conditional {
+      if ($input.ai_model != null) {
+        function.run "ai/resolve_model" {
+          input = {ai_model: $input.ai_model}
+        } as $new_ai_model
+
+        var.update $payload.ai_model {
+          value = $new_ai_model
+        }
+      }
+    }
+
     var $default_compensation_changed {
       value = $input.default_compensation|json_encode
     }

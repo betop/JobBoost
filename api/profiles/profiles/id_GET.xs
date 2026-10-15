@@ -179,6 +179,7 @@ query "profiles/{id}" verb=GET {
         block_lead_roles      : $p.block_lead_roles
         tailor_job_title      : $p.tailor_job_title
         allowed_languages     : $p.allowed_languages
+        ai_model              : $p.ai_model|first_notnull:"claude-haiku-4-5"
         default_compensation  : $p.default_compensation
         billing_admin_id      : $p.billing_admin_id
         billing_admin_name    : $billing_admin_name

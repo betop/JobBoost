@@ -11,6 +11,7 @@ import { templateVisibilityService } from "@/services/templateVisibilityService"
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import BillingAdminSelect from "@/components/BillingAdminSelect";
+import AiModelSelect from "@/components/AiModelSelect";
 import Input from "@/components/Input";
 import MultiSelect from "@/components/MultiSelect";
 import Button from "@/components/Button";
@@ -66,6 +67,7 @@ const profileSchema = z.object({
   block_lead_roles: z.boolean().optional().default(false),
   tailor_job_title: z.boolean().optional().default(true),
   allowed_languages: z.string().optional().default("English"),
+  ai_model: z.string().optional().default("claude-haiku-4-5"),
   default_compensation: z.string().optional(),
 });
 
@@ -125,6 +127,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       block_lead_roles: profile.block_lead_roles ?? false,
       tailor_job_title: profile.tailor_job_title ?? true,
       allowed_languages: profile.allowed_languages ?? "English",
+      ai_model: profile.ai_model ?? "claude-haiku-4-5",
       default_compensation: profile.default_compensation ?? "",
       education: profile.education?.length
         ? profile.education.map((e) => ({
@@ -425,6 +428,17 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
               Block lead-level and architect roles (don&apos;t generate a resume for jobs classified as &quot;lead&quot; seniority or with &quot;architect&quot; in the title)
             </label>
           )}
+        />
+      </div>
+
+      {/* AI Model */}
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">AI Model</h2>
+        <p className="text-sm text-gray-500 mb-4">The Claude model used to generate resumes, cover letters and chat answers for this profile. Applies to everyone who generates with this profile.</p>
+        <Controller
+          name="ai_model"
+          control={control}
+          render={({ field }) => <AiModelSelect value={field.value} onChange={field.onChange} />}
         />
       </div>
 

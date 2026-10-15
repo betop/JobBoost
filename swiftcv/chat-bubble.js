@@ -744,7 +744,7 @@
 
     // Load the user's SwiftCV token from storage
     const stored = await new Promise((resolve) =>
-      chrome.storage.local.get(["token", "lastLogId", "aiModel"], resolve)
+      chrome.storage.local.get(["token", "lastLogId"], resolve)
     );
     const token = stored.token;
     if (!token) {
@@ -777,7 +777,6 @@
     };
 
     if (stored.lastLogId) payload.log_id = stored.lastLogId;
-    if (stored.aiModel) payload.ai_model = stored.aiModel;
 
     if (isFirstMessage || attachedFiles.length > 0) {
       if (resumeFile)  payload.resume_base64        = resumeFile.base64;

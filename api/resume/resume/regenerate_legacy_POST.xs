@@ -16,7 +16,7 @@ query "resume/regenerate_legacy" verb=POST {
   stack {
     // Model picked in the extension (Haiku 4.5 default; 5.5 cheaper); validated against the selectable list
     function.run "ai/resolve_model" {
-      input = {ai_model: $input.ai_model}
+      input = {ai_model: null}
     } as $ai_model_id
 
     precondition ($input.log_id != null) {
@@ -38,6 +38,15 @@ query "resume/regenerate_legacy" verb=POST {
       field_name = "id"
       field_value = $log.profile_id
     } as $prof
+
+    // The model is a PER-PROFILE setting (admin panel -> profile); unknown/empty -> Haiku 4.5
+    function.run "ai/resolve_model" {
+      input = {ai_model: $prof.ai_model}
+    } as $profile_model
+
+    var.update $ai_model_id {
+      value = $profile_model
+    }
   
     precondition ($prof != null) {
       error_type = "notfound"
@@ -313,6 +322,7 @@ query "resume/regenerate_legacy" verb=POST {
           method = "POST"
           params = {}
             |set:"model":$ai_model_id
+            |set:"thinking":({}|set:"type":"disabled")
             |set:"max_tokens":6000
             |set:"system":$system_prompt
             |set:"messages":([]
@@ -334,7 +344,7 @@ query "resume/regenerate_legacy" verb=POST {
         }
       
         var.update $response_text {
-          value = $ai_resp.response.result.content|first|get:"text"
+          value = ($ai_resp.response.result.content|filter:($$.type == "text"))|first|get:"text"
         }
       
         // Save resume/cover letter content for reference

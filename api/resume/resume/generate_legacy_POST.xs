@@ -21,7 +21,7 @@ query "resume/generate_legacy" verb=POST {
   stack {
     // Model picked in the extension (Haiku 4.5 default; 5.5 cheaper); validated against the selectable list
     function.run "ai/resolve_model" {
-      input = {ai_model: $input.ai_model}
+      input = {ai_model: null}
     } as $ai_model_id
 
     precondition ($input.profile_id != null) {
@@ -240,6 +240,15 @@ query "resume/generate_legacy" verb=POST {
       field_name = "id"
       field_value = $input.profile_id
     } as $prof
+
+    // The model is a PER-PROFILE setting (admin panel -> profile); unknown/empty -> Haiku 4.5
+    function.run "ai/resolve_model" {
+      input = {ai_model: $prof.ai_model}
+    } as $profile_model
+
+    var.update $ai_model_id {
+      value = $profile_model
+    }
   
     precondition ($prof != null) {
       error_type = "notfound"
@@ -334,7 +343,8 @@ query "resume/generate_legacy" verb=POST {
                   method = "POST"
                   params = {}
                     |set:"model":$ai_model_id
-                    |set:"max_tokens":400
+                    |set:"thinking":({}|set:"type":"disabled")
+                    |set:"max_tokens":1500
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
@@ -349,7 +359,7 @@ query "resume/generate_legacy" verb=POST {
                 } as $extraction_resp
               
                 var.update $extraction_text {
-                  value = $extraction_resp.response.result.content|first|get:"text"
+                  value = ($extraction_resp.response.result.content|filter:($$.type == "text"))|first|get:"text"
                 }
               
                 var.update $extraction_input_tokens {
@@ -408,6 +418,33 @@ query "resume/generate_legacy" verb=POST {
               }
             }
           
+            // Models differ: Haiku 4.5 returns "true"/"false" strings, Haiku 5.5 returns JSON booleans.
+            // Normalize to the strings the checks below compare against.
+            var $bool_val {
+              value = null
+            }
+
+            conditional {
+              if ($extraction_json != null) {
+                foreach (["is_job_posting", "is_remote", "travels_or_relocation_required", "is_freelancer_marketplace_similar_to_toptal", "clearance_required", "is_federal_government_employer", "requires_in_person_interview"]) {
+                  each as $bool_key {
+                    var.update $bool_val {
+                      value = $extraction_json|get:$bool_key
+                    }
+
+                    conditional {
+                      // strict: a boolean false must not be treated as null
+                      if ($bool_val !== null) {
+                        var.update $extraction_json {
+                          value = $extraction_json|set:$bool_key:(($bool_val|json_encode)|replace:"\"":"")
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
             conditional {
               if ($extraction_json != null) {
                 var.update $company_name {
@@ -1313,6 +1350,7 @@ query "resume/generate_legacy" verb=POST {
               method = "POST"
               params = {}
                 |set:"model":$ai_model_id
+                |set:"thinking":({}|set:"type":"disabled")
                 |set:"max_tokens":6000
                 |set:"system":$system_prompt
                 |set:"messages":([]
@@ -1334,7 +1372,7 @@ query "resume/generate_legacy" verb=POST {
             }
           
             var.update $response_text {
-              value = $ai_resp.response.result.content|first|get:"text"
+              value = ($ai_resp.response.result.content|filter:($$.type == "text"))|first|get:"text"
             }
           
             // Save resume/cover letter content for reference

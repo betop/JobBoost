@@ -25,6 +25,7 @@ export interface Profile {
   block_lead_roles: boolean;
   tailor_job_title: boolean;
   allowed_languages: string;
+  ai_model?: string;
   default_compensation?: string;
   education: Education[];
   work_experience: WorkExperience[];
@@ -69,6 +70,7 @@ export interface CreateProfileInput {
   block_lead_roles?: boolean;
   tailor_job_title?: boolean;
   allowed_languages?: string;
+  ai_model?: string;
   default_compensation?: string;
   billing_admin_id?: string;
 }

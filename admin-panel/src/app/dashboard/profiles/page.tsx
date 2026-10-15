@@ -137,6 +137,7 @@ export default function ProfilesPage() {
         allowed_languages: full.allowed_languages,
         default_compensation: full.default_compensation,
         billing_admin_id: full.billing_admin_id ?? undefined,
+        ai_model: full.ai_model,
       });
     },
     onSuccess: () => {

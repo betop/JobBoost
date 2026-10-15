@@ -149,6 +149,7 @@ export const helpSections: HelpSection[] = [
       { text: "Resume sections: include or exclude Key Projects, Certifications and Awards & Recognition." },
       { text: "Generation API: an option to use the legacy generation API for this profile." },
       { text: "Job filtering: optionally block lead-level and architect roles (no resume is generated for them)." },
+      { text: "AI model: choose Claude Haiku 4.5 (recommended) or Haiku 5.5 (lower price) per profile; it applies to resumes, cover letters and chat for that profile." },
       { text: "Job title tailoring: when on, the header title and current position title are reworded to match each job description." },
       { text: "Allowed languages: job descriptions in other languages are rejected (default English)." },
       { text: "Default compensation: shown in the Assistant bubble when a job description has no pay information." },

@@ -74,19 +74,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     chrome.storage.local.set({ chatBubbleEnabled: chatToggle.checked });
   });
 
-  // ── AI model picker (everyone) ───────────────────────────────────────────
-  const DEFAULT_MODEL = "claude-haiku-4-5";
-  const modelRadios = document.querySelectorAll('input[name="aiModel"]');
-  chrome.storage.local.get(["aiModel"], (result) => {
-    const saved = result.aiModel || DEFAULT_MODEL;
-    modelRadios.forEach((r) => { r.checked = r.value === saved; });
-  });
-  modelRadios.forEach((r) => {
-    r.addEventListener("change", () => {
-      if (r.checked) chrome.storage.local.set({ aiModel: r.value });
-    });
-  });
-
   // ── Resume Only toggle (admin only) ──────────────────────────────────────
   const resumeOnlyRow = document.getElementById("resumeOnlyRow");
   const resumeOnlyToggle = document.getElementById("resumeOnlyToggle");

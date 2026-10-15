@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { aiModelLabel } from "@/utils/aiModels";
 import { useQuery } from "@tanstack/react-query";
 import { profileService } from "@/services/profileService";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -309,6 +310,13 @@ export default function ProfileViewPage() {
                     Block Lead Roles: {profile.block_lead_roles ? "On" : "Off"}
                   </span>
                 </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500">AI Model</p>
+                <p className="text-gray-900 font-medium">
+                  {aiModelLabel(profile.ai_model)}
+                </p>
               </div>
 
               <div>

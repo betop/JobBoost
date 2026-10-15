@@ -30,6 +30,7 @@ table profile {
     bool tailor_job_title?=true
     text allowed_languages?="English"
     text default_compensation?
+    text ai_model?="claude-haiku-4-5"
   }
 
   index = [

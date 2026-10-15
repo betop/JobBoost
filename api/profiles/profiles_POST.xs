@@ -22,6 +22,9 @@ query profiles verb=POST {
     bool block_lead_roles?
     bool tailor_job_title?
     text allowed_languages?
+    text ai_model? {
+      description = "Claude model used to generate for this profile (claude-haiku-4-5 | claude-haiku-5-5); default Haiku 4.5"
+    }
     text default_compensation?
     uuid billing_admin_id?
   }
@@ -91,6 +94,11 @@ query profiles verb=POST {
       }
     }
   
+    // Validate the chosen model (unknown / retired -> Haiku 4.5)
+    function.run "ai/resolve_model" {
+      input = {ai_model: $input.ai_model}
+    } as $profile_ai_model
+
     db.add profile {
       data = {
         created_at            : now
@@ -110,6 +118,7 @@ query profiles verb=POST {
         include_achievements  : ($input.include_achievements|json_encode) != "" ? $input.include_achievements : true
         use_legacy_api        : ($input.use_legacy_api|json_encode) != "" ? $input.use_legacy_api : false
         block_lead_roles      : ($input.block_lead_roles|json_encode) != "" ? $input.block_lead_roles : false
+        ai_model              : $profile_ai_model
         tailor_job_title      : ($input.tailor_job_title|json_encode) != "" ? $input.tailor_job_title : true
         allowed_languages     : ($input.allowed_languages != null && $input.allowed_languages != "") ? $input.allowed_languages : "English"
         default_compensation  : $input.default_compensation
