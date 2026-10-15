@@ -8,8 +8,6 @@ interface AiModelSelectProps {
   onChange: (model: string) => void;
 }
 
-const fmt = (n: number) => `$${n < 1 ? n.toFixed(2) : n.toFixed(0)}`;
-
 // Radio cards for choosing the Claude model of a profile ("Recommended" / "Lower price" tags).
 export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
   const selected = value || DEFAULT_AI_MODEL;
@@ -45,9 +43,6 @@ export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
               </span>
             </span>
             <span className="text-xs text-gray-500 pl-6">{m.description}</span>
-            <span className="text-xs text-gray-400 pl-6">
-              {fmt(m.price.input)} in / {fmt(m.price.output)} out per 1M tokens
-            </span>
           </label>
         );
       })}
