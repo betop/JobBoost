@@ -6,6 +6,7 @@ import { toZonedTime } from "date-fns-tz";
 import { Wallet, Plus, Minus, ExternalLink } from "lucide-react";
 import {
   creditsService,
+  type AdminCreditSummary,
   type UsageAppKey,
   type UsageTokens,
 } from "@/services/creditsService";
@@ -14,6 +15,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
+import DataTable, { type Column } from "@/components/DataTable";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { userService } from "@/services/userService";
 
@@ -521,6 +523,77 @@ export default function CreditsPage() {
     }
   };
 
+  const adminColumns: Column<AdminCreditSummary>[] = [
+    { key: "full_name", label: "Admin", sortable: true, render: (v: string) => <span className="font-medium text-gray-900">{v}</span> },
+    { key: "email", label: "Email", sortable: true },
+    {
+      key: "is_active",
+      label: "Status",
+      sortable: true,
+      filterOptions: [
+        { value: "true", label: "Active" },
+        { value: "false", label: "Inactive" },
+      ],
+      render: (v: boolean) =>
+        v ? (
+          <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Active</span>
+        ) : (
+          <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Inactive</span>
+        ),
+    },
+    {
+      key: "credit_balance",
+      label: "Balance",
+      sortable: true,
+      render: (v: number) => (
+        <span className={`font-semibold ${v < 0 ? "text-red-600" : "text-gray-900"}`}>{formatCurrency(v)}</span>
+      ),
+    },
+    {
+      key: "free_generations_remaining",
+      label: "Free left",
+      sortable: true,
+      render: (v: number | undefined) =>
+        (v ?? 0) > 0 ? (
+          <span className="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-800">{v}</span>
+        ) : (
+          <span className="text-gray-400">—</span>
+        ),
+    },
+    {
+      key: "usage_rate",
+      label: "Price rate",
+      sortable: true,
+      render: (v: number | null | undefined) =>
+        v != null ? (
+          <span className="font-semibold text-gray-900">{v}×</span>
+        ) : (
+          <span className="text-gray-400">Global{settings ? ` (${settings.usage_rate}×)` : ""}</span>
+        ),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      render: (_: unknown, a: AdminCreditSummary) => (
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <button
+            onClick={() => setAdjustTarget({ id: a.id, name: a.full_name })}
+            className="text-sm text-primary-600 hover:text-primary-800 font-medium"
+          >
+            Adjust
+          </button>
+          <span className="text-gray-300">|</span>
+          <button
+            onClick={() => openRateModal(a)}
+            className="text-sm text-primary-600 hover:text-primary-800 font-medium"
+          >
+            Set rate
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   if (isSuperAdmin) {
     return (
       <div className="space-y-6">
@@ -582,92 +655,16 @@ export default function CreditsPage() {
           }
         />
 
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Admin</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Free left</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Price rate</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {adminsLoading && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center">
-                    <LoadingSpinner size="md" />
-                  </td>
-                </tr>
-              )}
-              {!adminsLoading && adminsData?.items.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                    No admin accounts found
-                  </td>
-                </tr>
-              )}
-              {adminsData?.items.map((a) => (
-                <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{a.full_name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{a.email}</td>
-                  <td className="px-6 py-4 text-sm">
-                    {a.is_active ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Active</span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Inactive</span>
-                    )}
-                  </td>
-                  <td
-                    className={`px-6 py-4 text-sm text-right font-semibold ${
-                      a.credit_balance < 0 ? "text-red-600" : "text-gray-900"
-                    }`}
-                  >
-                    {formatCurrency(a.credit_balance)}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-right">
-                    {(a.free_generations_remaining ?? 0) > 0 ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-800">
-                        {a.free_generations_remaining}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-right whitespace-nowrap">
-                    {a.usage_rate != null ? (
-                      <span className="font-semibold text-gray-900">{a.usage_rate}×</span>
-                    ) : (
-                      <span className="text-gray-400">
-                        Global{settings ? ` (${settings.usage_rate}×)` : ""}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => setAdjustTarget({ id: a.id, name: a.full_name })}
-                      className="text-sm text-primary-600 hover:text-primary-800 font-medium"
-                    >
-                      Adjust
-                    </button>
-                    <span className="mx-2 text-gray-300">|</span>
-                    <button
-                      onClick={() => openRateModal(a)}
-                      className="text-sm text-primary-600 hover:text-primary-800 font-medium"
-                    >
-                      Set rate
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </div>
+        <DataTable<AdminCreditSummary>
+          persistKey="credits:admins"
+          persistToUrl={false}
+          data={adminsData?.items ?? []}
+          columns={adminColumns}
+          searchable
+          searchPlaceholder="Search admins..."
+          loading={adminsLoading}
+          defaultPageSize={10}
+        />
 
         <Modal
           isOpen={!!rateTarget}
