@@ -32,6 +32,8 @@ export interface AdminCreditSummary {
   is_approved: boolean;
   credit_balance: number;
   free_generations_remaining?: number;
+  /** Personal price rate; null/undefined = global default */
+  usage_rate?: number | null;
 }
 
 export interface DepositResponse {

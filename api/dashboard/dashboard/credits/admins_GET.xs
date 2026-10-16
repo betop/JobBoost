@@ -54,6 +54,7 @@ query "dashboard/credits/admins" verb=GET {
             is_approved: $full.is_approved,
             credit_balance: $bal,
             free_generations_remaining: $free
+            usage_rate: $full.usage_rate
           }
         }
 

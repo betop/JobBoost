@@ -15,6 +15,7 @@ import { useUIStore } from "@/store/uiStore";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { userService } from "@/services/userService";
 
 function formatCurrency(num: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -409,6 +410,46 @@ export default function CreditsPage() {
 
   const [usageAdminId, setUsageAdminId] = useState("");
 
+  // Per-admin price rate (super_admin only): blank = use the global rate
+  const [rateTarget, setRateTarget] = useState<{ id: string; name: string } | null>(null);
+  const [adminRateInput, setAdminRateInput] = useState("");
+  const [adminRateSaving, setAdminRateSaving] = useState(false);
+
+  const openRateModal = (a: { id: string; full_name: string; usage_rate?: number | null }) => {
+    setRateTarget({ id: a.id, name: a.full_name });
+    setAdminRateInput(a.usage_rate != null ? String(a.usage_rate) : "");
+  };
+
+  const handleSaveAdminRate = async () => {
+    if (!rateTarget) return;
+    const trimmed = adminRateInput.trim();
+    const payload: { usage_rate?: number; clear_usage_rate?: boolean } = {};
+    if (trimmed === "") {
+      payload.clear_usage_rate = true;
+    } else {
+      const rate = Number(trimmed);
+      if (!Number.isFinite(rate) || rate < 1 || rate > 10) {
+        showToast("Price rate must be between 1 and 10", "error");
+        return;
+      }
+      payload.usage_rate = rate;
+    }
+    setAdminRateSaving(true);
+    try {
+      await userService.update(rateTarget.id, payload);
+      queryClient.invalidateQueries({ queryKey: ["credits-admins"] });
+      showToast(
+        payload.clear_usage_rate ? `${rateTarget.name} now uses the global rate` : `${rateTarget.name}: price rate ${payload.usage_rate}x`,
+        "success"
+      );
+      setRateTarget(null);
+    } catch (err: any) {
+      showToast(err.response?.data?.message || "Failed to update price rate", "error");
+    } finally {
+      setAdminRateSaving(false);
+    }
+  };
+
   const [rateInput, setRateInput] = useState("");
   const [rateSaving, setRateSaving] = useState(false);
 
@@ -542,6 +583,7 @@ export default function CreditsPage() {
         />
 
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -550,20 +592,21 @@ export default function CreditsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Free left</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Price rate</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {adminsLoading && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center">
+                  <td colSpan={7} className="px-6 py-8 text-center">
                     <LoadingSpinner size="md" />
                   </td>
                 </tr>
               )}
               {!adminsLoading && adminsData?.items.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     No admin accounts found
                   </td>
                 </tr>
@@ -595,19 +638,71 @@ export default function CreditsPage() {
                       <span className="text-gray-400">—</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-sm text-right whitespace-nowrap">
+                    {a.usage_rate != null ? (
+                      <span className="font-semibold text-gray-900">{a.usage_rate}×</span>
+                    ) : (
+                      <span className="text-gray-400">
+                        Global{settings ? ` (${settings.usage_rate}×)` : ""}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
                     <button
                       onClick={() => setAdjustTarget({ id: a.id, name: a.full_name })}
                       className="text-sm text-primary-600 hover:text-primary-800 font-medium"
                     >
                       Adjust
                     </button>
+                    <span className="mx-2 text-gray-300">|</span>
+                    <button
+                      onClick={() => openRateModal(a)}
+                      className="text-sm text-primary-600 hover:text-primary-800 font-medium"
+                    >
+                      Set rate
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
+
+        <Modal
+          isOpen={!!rateTarget}
+          onClose={() => setRateTarget(null)}
+          title={`Price rate — ${rateTarget?.name ?? ""}`}
+          size="sm"
+        >
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-gray-600">
+              Multiplier applied to this admin&apos;s raw AI cost (1 – 10). Leave empty to use the global rate
+              {settings ? ` (${settings.usage_rate}×)` : ""}.
+            </p>
+            <div>
+              <label className="text-sm font-medium block mb-1">Price rate (×)</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                step="0.01"
+                value={adminRateInput}
+                onChange={(e) => setAdminRateInput(e.target.value)}
+                placeholder={settings ? `Global (${settings.usage_rate}×)` : "Global"}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="secondary" onClick={() => setRateTarget(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveAdminRate} loading={adminRateSaving}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </Modal>
 
         <Modal
           isOpen={!!adjustTarget}
