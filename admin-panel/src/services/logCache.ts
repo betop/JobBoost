@@ -16,7 +16,7 @@
 import type { GenerationLog } from "./logsService";
 
 const DB_NAME    = "jobboost_logs";
-const DB_VERSION = 4;          // v4: rows now carry server-computed est_cost_usd (flush cached rows without it)
+const DB_VERSION = 5;          // v5: rows carry ai_model for every role (flush cached rows without it)
 const STORE_LOGS = "logs";
 const STORE_META = "meta";
 

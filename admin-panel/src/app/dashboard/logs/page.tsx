@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { aiModelLabel } from "@/utils/aiModels";
 import { toZonedTime, format } from "date-fns-tz";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1827,6 +1828,7 @@ export default function LogsPage() {
                         { field: null,            label: "Job URL",     align: "left",  hidden: false },
                         { field: "position_title",label: "Position",    align: "left",  hidden: false },
                         { field: "company_name",  label: "Company",     align: "left",  hidden: false },
+                        { field: null,            label: "AI model",    align: "left",  hidden: false },
                         { field: null,            label: "Est. Cost",   align: "right", hidden: !isSuperAdmin },
                         { field: null,            label: "Actions",     align: "left",  hidden: false },
                       ] as { field: SortField | null; label: string; align: string; hidden: boolean }[]
@@ -2038,6 +2040,17 @@ export default function LogsPage() {
                         ) : (
                           <span className="text-gray-400 italic text-xs">—</span>
                         )}
+                      </td>
+
+                      {/* AI model */}
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 rounded-full font-semibold ${
+                            log.ai_model === "claude-haiku-5-5" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {aiModelLabel(log.ai_model)}
+                        </span>
                       </td>
 
                       {/* Est. Cost */}

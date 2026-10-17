@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AI_MODELS, aiModelLabel } from "@/utils/aiModels";
 import { useRouter } from "next/navigation";
 import { profileService, type Profile } from "@/services/profileService";
 import { userService, type User } from "@/services/userService";
@@ -195,6 +196,24 @@ export default function ProfilesPage() {
             <Tags className="w-3 h-3" />
             {codes.length} {codes.length === 1 ? "category" : "categories"}
           </button>
+        );
+      },
+    },
+    {
+      key: "ai_model",
+      label: "AI model",
+      sortable: true,
+      filterOptions: AI_MODELS.map((m) => ({ value: m.id, label: m.label })),
+      render: (value: string | null | undefined) => {
+        const isFive = value === "claude-haiku-5-5";
+        return (
+          <span
+            className={`px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${
+              isFive ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+            }`}
+          >
+            {aiModelLabel(value)}
+          </span>
         );
       },
     },
