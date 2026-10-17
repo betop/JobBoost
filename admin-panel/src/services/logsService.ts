@@ -140,6 +140,8 @@ export interface LogsFilters {
   period?: LogsPeriod;
   is_matched?: ("1" | "0" | "2" | "3" | "4" | "5" | "6")[];
   is_regenerated?: ("0" | "1")[];
+  /** Claude model id the generation used (client-side filter) */
+  ai_model?: string[];
 }
 
 export interface RegenerateResponse {

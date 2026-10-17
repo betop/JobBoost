@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { aiModelLabel } from "@/utils/aiModels";
+import { AI_MODELS, aiModelLabel } from "@/utils/aiModels";
 import { toZonedTime, format } from "date-fns-tz";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -906,6 +906,8 @@ export default function LogsPage() {
     if (regeneratedParam) {
       filterObj.is_regenerated = (regeneratedParam.split(",") as any) as ("0"|"1")[];
     }
+    const aiModelParam = params.get("ai_model");
+    if (aiModelParam) filterObj.ai_model = aiModelParam.split(",");
     if (Object.keys(filterObj).length > 0) {
       setFilters(filterObj);
     } else if (stored?.filters) {
@@ -1301,9 +1303,10 @@ export default function LogsPage() {
       if (filters.profile_id && filters.profile_id.length > 0 && !filters.profile_id.includes(log.profile_id)) return false;
       if (filters.is_matched && filters.is_matched.length > 0 && !filters.is_matched.includes(String(log.is_matched) as any)) return false;
       if (filters.is_regenerated && filters.is_regenerated.length > 0 && !filters.is_regenerated.includes(String(log.is_regenerated) as any)) return false;
+      if (filters.ai_model && filters.ai_model.length > 0 && !filters.ai_model.includes(log.ai_model || "claude-haiku-4-5")) return false;
       return true;
     });
-  }, [allRows, filters.user_id, filters.profile_id, filters.is_matched, filters.is_regenerated]);
+  }, [allRows, filters.user_id, filters.profile_id, filters.is_matched, filters.is_regenerated, filters.ai_model]);
 
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1678,11 +1681,23 @@ export default function LogsPage() {
           }}
         />
 
-        {((filters.user_id?.length ?? 0) + (filters.profile_id?.length ?? 0) + (filters.is_matched?.length ?? 0) + (filters.is_regenerated?.length ?? 0) > 0) && (
+        <CheckboxDropdown
+          label="AI model"
+          options={AI_MODELS.map((m) => ({ value: m.id, label: m.label }))}
+          selected={(filters.ai_model ?? []) as string[]}
+          disabled={logsLoading}
+          onChange={(next) => {
+            setFilters((f) => ({ ...f, ai_model: next.length > 0 ? next : undefined } as LogsFilters));
+            setPage(1);
+            updateQueryParams({ ai_model: next.length > 0 ? next.join(",") : undefined, page: 1 });
+          }}
+        />
+
+        {((filters.user_id?.length ?? 0) + (filters.profile_id?.length ?? 0) + (filters.is_matched?.length ?? 0) + (filters.is_regenerated?.length ?? 0) + (filters.ai_model?.length ?? 0) > 0) && (
           <button
             onClick={() => {
               setFilters({});
-              updateQueryParams({ user_id: undefined, profile_id: undefined, is_matched: undefined, is_regenerated: undefined, page: 1 });
+              updateQueryParams({ user_id: undefined, profile_id: undefined, is_matched: undefined, is_regenerated: undefined, ai_model: undefined, page: 1 });
               setPage(1);
             }}
             className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-2.5 py-2 self-end transition-colors"
