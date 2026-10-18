@@ -111,60 +111,45 @@ query "profiles/{id}" verb=PUT {
       }
     }
   
-    var $phone_changed {
-      value = $input.phone|json_encode
-    }
   
     conditional {
-      if ($phone_changed != "") {
+      if ($input.phone != null) {
         var.update $payload.phone_number {
           value = $input.phone
         }
       }
     }
   
-    var $location_changed {
-      value = $input.location|json_encode
-    }
   
     conditional {
-      if ($location_changed != "") {
+      if ($input.location != null) {
         var.update $payload.location {
           value = $input.location
         }
       }
     }
   
-    var $linkedin_changed {
-      value = $input.linkedin|json_encode
-    }
   
     conditional {
-      if ($linkedin_changed != "") {
+      if ($input.linkedin != null) {
         var.update $payload.linkedin_url {
           value = $input.linkedin
         }
       }
     }
   
-    var $github_changed {
-      value = $input.github|json_encode
-    }
   
     conditional {
-      if ($github_changed != "") {
+      if ($input.github != null) {
         var.update $payload.github_url {
           value = $input.github
         }
       }
     }
   
-    var $job_category_changed {
-      value = $input.job_category|json_encode
-    }
   
     conditional {
-      if ($job_category_changed != "") {
+      if ($input.job_category != null) {
         var.update $payload.job_category {
           value = $input.job_category
         }
@@ -317,12 +302,9 @@ query "profiles/{id}" verb=PUT {
       }
     }
 
-    var $default_compensation_changed {
-      value = $input.default_compensation|json_encode
-    }
   
     conditional {
-      if ($default_compensation_changed != "") {
+      if ($input.default_compensation != null) {
         var.update $payload.default_compensation {
           value = $input.default_compensation
         }
@@ -432,7 +414,7 @@ query "profiles/{id}" verb=PUT {
     }
 
     conditional {
-      if ($input.education != null) {
+      if ((($input.education|first_notnull:[])|count) > 0) {
         db.query education {
           where = $db.education.profile_id == $p.id
           return = {type: "list"}
@@ -468,7 +450,7 @@ query "profiles/{id}" verb=PUT {
     }
   
     conditional {
-      if ($input.work_experience != null) {
+      if ((($input.work_experience|first_notnull:[])|count) > 0) {
         db.query work_experience {
           where = $db.work_experience.profile_id == $p.id
           return = {type: "list"}
