@@ -14,6 +14,7 @@ query profiles verb=POST {
     text github?
     text job_category?
     json education
+    json certifications?
     json work_experience
     bool include_key_projects?
     bool include_certifications?
@@ -161,6 +162,25 @@ query profiles verb=POST {
       }
     }
   
+    conditional {
+      if ($input.certifications != null) {
+        foreach ($input.certifications) {
+          each as $cert {
+            db.add certification {
+              data = {
+                created_at : now
+                profile_id : $p.id
+                name       : $cert.name
+                issuer     : $cert.issuer
+                issued_date: $cert.date
+                updated_at : now
+              }
+            } as $new_cert
+          }
+        }
+      }
+    }
+
     foreach ($input.education) {
       each as $e {
         db.add education {

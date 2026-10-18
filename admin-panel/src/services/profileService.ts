@@ -1,5 +1,12 @@
 import api from "./api";
 
+export interface Certification {
+  id?: string;
+  name?: string;
+  issuer?: string;
+  date?: string;
+}
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -26,6 +33,7 @@ export interface Profile {
   tailor_job_title: boolean;
   allowed_languages: string;
   ai_model?: string;
+  certifications?: Certification[];
   default_compensation?: string;
   education: Education[];
   work_experience: WorkExperience[];
@@ -71,6 +79,8 @@ export interface CreateProfileInput {
   tailor_job_title?: boolean;
   allowed_languages?: string;
   ai_model?: string;
+  certifications?: Certification[];
+  clear_certifications?: boolean;
   default_compensation?: string;
   billing_admin_id?: string;
 }

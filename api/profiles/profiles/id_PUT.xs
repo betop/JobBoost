@@ -15,6 +15,10 @@ query "profiles/{id}" verb=PUT {
     text job_category?
     int resume_template?
     json education?
+    json certifications?
+    bool clear_certifications? {
+      description = "Set true to remove all of the profile's certifications (an empty list alone never clears them)"
+    }
     json work_experience?
     bool include_key_projects?
     bool include_certifications?
@@ -372,6 +376,61 @@ query "profiles/{id}" verb=PUT {
       }
     }
   
+    // Certifications: replace the list only when the caller sends some, or explicitly clears it.
+    // An omitted field arrives as an empty list, so an empty list alone must NOT delete anything.
+    var $replace_certs {
+      value = false
+    }
+
+    conditional {
+      if ((($input.certifications|first_notnull:[])|count) > 0) {
+        var.update $replace_certs {
+          value = true
+        }
+      }
+    }
+
+    conditional {
+      if ($input.clear_certifications == true) {
+        var.update $replace_certs {
+          value = true
+        }
+      }
+    }
+
+    conditional {
+      if ($replace_certs) {
+        db.query certification {
+          where = $db.certification.profile_id == $p.id
+          return = {type: "list"}
+        } as $cert_list
+
+        foreach ($cert_list) {
+          each as $old_cert {
+            db.del certification {
+              field_name = "id"
+              field_value = $old_cert.id
+            }
+          }
+        }
+
+        foreach ($input.certifications) {
+          each as $cd {
+            db.add certification {
+              data = {
+                created_at : now
+                profile_id : $p.id
+                name       : $cd.name
+                issuer     : $cd.issuer
+                issued_date: $cd.date
+                updated_at : now
+              }
+            } as $new_cert
+          }
+        }
+      }
+    }
+
     conditional {
       if ($input.education != null) {
         db.query education {
@@ -451,6 +510,29 @@ query "profiles/{id}" verb=PUT {
       return = {type: "list"}
     } as $education
   
+    db.query certification {
+      where = $db.certification.profile_id == $p.id
+      sort = {certification.created_at: "asc"}
+      return = {type: "list"}
+    } as $certifications
+
+    var $certifications_out {
+      value = []
+    }
+
+    foreach ($certifications) {
+      each as $cr {
+        array.push $certifications_out {
+          value = {
+            id    : $cr.id
+            name  : $cr.name
+            issuer: $cr.issuer
+            date  : $cr.issued_date
+          }
+        }
+      }
+    }
+
     db.query work_experience {
       where = $db.work_experience.profile_id == $p.id
       sort = {work_experience.start_date: "desc"}
@@ -512,6 +594,7 @@ query "profiles/{id}" verb=PUT {
     created_at     : $p.created_at
     billing_admin_id: $p.billing_admin_id
     education      : $education_out
+    certifications : $certifications_out
     work_experience: $work_out
   }
 

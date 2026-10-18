@@ -11,6 +11,7 @@ import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import BillingAdminSelect from "@/components/BillingAdminSelect";
 import AiModelSelect from "@/components/AiModelSelect";
+import CertificationFields from "@/components/CertificationFields";
 import Input from "@/components/Input";
 import MultiSelect from "@/components/MultiSelect";
 import Button from "@/components/Button";
@@ -64,6 +65,7 @@ const profileSchema = z.object({
   tailor_job_title: z.boolean().optional().default(true),
   allowed_languages: z.string().optional().default("English"),
   ai_model: z.string().optional().default("claude-haiku-4-5"),
+  certifications: z.array(z.object({ name: z.string().optional(), issuer: z.string().optional(), date: z.string().optional() })).optional().default([]),
   default_compensation: z.string().optional(),
 });
 
@@ -97,6 +99,7 @@ export default function NewProfilePage() {
       tailor_job_title: true,
       allowed_languages: "English",
       ai_model: "claude-haiku-4-5",
+      certifications: [],
       default_compensation: "",
     },
   });
@@ -154,6 +157,7 @@ export default function NewProfilePage() {
     }
     const payload = {
       ...data,
+      certifications: (data.certifications ?? []).filter((c) => (c.name ?? "").trim() !== "").map((c) => ({ name: (c.name ?? "").trim(), issuer: c.issuer, date: c.date })),
       billing_admin_id: isSuperAdmin ? billingAdminId : undefined,
       linkedin: data.linkedin || undefined,
       github: data.github || undefined,
@@ -447,6 +451,9 @@ export default function NewProfilePage() {
             )}
           />
         </div>
+
+        {/* Certifications */}
+        <CertificationFields control={control} register={register} />
 
         {/* AI Model */}
         <div>

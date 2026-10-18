@@ -12,6 +12,7 @@ import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import BillingAdminSelect from "@/components/BillingAdminSelect";
 import AiModelSelect from "@/components/AiModelSelect";
+import CertificationFields from "@/components/CertificationFields";
 import Input from "@/components/Input";
 import MultiSelect from "@/components/MultiSelect";
 import Button from "@/components/Button";
@@ -68,6 +69,7 @@ const profileSchema = z.object({
   tailor_job_title: z.boolean().optional().default(true),
   allowed_languages: z.string().optional().default("English"),
   ai_model: z.string().optional().default("claude-haiku-4-5"),
+  certifications: z.array(z.object({ name: z.string().optional(), issuer: z.string().optional(), date: z.string().optional() })).optional().default([]),
   default_compensation: z.string().optional(),
 });
 
@@ -128,6 +130,7 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       tailor_job_title: profile.tailor_job_title ?? true,
       allowed_languages: profile.allowed_languages ?? "English",
       ai_model: profile.ai_model ?? "claude-haiku-4-5",
+      certifications: (profile.certifications ?? []).map((c) => ({ name: c.name, issuer: c.issuer ?? "", date: c.date ?? "" })),
       default_compensation: profile.default_compensation ?? "",
       education: profile.education?.length
         ? profile.education.map((e) => ({
@@ -177,8 +180,12 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
       setBillingAdminError("Billing admin is required");
       return;
     }
+    // Certifications: an empty list is an explicit "remove all" (clear_certifications), not "leave unchanged"
+    const certifications = (data.certifications ?? []).filter((c) => (c.name ?? "").trim() !== "").map((c) => ({ name: (c.name ?? "").trim(), issuer: c.issuer, date: c.date }));
     const payload = {
       ...data,
+      certifications,
+      clear_certifications: certifications.length === 0,
       resume_template: data.resume_template ?? 11,
       ...(isSuperAdmin && billingAdminId !== initialBillingAdminId
         ? { billing_admin_id: billingAdminId }
@@ -430,6 +437,9 @@ function EditProfileForm({ profile, id }: { profile: Profile; id: string }) {
           )}
         />
       </div>
+
+      {/* Certifications */}
+      <CertificationFields control={control} register={register} />
 
       {/* AI Model */}
       <div>

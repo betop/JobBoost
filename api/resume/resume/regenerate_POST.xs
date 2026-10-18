@@ -134,6 +134,37 @@ query "resume/regenerate" verb=POST {
       return = {type: "list"}
     } as $work
   
+    db.query certification {
+      where = $db.certification.profile_id == $prof.id
+      sort = {certification.created_at: "asc"}
+      return = {type: "list"}
+    } as $user_certs
+
+    // Candidate-provided certifications, one per line (empty = the AI proposes them as before)
+    var $cert_text {
+      value = ""
+    }
+
+    foreach ($user_certs) {
+      each as $uc {
+        var.update $cert_text {
+          value = $cert_text ~ "- " ~ ($uc.name|first_notnull:"") ~ " | " ~ ($uc.issuer|first_notnull:"") ~ " | " ~ ($uc.issued_date|first_notnull:"") ~ "\n"
+        }
+      }
+    }
+
+    var $cert_block {
+      value = ""
+    }
+
+    conditional {
+      if (($user_certs|count) > 0) {
+        var.update $cert_block {
+          value = "\nCERTIFICATIONS (candidate-provided, use exactly these):\n" ~ $cert_text
+        }
+      }
+    }
+
     db.query education {
       where = $db.education.profile_id == $prof.id
       sort = {education.start_date: "asc"}
@@ -475,6 +506,14 @@ Return only fully compliant JSON.
 Remember today's year is 2026.
 """
     }
+
+    conditional {
+      if (($user_certs|count) > 0) {
+        var.update $system_prompt {
+          value = $system_prompt ~ "\n\n========================================================\nCANDIDATE CERTIFICATIONS OVERRIDE\n========================================================\n\nThe candidate has provided their own certifications (CERTIFICATIONS in the candidate profile). This OVERRIDES the CERTIFICATIONS RULE above: the certifications section MUST contain exactly the candidate-provided certifications, with their name, issuer and date exactly as entered (do not shorten or reformat any part). Do NOT add, invent, or replace them with other certifications."
+        }
+      }
+    }
   
     // Per-profile opt-out: substitute the title-tailoring rule text based on
     // $prof.tailor_job_title (default true). When disabled, the header title and
@@ -553,7 +592,7 @@ Remember today's year is 2026.
                 |set:"content":([]
                   |push:({}
                     |set:"type":"text"
-                    |set:"text":"Generate a full tailored resume only.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $resume_schema
+                    |set:"text":"Generate a full tailored resume only.\n\nCANDIDATE PROFILE:\n\nFull Name: " ~ $prof.full_name ~ "\nEmail: " ~ $prof.email ~ "\nPhone: " ~ $prof.phone_number ~ "\nLocation: " ~ $prof.location ~ "\nLinkedIn: " ~ $prof.linkedin_url ~ "\nGitHub: " ~ $prof.github_url ~ "\nTarget Category: " ~ $prof.job_category ~ "\n\nWORK EXPERIENCE:\n" ~ $work_text ~ "\nEDUCATION:\n" ~ $edu_text ~ $cert_block ~ "\n\nReturn EXACTLY this JSON structure:\n\n" ~ $resume_schema
                     |set:"cache_control":({}|set:"type":"ephemeral"|set:"ttl":"1h")
                   )
                   |push:({}

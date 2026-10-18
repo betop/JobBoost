@@ -70,6 +70,29 @@ query "profiles/{id}" verb=GET {
       return = {type: "list"}
     } as $education
   
+    db.query certification {
+      where = $db.certification.profile_id == $p.id
+      sort = {certification.created_at: "asc"}
+      return = {type: "list"}
+    } as $certifications
+
+    var $certifications_out {
+      value = []
+    }
+
+    foreach ($certifications) {
+      each as $cr {
+        array.push $certifications_out {
+          value = {
+            id    : $cr.id
+            name  : $cr.name
+            issuer: $cr.issuer
+            date  : $cr.issued_date
+          }
+        }
+      }
+    }
+
     db.query work_experience {
       where = $db.work_experience.profile_id == $p.id
       sort = {work_experience.start_date: "desc"}
@@ -188,6 +211,7 @@ query "profiles/{id}" verb=GET {
         hide                  : $p.hide
         updated_at            : $p.updated_at
         education             : $education_out
+    certifications        : $certifications_out
         work_experience       : $work_out
       }
     }
