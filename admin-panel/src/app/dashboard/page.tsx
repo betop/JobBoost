@@ -16,8 +16,7 @@ import {
 } from "lucide-react";
 import { dashboardService } from "@/services/dashboardService";
 import { creditsService, type UsageAppKey } from "@/services/creditsService";
-import * as logCache from "@/services/logCache";
-import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
+import { logsService, toStartOfDayEST, toEndOfDayEST, type LogsSummaryResponse } from "@/services/logsService";
 import { useAuthStore } from "@/store/authStore";
 
 const EST = "America/New_York";
@@ -156,6 +155,22 @@ function Alert({
   );
 }
 
+/** Outcome counts for the dashboard panel, from the server summary (same keys as before). */
+function toOutcomeStats(sum: LogsSummaryResponse) {
+  const b = sum.by_status ?? {};
+  return {
+    total_generations: sum.total ?? 0,
+    matched_count: b.matched ?? 0,
+    mismatched_count: b.mismatched ?? 0,
+    skipped_count: b.skipped ?? 0,
+    duplicated_count: b.duplicated ?? 0,
+    not_jd_count: b.not_jd ?? 0,
+    reposted_count: b.reposted ?? 0,
+    error_count: b.error ?? 0,
+    applied_count: sum.applied ?? 0,
+  };
+}
+
 export default function DashboardPage() {
   const admin = useAuthStore((state) => state.admin);
   const isSuper = admin?.type === "super_admin";
@@ -198,7 +213,10 @@ export default function DashboardPage() {
 
   const logQ = useQuery({
     queryKey: ["logs-stats-dashboard", from, today],
-    queryFn: () => logCache.computeStats(toStartOfDayEST(from), toEndOfDayEST(today)),
+    queryFn: () =>
+      logsService
+        .summary({ date_from: toStartOfDayEST(from), date_to: toEndOfDayEST(today) })
+        .then(toOutcomeStats),
     enabled: ready,
     staleTime: 30_000,
   });

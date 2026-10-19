@@ -4,9 +4,8 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { AI_MODELS, aiModelLabel } from "@/utils/aiModels";
 import { toZonedTime, format } from "date-fns-tz";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { logsService, LogsFilters, GenerationLog } from "@/services/logsService";
-import * as logCache from "@/services/logCache";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { logsService, LogsFilters, LogsQuery, GenerationLog } from "@/services/logsService";
 import { toStartOfDayEST, toEndOfDayEST } from "@/services/logsService";
 import { downloadResumePDF } from "@/utils/pdfDownload";
 import { downloadResumeDocx } from "@/utils/docxDownload";
@@ -15,7 +14,6 @@ import { profileService } from "@/services/profileService";
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { readSessionState, writeSessionState } from "@/utils/sessionState";
 import {
   Activity,
   ExternalLink,
@@ -844,24 +842,39 @@ export default function LogsPage() {
 
   // Get today's date as YYYY-MM-DD in EST
   const today = todayInEST();
-  
-  // Date range state — only these trigger API calls
-  const [statsPeriod, setStatsPeriod] = useState<LogsPeriod>("today");
-  const [dateFrom, setDateFrom] = useState<number | undefined>(() => new Date(toStartOfDayEST(today)).getTime());
-  const [dateTo, setDateTo] = useState<number | undefined>(() => new Date(toEndOfDayEST(today)).getTime());
-  // Pending dates: updated as user types, applied only on Check button click
-  const [pendingFrom, setPendingFrom] = useState(today);
-  const [pendingTo, setPendingTo] = useState(today);
 
-  // Client-side filters — these do NOT trigger API calls
-  const [filters, setFilters] = useState<LogsFilters>({});
+  const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
+  const DEFAULT_PAGE_SIZE = 50;
+  // Pages stay cached for this long; going back to a viewed page is served from the cache
+  const CACHE_STALE_MS = 5 * 60 * 1000;
+  const CACHE_GC_MS = 30 * 60 * 1000;
 
-  // Table state
-  const [search, setSearch]         = useState("");
-  const [sortField, setSortField]   = useState<SortField>("created_at");
-  const [sortDir, setSortDir]       = useState<SortDir>("desc");
-  const [page, setPage]             = useState(1);
-  const [pageSize, setPageSize]     = useState(25);
+  // ── Table state lives in the URL: page, size, sort, search, period and filters ──
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const pageSizeParam = Number(searchParams.get("size"));
+  const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(pageSizeParam) ? pageSizeParam : DEFAULT_PAGE_SIZE;
+  const sortField = ((searchParams.get("sortField") as SortField) || "created_at");
+  const sortDir = ((searchParams.get("sortDir") as SortDir) || "desc");
+  const search = searchParams.get("search") ?? "";
+  const statsPeriod = ((searchParams.get("statsPeriod") as LogsPeriod) || "today");
+  const customFrom = searchParams.get("date_from") ?? undefined;
+  const customTo = searchParams.get("date_to") ?? undefined;
+
+  const filters: LogsFilters = useMemo(() => {
+    const list = (key: string) => {
+      const v = searchParams.get(key);
+      return v ? v.split(",") : undefined;
+    };
+    return {
+      profile_id: list("profile_id"),
+      user_id: list("user_id"),
+      is_matched: list("is_matched") as LogsFilters["is_matched"],
+      is_regenerated: list("is_regenerated") as LogsFilters["is_regenerated"],
+      ai_model: list("ai_model"),
+    };
+  }, [searchParams]);
+
+  const isSuperAdmin = admin?.type === "super_admin";
 
   // Modal state
   const [jobDetailsLog, setJobDetailsLog]     = useState<GenerationLog | null>(null);
@@ -870,253 +883,150 @@ export default function LogsPage() {
   const [downloadingDocxLogId, setDownloadingDocxLogId] = useState<string | null>(null);
   const [reasonLog, setReasonLog]             = useState<GenerationLog | null>(null);
   const [isRefreshing, setIsRefreshing]       = useState(false);
-  // const [isRecovering, setIsRecovering]       = useState(false);
 
-  const isSuperAdmin = admin?.type === "super_admin";
-
-  // Load state from URL on mount, falling back to IndexedDB-persisted filter
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    const stored = readSessionState<StoredLogsTableState>("logs");
-    
-    if (params.get("search")) setSearch(params.get("search") || "");
-    else if (stored?.search) setSearch(stored.search);
-    if (params.get("sortField")) setSortField((params.get("sortField") as SortField) || "created_at");
-    else if (stored?.sortField) setSortField(stored.sortField);
-    if (params.get("sortDir")) setSortDir((params.get("sortDir") as SortDir) || "desc");
-    else if (stored?.sortDir) setSortDir(stored.sortDir);
-    if (params.get("page")) setPage(Number(params.get("page")) || 1);
-    else if (stored?.page) setPage(stored.page);
-    if (params.get("pageSize")) setPageSize(Number(params.get("pageSize")) || 25);
-    else if (stored?.pageSize) setPageSize(stored.pageSize);
-    
-    const urlPeriod = params.get("statsPeriod") as LogsPeriod | null;
-
-    // Load client-side filters
-    const filterObj: LogsFilters = {};
-    const userParam = params.get("user_id");
-    if (userParam) filterObj.user_id = userParam.split(",");
-    const profileParam = params.get("profile_id");
-    if (profileParam) filterObj.profile_id = profileParam.split(",");
-    const matchedParam = params.get("is_matched");
-    if (matchedParam) {
-      filterObj.is_matched = (matchedParam.split(",") as any) as ("1"|"0"|"2"|"3"|"4"|"5"|"6")[];
-    }
-    const regeneratedParam = params.get("is_regenerated");
-    if (regeneratedParam) {
-      filterObj.is_regenerated = (regeneratedParam.split(",") as any) as ("0"|"1")[];
-    }
-    const aiModelParam = params.get("ai_model");
-    if (aiModelParam) filterObj.ai_model = aiModelParam.split(",");
-    if (Object.keys(filterObj).length > 0) {
-      setFilters(filterObj);
-    } else if (stored?.filters) {
-      setFilters(stored.filters);
-    }
-
-    if (urlPeriod) {
-      // URL has an explicit period — use it
-      setStatsPeriod(urlPeriod);
-      const customFrom = params.get("date_from") ?? undefined;
-      const customTo   = params.get("date_to")   ?? undefined;
-      const range = getESTDateRange(urlPeriod, customFrom, customTo);
-      if (range) {
-        setDateFrom(new Date(toStartOfDayEST(range.from)).getTime());
-        setDateTo(new Date(toEndOfDayEST(range.to)).getTime());
-      } else {
-        setDateFrom(undefined);
-        setDateTo(undefined);
-      }
-      setDatesReady(true);
-    } else {
-      // No URL period — restore from IndexedDB
-      logCache.getDateFilter().then((saved) => {
-        const period = (saved?.period as LogsPeriod) ?? "today";
-        setStatsPeriod(period);
-        if (saved?.dateFrom !== undefined) {
-          setDateFrom(saved.dateFrom ? new Date(toStartOfDayEST(saved.dateFrom)).getTime() : undefined);
-          setDateTo(saved.dateTo ? new Date(toEndOfDayEST(saved.dateTo)).getTime() : undefined);
-          setPendingFrom(saved.dateFrom);
-          setPendingTo(saved.dateTo);
-        } else {
-          const range = getESTDateRange(period);
-          if (range) { setDateFrom(new Date(toStartOfDayEST(range.from)).getTime()); setDateTo(new Date(toEndOfDayEST(range.to)).getTime()); setPendingFrom(range.from); setPendingTo(range.to); }
-          else { setDateFrom(undefined); setDateTo(undefined); }
-        }
-        setDatesReady(true);
-      });
-    }
-  }, []);
-
-  const [tableHydrated, setTableHydrated] = useState(false);
-  useEffect(() => {
-    setTableHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!tableHydrated) return;
-    writeSessionState<StoredLogsTableState>("logs", {
-      search,
-      sortField,
-      sortDir,
-      page,
-      pageSize,
-      filters,
-    });
-  }, [tableHydrated, search, sortField, sortDir, page, pageSize, filters]);
-
-  // Update URL when state changes
+  // Update the URL (keeps every other param); page-level state derives from it
   const updateQueryParams = (updates: Record<string, string | number | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
-    
     Object.entries(updates).forEach(([key, value]) => {
-      if (value === undefined || value === "" || value === null) {
-        params.delete(key);
-      } else {
-        params.set(key, String(value));
-      }
+      if (value === undefined || value === "" || value === null) params.delete(key);
+      else params.set(key, String(value));
     });
-    
     router.push(`?${params.toString()}`, { scroll: false } as any);
   };
 
-  // ── Cache-driven log state ──
-  // `cachedRows` is the slice of the global cache visible for the current date range.
-  // It updates whenever the cache is refreshed by the fetch effect below.
-  const [cachedRows, setCachedRows]     = useState<GenerationLog[]>([]);
-  const [logsLoading, setLogsLoading]   = useState(false);
-  const [datesReady, setDatesReady]     = useState(false);
-  const hasFetchedRef                   = useRef(false);
+  const setPage = (n: number) => updateQueryParams({ page: n });
+  const setPageSize = (n: number) => updateQueryParams({ size: n, page: 1 });
 
-  /**
-   * Reads the current cache slice for the active date window into state.
-   * Called after every successful fetch/merge.
-   */
-  const flushCacheToState = useCallback(async (from: number | undefined, to: number | undefined) => {
-    const fromISO = from ? new Date(from).toISOString() : undefined;
-    const toISO   = to   ? new Date(to).toISOString()   : undefined;
-    const records = await logCache.getCachedRecords(fromISO, toISO);
-    setCachedRows(records);
-  }, []);
+  // Date range (EST) from the period in the URL
+  const activeRange = getESTDateRange(statsPeriod, customFrom, customTo);
+  const rangeFrom = activeRange?.from ?? "";
+  const rangeTo = activeRange?.to ?? "";
+  const dateFromMs = activeRange ? new Date(toStartOfDayEST(activeRange.from)).getTime() : undefined;
+  const dateToMs = activeRange ? new Date(toEndOfDayEST(activeRange.to)).getTime() : undefined;
 
-  // `from` / `to`: a number = explicit bound, `null` = explicitly unbounded (the "All time" tab),
-  // `undefined` = use the current state. (Passing undefined for "All time" used to fall back to the
-  // stale state, e.g. the previous "Today" range, until the tab was clicked a second time.)
-  async function doFetch(from?: number | null, to?: number | null) {
-    // Only the last 6 months are ever loaded or kept in the local cache
-    const cutoffMs = logCache.getRetentionCutoffMs();
-    const requestedFrom = from === undefined ? dateFrom : (from ?? undefined);
-    const effectiveFrom = Math.max(requestedFrom ?? 0, cutoffMs);
-    const effectiveTo   = to === undefined ? dateTo : (to ?? undefined);
-    setLogsLoading(true);
-    await logCache.pruneOldRecords();
-    const lastSync = await logCache.getLastSyncAt();
-    const coveredFrom = await logCache.getCoveredFrom();
-
-    // Only fetch what the visible window needs (plus a 7-day buffer). Everything older is
-    // pulled lazily when the user widens the range, so a fresh device loads a small payload.
-    const BUFFER_MS = 7 * 24 * 60 * 60 * 1000;
-    const needFromMs = Math.max(cutoffMs, effectiveFrom - BUFFER_MS);
-    const needFromISO = needFromMs > 0 ? new Date(needFromMs).toISOString() : "";
-
-    try {
-      let failed = 0;
-      if (lastSync && coveredFrom !== null) {
-        // Delta: listDelta handles mergeRecords + setLastSyncAt internally
-        await logsService.listDelta(lastSync);
-        await flushCacheToState(effectiveFrom, effectiveTo);
-
-        // Gap fill: the window reaches further back than what is cached
-        const coveredMs = coveredFrom === "" ? 0 : new Date(coveredFrom).getTime();
-        if (coveredMs > needFromMs) {
-          const res = await logsService.listAllPages(
-            async () => { await flushCacheToState(effectiveFrom, effectiveTo); },
-            500,
-            { from: needFromISO || undefined, to: coveredFrom || undefined },
-          );
-          failed = res.failedOffsets.length;
-          if (failed === 0) await logCache.setCoveredFrom(needFromISO);
-        }
-      } else {
-        // First load on this device: only the visible window, flushed page-by-page
-        const res = await logsService.listAllPages(
-          async () => { await flushCacheToState(effectiveFrom, effectiveTo); },
-          500,
-          { from: needFromISO || undefined },
-        );
-        failed = res.failedOffsets.length;
-        if (failed === 0) await logCache.setCoveredFrom(needFromISO);
-      }
-      if (failed > 0) {
-        showToast(`Loaded logs, but ${failed} page(s) failed to fetch. Try Hard Refresh to retry.`, "error");
-      }
-
-      await flushCacheToState(effectiveFrom, effectiveTo);
-    } catch (err: unknown) {
-      if ((err as { name?: string })?.name === "AbortError") return;
-      console.error("[LogsPage] fetch error", err);
-    } finally {
-      setLogsLoading(false);
-    }
-  }
-
+  // Custom date inputs: applied only when the user clicks Check
+  const [pendingFrom, setPendingFrom] = useState(today);
+  const [pendingTo, setPendingTo] = useState(today);
   useEffect(() => {
-    if (!datesReady) return;
-    if (!hasFetchedRef.current) {
-      // First load — run once
-      hasFetchedRef.current = true;
-      doFetch(dateFrom, dateTo);
+    if (rangeFrom) setPendingFrom(rangeFrom);
+    if (rangeTo) setPendingTo(rangeTo);
+  }, [rangeFrom, rangeTo]);
+
+  // Search: typing updates the input at once; the API is queried 400 ms after the user stops typing
+  const [searchInput, setSearchInput] = useState(search);
+  const setSearch = setSearchInput;
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (trimmed === search.trim()) return;
+    const timer = setTimeout(() => {
+      updateQueryParams({ search: trimmed || undefined, page: 1 });
+    }, 400);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+
+  // ── Server query: one page of logs, and the totals for the stat cards ──
+  const queryFilters: LogsQuery = useMemo(() => ({
+    date_from: dateFromMs ? new Date(dateFromMs).toISOString() : undefined,
+    date_to: dateToMs ? new Date(dateToMs).toISOString() : undefined,
+    search: search.trim() || undefined,
+    sort_field: sortField,
+    sort_dir: sortDir,
+    profile_ids: filters.profile_id,
+    user_ids: filters.user_id,
+    matched: filters.is_matched,
+    regenerated: filters.is_regenerated,
+    ai_models: filters.ai_model,
+  }), [dateFromMs, dateToMs, search, sortField, sortDir, filters]);
+
+  const pageQueryKey = (p: number) => ["logs-page", queryFilters, p, pageSize] as const;
+  const pageRequest = (p: number): LogsQuery => ({
+    ...queryFilters,
+    offset: (p - 1) * pageSize,
+    limit: pageSize,
+  });
+
+  const logsQuery = useQuery({
+    queryKey: pageQueryKey(page),
+    queryFn: () => logsService.listPage(pageRequest(page)),
+    placeholderData: keepPreviousData,
+    staleTime: CACHE_STALE_MS,
+    gcTime: CACHE_GC_MS,
+  });
+
+  const summaryQuery = useQuery({
+    queryKey: ["logs-summary", queryFilters],
+    queryFn: () => logsService.summary(queryFilters),
+    placeholderData: keepPreviousData,
+    staleTime: CACHE_STALE_MS,
+    gcTime: CACHE_GC_MS,
+  });
+
+  const totalCount = logsQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  // Prefetch the neighbouring pages so paging next / previous is instant
+  useEffect(() => {
+    if (logsQuery.isPlaceholderData) return;
+    for (const p of [safePage + 1, safePage - 1]) {
+      if (p < 1 || p > totalPages) continue;
+      queryClient.prefetchQuery({
+        queryKey: pageQueryKey(p),
+        queryFn: () => logsService.listPage(pageRequest(p)),
+        staleTime: CACHE_STALE_MS,
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datesReady]);
+  }, [safePage, totalPages, pageSize, queryFilters, logsQuery.isPlaceholderData]);
 
+  const allRows: GenerationLog[] = useMemo(() => {
+    return (logsQuery.data?.items ?? []).map((log) => {
+      const userId = (log.user_id ?? "").trim();
+      const isAdminUser = userId === "" || userId === ADMIN_USER_ID;
+      return {
+        ...log,
+        user_id: userId,
+        user_name: log.user_name || (isAdminUser ? "Admin" : ""),
+        profile_name: log.profile_name || "",
+        user_deleted: !isAdminUser && !!log.user_deleted,
+      };
+    });
+  }, [logsQuery.data]);
 
-  // All active users — used for building the user_name lookup map AND filter dropdown
+  const pageRows = allRows;
+  const logsLoading = logsQuery.isFetching;
+
+  // Stat cards: totals over every log matching the filters (from the server, not the current page)
+  const summary = summaryQuery.data;
+  const byStatus: Record<string, number> = summary?.by_status ?? {};
+  const stats = {
+    total_generations: summary?.total ?? 0,
+    total_input_tokens: summary?.input_tokens ?? 0,
+    total_output_tokens: summary?.output_tokens ?? 0,
+    claude_count: summary?.claude_count ?? 0,
+    openai_count: summary?.openai_count ?? 0,
+    matched_count: byStatus.matched ?? 0,
+    mismatched_count: byStatus.mismatched ?? 0,
+    skipped_count: byStatus.skipped ?? 0,
+    duplicated_count: byStatus.duplicated ?? 0,
+    not_jd_count: byStatus.not_jd ?? 0,
+    reposted_count: byStatus.reposted ?? 0,
+    error_count: byStatus.error ?? 0,
+    applied_count: summary?.applied ?? 0,
+  };
+  const periodCost = summary?.est_cost_usd ?? 0;
+
+  // All active users — used for the user filter dropdown
   const { data: allUsers } = useQuery({
     queryKey: ["users", "all"],
     queryFn: () => userService.getAll(undefined),
     staleTime: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
-
-  console.log(allUsers)
-  // Extra name map for user IDs that appear in logs but are missing from allUsers
-  // (i.e. deleted users). Populated lazily once cachedRows + allUsers are both ready.
-  const [extraUserNames, setExtraUserNames] = useState<Map<string, { name: string | null; deleted: boolean }>>(new Map());
-
-  useEffect(() => {
-    if (!cachedRows.length || !allUsers) return;
-
-    // Build set of known IDs
-    const knownIds = new Set(allUsers.map((u) => u.id));
-    knownIds.add(ADMIN_USER_ID);
-
-    // Collect IDs present in logs but not in allUsers (and not already fetched)
-    const missing = new Set<string>();
-    for (const log of cachedRows) {
-      const uid = (log.user_id ?? (log as any).bidder_id ?? "").trim();
-      if (uid && !knownIds.has(uid) && !extraUserNames.has(uid)) {
-        missing.add(uid);
-      }
-    }
-    if (missing.size === 0) return;
-
-    // Fetch each missing user individually; mark null on 404 (deleted)
-    Promise.all(
-      Array.from(missing).map((uid) =>
-        userService.getById(uid)
-          .then((u): [string, { name: string | null; deleted: boolean }] => [uid, { name: u.full_name, deleted: true }])
-          .catch((): [string, { name: string | null; deleted: boolean }] => [uid, { name: null, deleted: true }]),
-      ),
-    ).then((results) => {
-      setExtraUserNames((prev) => {
-        const next = new Map(prev);
-        for (const [uid, info] of results) next.set(uid, info);
-        return next;
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cachedRows, allUsers]);
 
   const { data: profiles } = useQuery({
     queryKey: ["profiles"],
@@ -1125,45 +1035,25 @@ export default function LogsPage() {
     gcTime: 60 * 60 * 1000,
   });
 
-  async function hardRefresh() {
+  const userOptions = useMemo(() => {
+    const options = (allUsers ?? []).map((u) => ({ value: u.id, label: u.full_name }));
+    return [{ value: ADMIN_USER_ID, label: "Admin" }, ...options];
+  }, [allUsers]);
+
+  // Refresh: re-fetch the visible page and the totals (cached pages are invalidated)
+  async function refreshLogs() {
     setIsRefreshing(true);
     try {
-      await logCache.clearCache();
-      await doFetch(dateFrom, dateTo);
-    } catch (err) {
-      console.error("[LogsPage] hard refresh failed", err);
-      // Cache was already cleared — flush whatever partial data made it in before the failure
-      // so the user doesn't see a blank table with no explanation.
-      await flushCacheToState(dateFrom, dateTo);
-      showToast("Hard refresh failed. Please try again.", "error");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["logs-page"] }),
+        queryClient.invalidateQueries({ queryKey: ["logs-summary"] }),
+      ]);
     } finally {
       setIsRefreshing(false);
     }
   }
-
-  async function fastRefresh() {
-    setIsRefreshing(true);
-    try {
-      await doFetch(dateFrom, dateTo);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }
-
-  // async function recoverUserIds() {
-  //   if (!confirm("This will update user_id on ALL generation logs by matching profile_id to user assignments. Continue?")) return;
-  //   setIsRecovering(true);
-  //   try {
-  //     const result = await logsService.recoverUserIds();
-  //     alert(`Recovery complete:\n• Total logs: ${result.total_logs}\n• Updated: ${result.updated_count}\n• Skipped: ${result.skipped_count} (no matching user for profile)`);
-  //     // Refresh data to pull updated records
-  //     await hardRefresh();
-  //   } catch (err: any) {
-  //     alert(`Recovery failed: ${err?.response?.data?.message || err.message}`);
-  //   } finally {
-  //     setIsRecovering(false);
-  //   }
-  // }
+  const fastRefresh = refreshLogs;
+  const hardRefresh = refreshLogs;
 
   // The list endpoint omits job_description; load it on demand before opening a modal.
   async function openWithJD(log: GenerationLog, open: (l: GenerationLog) => void) {
@@ -1180,207 +1070,21 @@ export default function LogsPage() {
   }
 
   function applyPeriod(period: LogsPeriod) {
-    setStatsPeriod(period);
-    setPage(1);
-    
-    const range = getESTDateRange(period);
     if (period === "custom") {
       const lastWeek = getLastWeekRange();
-      setDateFrom(new Date(toStartOfDayEST(lastWeek.from)).getTime());
-      setDateTo(new Date(toEndOfDayEST(lastWeek.to)).getTime());
-      setPendingFrom(lastWeek.from);
-      setPendingTo(lastWeek.to);
       updateQueryParams({ statsPeriod: period, date_from: lastWeek.from, date_to: lastWeek.to, page: 1 });
-      logCache.setDateFilter({ period, dateFrom: lastWeek.from, dateTo: lastWeek.to });
-      // Don't auto-fetch for custom — user must click Check
-    } else if (period === "all") {
-      setDateFrom(undefined);
-      setDateTo(undefined);
+    } else {
       updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
-      logCache.setDateFilter({ period, dateFrom: "", dateTo: "" });
-      doFetch(null, null);
-    } else if (range) {
-      const fromMs = new Date(toStartOfDayEST(range.from)).getTime();
-      const toMs = new Date(toEndOfDayEST(range.to)).getTime();
-      setDateFrom(fromMs);
-      setDateTo(toMs);
-      updateQueryParams({ statsPeriod: period, date_from: undefined, date_to: undefined, page: 1 });
-      logCache.setDateFilter({ period, dateFrom: range.from, dateTo: range.to });
-      doFetch(fromMs, toMs);
     }
   }
 
   function handleSort(field: SortField) {
     if (sortField === field) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-      updateQueryParams({ sortDir: sortField === field && sortDir === "asc" ? "desc" : "asc", page: 1 });
+      updateQueryParams({ sortField: field, sortDir: sortDir === "asc" ? "desc" : "asc", page: 1 });
     } else {
-      setSortField(field);
-      setSortDir(field === "created_at" ? "desc" : "asc");
       updateQueryParams({ sortField: field, sortDir: field === "created_at" ? "desc" : "asc", page: 1 });
     }
-    setPage(1);
   }
-
-  // ── All rows from cache, enriched with names ──
-  const allRows: GenerationLog[] = useMemo(() => {
-    const items = cachedRows;
-
-    // Build name lookup maps
-    const profileMap = new Map<string, string>();
-    const userMap = new Map<string, string>();
-    if (profiles) for (const p of profiles) profileMap.set(p.id, p.full_name);
-    // allUsers covers all active users (bidders + admins)
-    if (allUsers) for (const u of allUsers) userMap.set(u.id, u.full_name);
-
-    const result: GenerationLog[] = [];
-    for (const log of items) {
-      // Fall back to bidder_id for any stale cached records from before the rename
-      const userId = (log.user_id ?? (log as any).bidder_id ?? "").trim();
-      const isAdminUser = userId === "" || userId === ADMIN_USER_ID;
-
-      let resolvedName = log.user_name || "";
-      if (!resolvedName) {
-        if (isAdminUser) {
-          resolvedName = "Admin";
-        } else if (userMap.has(userId)) {
-          resolvedName = userMap.get(userId) || "";
-        } else if (extraUserNames.has(userId)) {
-          // name null means the lookup failed → truly unknown user
-          resolvedName = extraUserNames.get(userId)?.name ?? "";
-        }
-        // else: still loading the extra fetch — leave empty for now
-      }
-
-      result.push({
-        ...log,
-        user_id: userId || "",
-        profile_name: log.profile_name || profileMap.get(log.profile_id) || "",
-        user_name: resolvedName,
-        user_deleted: !isAdminUser && (!!log.user_deleted || (!userMap.has(userId) && extraUserNames.has(userId))),
-      });
-    }
-
-    // Access control: admins see only logs for their assigned/created profiles
-    if (admin?.type !== "super_admin" && profiles && profiles.length > 0) {
-      const allowedProfileIds = new Set(profiles.map((p) => p.id));
-      return result.filter((log) => allowedProfileIds.has(log.profile_id));
-    }
-    // If admin is not super_admin and no profiles loaded yet, show nothing
-    if (admin?.type !== "super_admin" && (!profiles || profiles.length === 0)) {
-      return [];
-    }
-
-    return result;
-  }, [cachedRows, profiles, allUsers, extraUserNames, admin]);
-
-  const userOptions = useMemo(() => {
-    const options = (allUsers ?? []).map((u) => ({ value: u.id, label: u.full_name }));
-    // Add deleted users that appear in logs so super_admin can still filter by them
-    const seen = new Set(options.map((o) => o.value));
-    for (const log of allRows) {
-      const uid = (log.user_id ?? "").trim();
-      if (!uid || uid === ADMIN_USER_ID || seen.has(uid) || !log.user_deleted) continue;
-      seen.add(uid);
-      options.push({ value: uid, label: `${log.user_name || "Unknown user"} (deleted)` });
-    }
-    const hasAdminRows = allRows.some((log) => {
-      const userId = (log.user_id ?? "").trim();
-      return userId === "" || userId === ADMIN_USER_ID;
-    });
-    if (!hasAdminRows) return options;
-    return [{ value: ADMIN_USER_ID, label: "Admin" }, ...options];
-  }, [allUsers, allRows]);
-
-  // ── Client-side filtering: user, profile, match status, type, search ──
-  const filtered = useMemo(() => {
-    return allRows.filter((log) => {
-      if (filters.user_id && filters.user_id.length > 0) {
-        const userId = (log.user_id ?? "").trim();
-        const normalizedUserId = userId === "" ? ADMIN_USER_ID : userId;
-        if (!filters.user_id.includes(normalizedUserId)) return false;
-      }
-      if (filters.profile_id && filters.profile_id.length > 0 && !filters.profile_id.includes(log.profile_id)) return false;
-      if (filters.is_matched && filters.is_matched.length > 0 && !filters.is_matched.includes(String(log.is_matched) as any)) return false;
-      if (filters.is_regenerated && filters.is_regenerated.length > 0 && !filters.is_regenerated.includes(String(log.is_regenerated) as any)) return false;
-      if (filters.ai_model && filters.ai_model.length > 0 && !filters.ai_model.includes(log.ai_model || "claude-haiku-4-5")) return false;
-      return true;
-    });
-  }, [allRows, filters.user_id, filters.profile_id, filters.is_matched, filters.is_regenerated, filters.ai_model]);
-
-  const searched = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return filtered;
-    return filtered.filter((log) =>
-      [log.user_name, log.profile_name, log.position_title, log.company_name, log.job_url]
-        .some((v) => v?.toLowerCase().includes(q))
-    );
-  }, [filtered, search]);
-
-  const sorted = useMemo(() => {
-    return [...searched].sort((a, b) => {
-      let av: number | string, bv: number | string;
-      switch (sortField) {
-        case "created_at":    av = a.created_at;          bv = b.created_at;          break;
-        case "user_name":     av = a.user_name ?? "";     bv = b.user_name ?? "";     break;
-        case "profile_name":  av = a.profile_name ?? "";  bv = b.profile_name ?? "";  break;
-        case "position_title":av = a.position_title ?? ""; bv = b.position_title ?? ""; break;
-        case "company_name":  av = a.company_name ?? "";  bv = b.company_name ?? "";  break;
-        default: av = ""; bv = "";
-      }
-      if (av < bv) return sortDir === "asc" ? -1 : 1;
-      if (av > bv) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [searched, sortField, sortDir]);
-
-  const totalPages    = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const safePage      = Math.min(page, totalPages);
-  const pageRows      = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
-
-  // ── Client-side stats computed from filtered rows (reflects active filters) ──
-  const stats = useMemo(() => {
-    const rows = filtered;
-    let total_input_tokens = 0, total_output_tokens = 0;
-    let claude_count = 0, openai_count = 0;
-    let matched_count = 0, mismatched_count = 0, skipped_count = 0;
-    let duplicated_count = 0, not_jd_count = 0, reposted_count = 0;
-    let error_count = 0, applied_count = 0;
-
-    for (const log of rows) {
-      total_input_tokens += log.input_tokens ?? 0;
-      total_output_tokens += log.output_tokens ?? 0;
-      if (log.ai_provider === "claude") claude_count++;
-      else openai_count++;
-      if (log.is_matched === 1) matched_count++;
-      else if (log.is_matched === 0) mismatched_count++;
-      else if (log.is_matched === 2) skipped_count++;
-      else if (log.is_matched === 3) not_jd_count++;
-      else if (log.is_matched === 4) duplicated_count++;
-      else if (log.is_matched === 5) reposted_count++;
-      else if (log.is_matched === 6) error_count++;
-      if (log.is_applied || log.is_matched === 1) applied_count++;
-    }
-
-    return {
-      total_generations: rows.length,
-      total_input_tokens,
-      total_output_tokens,
-      claude_count,
-      openai_count,
-      matched_count,
-      mismatched_count,
-      skipped_count,
-      duplicated_count,
-      not_jd_count,
-      reposted_count,
-      error_count,
-      applied_count,
-    };
-  }, [filtered]);
-
-  // ── Estimated cost: sum of the server-computed per-log costs (same logic as billing) ──
-  const periodCost = sumCost(filtered);
 
   const totalTokens = stats.total_input_tokens + stats.total_output_tokens;
 
@@ -1398,13 +1102,9 @@ export default function LogsPage() {
           log={regenerateLog}
           resumeTemplate={profiles?.find((p) => p.id === regenerateLog.profile_id)?.resume_template ?? 11}
           onClose={() => setRegenerateLog(null)}
-          onSuccess={async () => {
-            // Delta-sync so the new regenerated log appears immediately
-            // listDelta handles mergeRecords + setLastSyncAt internally
-            const lastSync = await logCache.getLastSyncAt();
-            await logsService.listDelta(lastSync ?? new Date(0).toISOString());
-            await flushCacheToState(dateFrom, dateTo);
-            queryClient.invalidateQueries({ queryKey: ["logs-stats"] });
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["logs-page"] });
+            queryClient.invalidateQueries({ queryKey: ["logs-summary"] });
           }}
         />
       )}
@@ -1489,17 +1189,7 @@ export default function LogsPage() {
           <button
             type="button"
             disabled={logsLoading}
-            onClick={() => {
-              const fromMs = new Date(toStartOfDayEST(pendingFrom)).getTime();
-              const toMs = new Date(toEndOfDayEST(pendingTo)).getTime();
-              setDateFrom(fromMs);
-              setDateTo(toMs);
-              setPage(1);
-              updateQueryParams({ date_from: pendingFrom, date_to: pendingTo, page: 1 });
-              console.log(fromMs, toMs);
-              logCache.setDateFilter({ period: "custom", dateFrom: pendingFrom, dateTo: pendingTo });
-              doFetch(fromMs, toMs);
-            }}
+            onClick={() => updateQueryParams({ statsPeriod: "custom", date_from: pendingFrom, date_to: pendingTo, page: 1 })}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Search className="w-4 h-4" />
@@ -1628,8 +1318,6 @@ export default function LogsPage() {
           selected={filters.user_id ?? []}
           disabled={logsLoading}
           onChange={(next) => {
-            setFilters((f) => ({ ...f, user_id: next.length > 0 ? next : undefined } as LogsFilters));
-            setPage(1);
             updateQueryParams({ user_id: next.length > 0 ? next.join(",") : undefined, page: 1 });
           }}
         />
@@ -1640,8 +1328,6 @@ export default function LogsPage() {
           selected={filters.profile_id ?? []}
           disabled={logsLoading}
           onChange={(next) => {
-            setFilters((f) => ({ ...f, profile_id: next.length > 0 ? next : undefined } as LogsFilters));
-            setPage(1);
             updateQueryParams({ profile_id: next.length > 0 ? next.join(",") : undefined, page: 1 });
           }}
         />
@@ -1660,8 +1346,6 @@ export default function LogsPage() {
           selected={(filters.is_matched ?? []) as string[]}
           disabled={logsLoading}
           onChange={(next) => {
-            setFilters((f) => ({ ...f, is_matched: next.length > 0 ? next : undefined } as LogsFilters));
-            setPage(1);
             updateQueryParams({ is_matched: next.length > 0 ? next.join(",") : undefined, page: 1 });
           }}
         />
@@ -1675,8 +1359,6 @@ export default function LogsPage() {
           selected={(filters.is_regenerated ?? []) as string[]}
           disabled={logsLoading}
           onChange={(next) => {
-            setFilters((f) => ({ ...f, is_regenerated: next.length > 0 ? next : undefined } as LogsFilters));
-            setPage(1);
             updateQueryParams({ is_regenerated: next.length > 0 ? next.join(",") : undefined, page: 1 });
           }}
         />
@@ -1687,8 +1369,6 @@ export default function LogsPage() {
           selected={(filters.ai_model ?? []) as string[]}
           disabled={logsLoading}
           onChange={(next) => {
-            setFilters((f) => ({ ...f, ai_model: next.length > 0 ? next : undefined } as LogsFilters));
-            setPage(1);
             updateQueryParams({ ai_model: next.length > 0 ? next.join(",") : undefined, page: 1 });
           }}
         />
@@ -1696,9 +1376,7 @@ export default function LogsPage() {
         {((filters.user_id?.length ?? 0) + (filters.profile_id?.length ?? 0) + (filters.is_matched?.length ?? 0) + (filters.is_regenerated?.length ?? 0) + (filters.ai_model?.length ?? 0) > 0) && (
           <button
             onClick={() => {
-              setFilters({});
               updateQueryParams({ user_id: undefined, profile_id: undefined, is_matched: undefined, is_regenerated: undefined, ai_model: undefined, page: 1 });
-              setPage(1);
             }}
             className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-2.5 py-2 self-end transition-colors"
           >
@@ -1721,7 +1399,6 @@ export default function LogsPage() {
               value={search}
               onChange={(e) => { 
                 setSearch(e.target.value);
-                setPage(1);
                 updateQueryParams({ search: e.target.value || undefined, page: 1 });
               }}
               className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1730,7 +1407,6 @@ export default function LogsPage() {
               <button
                 onClick={() => { 
                   setSearch("");
-                  setPage(1);
                   updateQueryParams({ search: undefined, page: 1 });
                 }}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
@@ -1746,25 +1422,23 @@ export default function LogsPage() {
               onChange={(e) => { 
                 const newSize = Number(e.target.value);
                 setPageSize(newSize);
-                setPage(1);
-                updateQueryParams({ pageSize: newSize, page: 1 });
               }}
               className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
         </div>
 
-        {logsLoading && !cachedRows.length ? (
+        {logsLoading && !allRows.length ? (
           <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
-        ) : !allRows.length ? (
+        ) : !allRows.length && !search ? (
           <div className="text-center py-16 text-gray-400">
             <Activity className="w-10 h-10 mx-auto mb-3 opacity-40" />
             <p className="font-medium">No generations found</p>
             <p className="text-sm mt-1">Try adjusting your filters or date range</p>
           </div>
-        ) : !sorted.length ? (
+        ) : !allRows.length ? (
           <div className="text-center py-16 text-gray-400">
             <Search className="w-10 h-10 mx-auto mb-3 opacity-40" />
             <p className="font-medium">No results for &ldquo;{search}&rdquo;</p>
@@ -1896,8 +1570,6 @@ export default function LogsPage() {
                                 <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-normal text-gray-500">deleted</span>
                               </>
                             ) : log.user_name;
-                          if (uid && extraUserNames.get(uid)?.name === null)
-                            return <span className="text-red-400 italic text-xs">Deleted user</span>;
                           return <span className="text-gray-400 italic">—</span>;
                         })()}
                       </td>
@@ -2179,17 +1851,16 @@ export default function LogsPage() {
               <div className="text-xs text-gray-500 flex flex-wrap gap-2 items-center">
                 {search ? (
                   <span>
-                    <span className="font-semibold text-gray-700">{sorted.length}</span> of{" "}
-                    <span className="font-semibold text-gray-700">{allRows.length}</span> logs
+                    <span className="font-semibold text-gray-700">{totalCount}</span> matching logs
                   </span>
                 ) : (
-                  <span><span className="font-semibold text-gray-700">{allRows.length}</span> logs</span>
+                  <span><span className="font-semibold text-gray-700">{totalCount}</span> logs</span>
                 )}
                 {isSuperAdmin && (
                   <>
                     <span className="text-gray-300">·</span>
                     <span className="font-semibold text-emerald-700">
-                      {formatCost(sumCost(allRows))}
+                      {formatCost(periodCost)}
                     </span>
                   </>
                 )}
@@ -2202,7 +1873,6 @@ export default function LogsPage() {
                 </span>
                 <button
                   onClick={() => {
-                    setPage(1);
                     updateQueryParams({ page: 1 });
                   }}
                   disabled={safePage === 1}

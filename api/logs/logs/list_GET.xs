@@ -1,201 +1,163 @@
-//  List generation logs — lightweight version
-//  Returns raw logs without enrichment (name lookups done client-side)
-// 
-//  Two modes:
-//   1. Full fetch:  send date_from / date_to  → returns all logs in that date range (paginated)
-//   2. Delta fetch: send updated_since        → returns ALL records touched since that timestamp
-//                   (created_at OR updated_at >= updated_since), no date range filter, no page limit
-// 
-//  Access control:
-//   - super_admins see all logs
-//   - admins see only logs whose profile_id is in their assigned/created profiles
-// 
-//  Frontend always sends EST-aligned timestamps for date_from/date_to.
+//  List generation logs, one page at a time (server-side search, filters, sort and paging)
+//  - limit: page size (default 50, max 200); offset: rows to skip
+//  - sort_field: created_at (default) | position_title | company_name | user_name | profile_name; sort_dir: asc | desc (default)
+//  - search / profile_ids / user_ids / matched / regenerated / ai_models / date_from / date_to: see logs/filter_sql
+//  Returns {items, total}. Each item carries user_name / profile_name. Billing fields are for super_admin only;
+//  est_cost_usd = raw provider cost x price rate (same logic as billing), computed for the rows of this page.
 query "logs/list" verb=GET {
   api_group = "logs"
   auth = "users"
 
   input {
-    timestamp updated_since?
     timestamp date_from?
     timestamp date_to?
-    int offset?
-    int limit?
-    bool count_only?
+    text search?
+    int offset?=0
+    int limit?=50
+    text sort_field?
+    text sort_dir?
+    uuid[] profile_ids?
+    text[] user_ids?
+    text[] matched?
+    text[] regenerated?
+    text[] ai_models?
   }
 
   stack {
-    // Get auth user to determine access scope
     db.get users {
       field_name = "id"
       field_value = $auth.id
     } as $auth_user
-  
-    var $is_delta {
-      value = $input.updated_since != null
-    }
-  
-    // Lean projection: the heavy job_description text is NOT returned (it is fetched
-    // on demand via logs/jd); has_job_description tells the UI whether one exists.
-    var $query {
-      value = "SELECT id, created_at, updated_at, profile_id, user_id, job_url, job_description_snippet, ai_provider, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, resume_filename, cover_letter_filename, position_title, company_name, is_regenerated, original_log_id, is_matched, match_reason, is_applied, seniority, tech_scope, compensation, content_id, COALESCE((SELECT u.deleted FROM x1_2 u WHERE u.id = x1_7.user_id), false) AS user_deleted, (job_description IS NOT NULL AND job_description <> '') AS has_job_description, COALESCE(ai_model, 'claude-haiku-4-5') AS ai_model FROM x1_7"
-    }
-  
-    // Billing columns (rate, charged amount, billing admin, model) are for super_admin only
-    conditional {
-      if ($auth_user.type == "super_admin") {
-        var.update $query {
-          value = $query|replace:"COALESCE(ai_model, 'claude-haiku-4-5') AS ai_model FROM x1_7":"COALESCE(ai_model, 'claude-haiku-4-5') AS ai_model, usage_rate, charged_amount, billing_admin_id FROM x1_7"
-        }
-      }
-    }
 
-    var $has_where {
-      value = false
-    }
-  
-    // {{ $auth.id|sql_esc }};"
-    conditional {
-      if ($auth_user.type != "super_admin" && $auth_user.type == "admin") {
-        var $profile_ids {
-          value = ""
-        }
-      
-        // $auth_user.profile_ids != null ? (($auth_user.profile_ids|join:",")|sql_esc) : "NULL"
-        foreach ($auth_user.profile_ids) {
-          each as $id {
-            var.update $profile_ids {
-              value = $profile_ids ~ ( $profile_ids == "" ? "" : ",") ~ ($id|sql_esc)
-            }
-          }
-        }
-      
-        var.update $query {
-          value = $query ~ " WHERE profile_id IN (" ~ $profile_ids ~ ")"
-        }
-      
-        var.update $has_where {
-          value = true
-        }
+    function.run "logs/filter_sql" {
+      input = {
+        auth_id     : $auth.id
+        date_from   : $input.date_from
+        date_to     : $input.date_to
+        search      : $input.search
+        profile_ids : $input.profile_ids
+        user_ids    : $input.user_ids
+        matched     : $input.matched
+        regenerated : $input.regenerated
+        ai_models   : $input.ai_models
       }
-    }
-  
-    // Exclude logs belonging to hidden profiles, for all user types
-    var $hide_keyword {
-      value = $has_where ? " AND" : " WHERE"
-    }
-  
-    var.update $query {
-      value = $query ~ $hide_keyword ~ " (profile_id IS NULL OR profile_id NOT IN (SELECT id FROM x1_5 WHERE hide = true))"
-    }
-  
-    var.update $has_where {
-      value = true
-    }
-  
-    conditional {
-      if ($is_delta) {
-        var $delta_keyword {
-          value = $has_where ? " AND" : " WHERE"
-        }
-      
-        var.update $query {
-          value = $query ~ $delta_keyword ~ " updated_at >= '" ~ $input.updated_since ~ "'"
-        }
-      }
-    }
-  
-    conditional {
-      if ($input.date_from != null) {
-        var $from_keyword {
-          value = $has_where ? " AND" : " WHERE"
-        }
-      
-        var.update $query {
-          value = $query ~ $from_keyword ~ " created_at >= '" ~ $input.date_from ~ "'"
-        }
-      
-        var.update $has_where {
-          value = true
-        }
-      }
-    }
-  
-    conditional {
-      if ($input.date_to != null) {
-        var $to_keyword {
-          value = $has_where ? " AND" : " WHERE"
-        }
-      
-        var.update $query {
-          value = $query ~ $to_keyword ~ " created_at < '" ~ $input.date_to ~ "'"
-        }
-      
-        var.update $has_where {
-          value = true
-        }
-      }
-    }
-  
-    var.update $query {
-      value = $query ~ " ORDER BY created_at DESC"
-    }
-  
+    } as $where
+
+    // Paging bounds
     var $page_limit {
-      value = $input.limit != null ? $input.limit : 500
+      value = $input.limit
     }
-  
+
+    conditional {
+      if ($page_limit < 1) {
+        var.update $page_limit {
+          value = 50
+        }
+      }
+    }
+
+    conditional {
+      if ($page_limit > 200) {
+        var.update $page_limit {
+          value = 200
+        }
+      }
+    }
+
     var $page_offset {
-      value = $input.offset != null ? $input.offset : 0
+      value = $input.offset
     }
-  
+
     conditional {
-      if ($is_delta == false && $input.count_only != true) {
-        var.update $query {
-          value = $query ~ " LIMIT " ~ $page_limit ~ " OFFSET " ~ $page_offset
+      if ($page_offset < 0) {
+        var.update $page_offset {
+          value = 0
         }
       }
     }
-  
+
+    // Sort (whitelisted columns only)
+    var $sort_col {
+      value = "created_at"
+    }
+
     conditional {
-      if ($input.count_only) {
-        var $count_query {
-          value = "SELECT COUNT(*) as total FROM (" ~ $query ~ ") AS sub"
+      if ($input.sort_field == "position_title") {
+        var.update $sort_col {
+          value = "position_title"
         }
-      
-        // Raw SQL ignores the request data source: point it at that data source's tables
-        function.run "db/sql_for_datasource" {
-          input = {sql: $count_query}
-        } as $count_query_ds
-
-        db.direct_query {
-          sql = "{{ $count_query_ds }};"
-          parser = "template_engine"
-          response_type = "single"
-        } as $count_result
       }
-    }
-  
-    conditional {
-      if ($input.count_only != true) {
-        // Raw SQL ignores the request data source: point it at that data source's tables
-        function.run "db/sql_for_datasource" {
-          input = {sql: $query}
-        } as $query_ds
 
-        db.direct_query {
-          sql = "{{ $query_ds }};"
-          parser = "template_engine"
-          response_type = "list"
-        } as $logs
+      elseif ($input.sort_field == "company_name") {
+        var.update $sort_col {
+          value = "company_name"
+        }
+      }
+
+      elseif ($input.sort_field == "user_name") {
+        var.update $sort_col {
+          value = "user_name"
+        }
+      }
+
+      elseif ($input.sort_field == "profile_name") {
+        var.update $sort_col {
+          value = "profile_name"
+        }
       }
     }
 
-    // Estimated cost per log (super_admin only) = SAME pricing logic as billing:
-    // ai/claude_haiku_cost (model prices, 1h cache write, 5.5 tiers) x price rate
-    // (the rate stored on the log, else the billing admin's personal rate, else the global rate).
+    var $sort_order {
+      value = "DESC"
+    }
+
     conditional {
-      if ($input.count_only != true && $auth_user.type == "super_admin") {
+      if ($input.sort_dir == "asc") {
+        var.update $sort_order {
+          value = "ASC"
+        }
+      }
+    }
+
+    var $billing_cols {
+      value = ""
+    }
+
+    conditional {
+      if ($auth_user != null && $auth_user.type == "super_admin") {
+        var.update $billing_cols {
+          value = ", usage_rate, charged_amount, billing_admin_id"
+        }
+      }
+    }
+
+    var $query {
+      value = "SELECT id, created_at, updated_at, profile_id, user_id, job_url, job_description_snippet, ai_provider, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, resume_filename, cover_letter_filename, position_title, company_name, is_regenerated, original_log_id, is_matched, match_reason, is_applied, seniority, tech_scope, compensation, content_id, COALESCE((SELECT u.deleted FROM x1_2 u WHERE u.id = x1_7.user_id), false) AS user_deleted, (job_description IS NOT NULL AND job_description <> '') AS has_job_description, COALESCE(ai_model, 'claude-haiku-4-5') AS ai_model, (SELECT u.full_name FROM x1_2 u WHERE u.id = x1_7.user_id) AS user_name, (SELECT p.full_name FROM x1_5 p WHERE p.id = x1_7.profile_id) AS profile_name" ~ $billing_cols ~ " FROM x1_7" ~ $where ~ " ORDER BY " ~ $sort_col ~ " " ~ $sort_order ~ ", id " ~ $sort_order ~ " LIMIT " ~ ($page_limit|to_text) ~ " OFFSET " ~ ($page_offset|to_text)
+    }
+
+    var $count_query {
+      value = "SELECT COUNT(*) AS total FROM x1_7" ~ $where
+    }
+
+    db.direct_query {
+      sql = "{{ $query }};"
+      parser = "template_engine"
+      response_type = "list"
+    } as $logs
+
+    db.direct_query {
+      sql = "{{ $count_query }};"
+      parser = "template_engine"
+      response_type = "single"
+    } as $count_row
+
+    // Cost per row of this page (super_admin only): same pricing logic as billing
+    var $items {
+      value = $logs
+    }
+
+    conditional {
+      if ($auth_user != null && $auth_user.type == "super_admin") {
         function.run "credits/get_usage_rate" {
           input = {}
         } as $default_rate_info
@@ -264,13 +226,14 @@ query "logs/list" verb=GET {
           }
         }
 
-        var.update $logs {
+        var.update $items {
           value = $enriched
         }
       }
     }
   }
 
-  response = $input.count_only == true ? {total: $count_result.total} : {items: $logs}
+  response = {items: $items, total: $count_row.total|first_notnull:0}
+
   guid = "AIYv-aZ2F4QwpeGMhvFPE5USbXc"
 }

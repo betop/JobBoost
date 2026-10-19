@@ -1,6 +1,5 @@
 import api from "./api";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import * as logCache from "./logCache";
 
 type LogsPeriod = "today" | "week" | "month" | "custom";
 
@@ -110,6 +109,8 @@ export interface GenerationLog {
 
 export interface LogsListResponse {
   items: GenerationLog[];
+  /** Logs matching the query across all pages */
+  total: number;
 }
 
 export interface LogsStatsResponse {
@@ -151,134 +152,70 @@ export interface RegenerateResponse {
   resume_filename: string;
 }
 
-export const logsService = {
-  /** Fetch logs for a date range — no bidder/profile/status filtering (done client-side) */
-  list: async (filters: LogsFilters = {}): Promise<LogsListResponse> => {
-    const params = new URLSearchParams();
-    const periodRange = getDateRangeForPeriod(filters.period);
-    const effectiveDateFrom = filters.date_from ?? periodRange.dateFrom;
-    const effectiveDateTo = filters.date_to ?? periodRange.dateTo;
+export interface LogsQuery {
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  sort_field?: string;
+  sort_dir?: "asc" | "desc";
+  offset?: number;
+  limit?: number;
+  profile_ids?: string[];
+  user_ids?: string[];
+  matched?: string[];
+  regenerated?: string[];
+  ai_models?: string[];
+}
 
-    if (effectiveDateFrom) params.set("date_from", toStartOfDayEST(effectiveDateFrom));
-    if (effectiveDateTo) params.set("date_to", toEndOfDayEST(effectiveDateTo));
-    const response = await api.get(`/logs/list?${params.toString()}`);
+export interface LogsSummaryResponse {
+  total: number;
+  by_status: Record<string, number>;
+  applied: number;
+  claude_count: number;
+  openai_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  raw_cost_usd: number | null;
+  est_cost_usd: number | null;
+}
+
+/** Query string for logs endpoints. Arrays are sent as `name[]=a&name[]=b` (repeated plain keys keep only the last value). */
+export function buildLogsQuery(q: LogsQuery): string {
+  const p = new URLSearchParams();
+  const set = (key: string, value: string | number | undefined) => {
+    if (value !== undefined && value !== null && value !== "") p.set(key, String(value));
+  };
+  const list = (key: string, values?: string[]) => {
+    values?.forEach((v) => p.append(`${key}[]`, v));
+  };
+  set("date_from", q.date_from);
+  set("date_to", q.date_to);
+  set("search", q.search?.trim());
+  set("sort_field", q.sort_field);
+  set("sort_dir", q.sort_dir);
+  set("offset", q.offset);
+  set("limit", q.limit);
+  list("profile_ids", q.profile_ids);
+  list("user_ids", q.user_ids);
+  list("matched", q.matched);
+  list("regenerated", q.regenerated);
+  list("ai_models", q.ai_models);
+  return p.toString();
+}
+
+export const logsService = {
+  /** One page of logs. Search, sort, filters and paging are all server-side. */
+  listPage: async (query: LogsQuery): Promise<LogsListResponse> => {
+    const response = await api.get(`/logs/list?${buildLogsQuery(query)}`);
     return response.data;
   },
 
-  /**
-   * Fetch ALL logs in parallel batches of up to CONCURRENT_PAGES requests at a time.
-   * 1. First fetches the total record count.
-   * 2. Computes all page offsets.
-   * 3. Fires up to CONCURRENT_PAGES requests concurrently; each saves to IndexedDB as
-   *    soon as it resolves (no waiting for the rest of the batch).
-   * 4. A page that fails (e.g. 502 from a flaky upstream) is retried with backoff;
-   *    if it still fails, it's skipped and reported — it never aborts the other pages.
-   * 5. Repeats for the next group of pages until all are done.
-   * 6. Saves lastSyncAt after all pages have been attempted.
-   * `onBatch` is called after each page is persisted (for UI flush).
-   * Returns the list of offsets that failed even after retries, so the caller can warn the user.
-   */
-  listAllPages: async (
-    onBatch?: () => Promise<void>,
-    pageSize = 500,
-    range?: { from?: string; to?: string },
-  ): Promise<{ failedOffsets: number[] }> => {
-    const CONCURRENT_PAGES = 10;
-    const MAX_ATTEMPTS = 3;
-    const RETRY_DELAY_MS = 1000;
-    const syncStart = new Date().toISOString();
-
-    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    const rangeParams = (params: URLSearchParams) => {
-      if (range?.from) params.set("date_from", range.from);
-      if (range?.to) params.set("date_to", range.to);
-    };
-
-    const fetchPage = async (offset: number): Promise<void> => {
-      const params = new URLSearchParams();
-      params.set("limit", String(pageSize));
-      params.set("offset", String(offset));
-      rangeParams(params);
-      const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
-      const items = response.data.items;
-      if (items.length > 0) {
-        await logCache.mergeRecords(items);
-        if (onBatch) await onBatch();
-      }
-    };
-
-    const fetchPageWithRetry = async (offset: number): Promise<void> => {
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        try {
-          await fetchPage(offset);
-          return;
-        } catch (err) {
-          if (attempt === MAX_ATTEMPTS) throw err;
-          await sleep(RETRY_DELAY_MS * attempt);
-        }
-      }
-    };
-
-    // Step 1: get total count
-    const countParams = new URLSearchParams({ count_only: "true" });
-    rangeParams(countParams);
-    const countRes = await api.get<{ total: number }>(`/logs/list?${countParams.toString()}`);
-    const total = Number(countRes.data.total) || 0;
-
-    if (total === 0) {
-      await logCache.setLastSyncAt(syncStart);
-      return { failedOffsets: [] };
-    }
-
-    // Step 2: build all offsets
-    const offsets: number[] = [];
-    for (let off = 0; off < total; off += pageSize) {
-      offsets.push(off);
-    }
-
-    // Step 3: process in groups of CONCURRENT_PAGES. Promise.allSettled means one
-    // page failing (after retries) never stops the remaining groups from fetching.
-    const failedOffsets: number[] = [];
-    for (let i = 0; i < offsets.length; i += CONCURRENT_PAGES) {
-      const group = offsets.slice(i, i + CONCURRENT_PAGES);
-
-      const results = await Promise.allSettled(group.map((offset) => fetchPageWithRetry(offset)));
-
-      results.forEach((result, idx) => {
-        if (result.status === "rejected") {
-          console.error(`[logsService] page offset=${group[idx]} failed after ${MAX_ATTEMPTS} attempts`, result.reason);
-          failedOffsets.push(group[idx]);
-        }
-      });
-    }
-
-    // Step 4: all pages attempted — commit sync timestamp regardless, so successfully
-    // fetched pages aren't re-fetched on the next delta sync. Failed offsets are reported
-    // so the caller can prompt the user to retry (e.g. via another hard refresh).
-    await logCache.setLastSyncAt(syncStart);
-
-    return { failedOffsets };
-  },
-
-  /**
-   * Delta fetch: returns all records whose updated_at >= updatedSince.
-   * Persists results to IndexedDB and updates lastSyncAt.
-   */
-  listDelta: async (updatedSince: string): Promise<GenerationLog[]> => {
-    const syncStart = new Date().toISOString();
-    const params = new URLSearchParams();
-    params.set("updated_since", updatedSince);
-
-    const response = await api.get<LogsListResponse>(`/logs/list?${params.toString()}`);
-    const items = response.data.items;
-
-    if (items.length > 0) {
-      await logCache.mergeRecords(items);
-    }
-    await logCache.setLastSyncAt(syncStart);
-
-    return items;
+  /** Totals for the stat cards over every log matching the query (not just one page). */
+  summary: async (query: LogsQuery): Promise<LogsSummaryResponse> => {
+    const response = await api.get(`/logs/summary?${buildLogsQuery(query)}`);
+    return response.data;
   },
 
   stats: async (
