@@ -170,9 +170,10 @@ query profiles verb=POST {
               data = {
                 created_at : now
                 profile_id : $p.id
-                name       : $cert.name
-                issuer     : $cert.issuer
-                issued_date: $cert.date
+                name       : ($cert|get:"name")
+                issuer     : ($cert|get:"issuer")
+                issued_date: ($cert|get:"date")
+                url        : ($cert|get:"url")
                 updated_at : now
               }
             } as $new_cert

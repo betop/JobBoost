@@ -88,6 +88,7 @@ query "profiles/{id}" verb=GET {
             name  : $cr.name
             issuer: $cr.issuer
             date  : $cr.issued_date
+            url   : $cr.url
           }
         }
       }

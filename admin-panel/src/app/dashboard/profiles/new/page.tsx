@@ -65,7 +65,7 @@ const profileSchema = z.object({
   tailor_job_title: z.boolean().optional().default(true),
   allowed_languages: z.string().optional().default("English"),
   ai_model: z.string().optional().default("claude-haiku-4-5"),
-  certifications: z.array(z.object({ name: z.string().optional(), issuer: z.string().optional(), date: z.string().optional() })).optional().default([]),
+  certifications: z.array(z.object({ name: z.string().optional(), issuer: z.string().optional(), date: z.string().optional(), url: z.string().optional() })).optional().default([]),
   default_compensation: z.string().optional(),
 });
 
@@ -157,7 +157,7 @@ export default function NewProfilePage() {
     }
     const payload = {
       ...data,
-      certifications: (data.certifications ?? []).filter((c) => (c.name ?? "").trim() !== "").map((c) => ({ name: (c.name ?? "").trim(), issuer: c.issuer, date: c.date })),
+      certifications: (data.certifications ?? []).filter((c) => (c.name ?? "").trim() !== "").map((c) => ({ name: (c.name ?? "").trim(), issuer: c.issuer, date: c.date, url: (c.url ?? "").trim() || undefined })),
       billing_admin_id: isSuperAdmin ? billingAdminId : undefined,
       linkedin: data.linkedin || undefined,
       github: data.github || undefined,

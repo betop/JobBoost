@@ -402,9 +402,10 @@ query "profiles/{id}" verb=PUT {
               data = {
                 created_at : now
                 profile_id : $p.id
-                name       : $cd.name
-                issuer     : $cd.issuer
-                issued_date: $cd.date
+                name       : ($cd|get:"name")
+                issuer     : ($cd|get:"issuer")
+                issued_date: ($cd|get:"date")
+                url        : ($cd|get:"url")
                 updated_at : now
               }
             } as $new_cert
@@ -510,6 +511,7 @@ query "profiles/{id}" verb=PUT {
             name  : $cr.name
             issuer: $cr.issuer
             date  : $cr.issued_date
+            url   : $cr.url
           }
         }
       }

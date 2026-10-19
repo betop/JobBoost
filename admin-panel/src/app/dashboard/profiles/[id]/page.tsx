@@ -182,6 +182,33 @@ export default function ProfileViewPage() {
                 ))}
               </div>
             </div>
+
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Certifications</h3>
+              {(profile.certifications ?? []).length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  None entered. The resume generator will suggest certifications.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {(profile.certifications ?? []).map((cert, index) => (
+                    <div key={cert.id ?? index} className="border-l-4 border-amber-500 pl-4">
+                      <h4 className="font-semibold text-gray-900">
+                        {cert.url ? (
+                          <a href={cert.url} target="_blank" rel="noopener noreferrer" className="text-primary-700 hover:underline">
+                            {cert.name}
+                          </a>
+                        ) : (
+                          cert.name
+                        )}
+                      </h4>
+                      {cert.issuer && <p className="text-gray-700">{cert.issuer}</p>}
+                      {cert.date && <p className="text-sm text-gray-600">{cert.date}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>

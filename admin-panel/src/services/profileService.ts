@@ -5,6 +5,8 @@ export interface Certification {
   name?: string;
   issuer?: string;
   date?: string;
+  /** Optional link (e.g. credential verification) shown on the resume */
+  url?: string;
 }
 
 export interface Profile {

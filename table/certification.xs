@@ -13,6 +13,7 @@ table certification {
     text name?
     text issuer?
     text issued_date?
+    text url?
     timestamp updated_at?
   }
 

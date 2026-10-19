@@ -42,10 +42,11 @@ export default function CertificationFields<T extends FieldValues>({ control, re
             >
               <Trash2 className="w-4 h-4" />
             </button>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input label="Certification" {...register(`certifications.${index}.name` as never)} />
               <Input label="Issuer" placeholder="e.g. AWS" {...register(`certifications.${index}.issuer` as never)} />
               <Input label="Date" placeholder="e.g. 2024-05" {...register(`certifications.${index}.date` as never)} />
+              <Input label="Link (optional)" placeholder="https://..." {...register(`certifications.${index}.url` as never)} />
             </div>
           </div>
         ))}

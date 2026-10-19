@@ -1700,10 +1700,16 @@ class PDFGenerator {
     const name   = cert.name || cert.cert_name || "";
     const issuer = cert.issuer || "";
     const date   = cert.date || "";
+    const url    = typeof cert.url === "string" && /^https?:\/\//i.test(cert.url.trim()) ? cert.url.trim() : "";
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...this.C.body);
-    doc.text(name, m, this.currentY);
+    if (url) {
+      // Clickable certification name when the profile gave a link
+      doc.textWithLink(name, m, this.currentY, { url });
+    } else {
+      doc.text(name, m, this.currentY);
+    }
 
     if (issuer) {
       const nw  = doc.getTextWidth(name);

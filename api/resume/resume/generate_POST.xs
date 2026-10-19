@@ -1050,7 +1050,7 @@ query "resume/generate" verb=POST {
     foreach ($user_certs) {
       each as $uc {
         var.update $cert_text {
-          value = $cert_text ~ "- " ~ ($uc.name|first_notnull:"") ~ " | " ~ ($uc.issuer|first_notnull:"") ~ " | " ~ ($uc.issued_date|first_notnull:"") ~ "\n"
+          value = $cert_text ~ "- " ~ ($uc.name|first_notnull:"") ~ " | " ~ ($uc.issuer|first_notnull:"") ~ " | " ~ ($uc.issued_date|first_notnull:"") ~ " | " ~ ($uc.url|first_notnull:"") ~ "\n"
         }
       }
     }
@@ -1648,7 +1648,7 @@ Regenerate if violated.
             conditional {
               if (($user_certs|count) > 0) {
                 var.update $system_prompt {
-                  value = $system_prompt ~ "\n\n========================================================\nCANDIDATE CERTIFICATIONS OVERRIDE\n========================================================\n\nThe candidate has provided their own certifications (CERTIFICATIONS in the candidate profile). This OVERRIDES the CERTIFICATIONS RULE above: the certifications section MUST contain exactly the candidate-provided certifications, with their name, issuer and date exactly as entered (do not shorten or reformat any part). Do NOT add, invent, or replace them with other certifications."
+                  value = $system_prompt ~ "\n\n========================================================\nCANDIDATE CERTIFICATIONS OVERRIDE\n========================================================\n\nThe candidate has provided their own certifications (CERTIFICATIONS in the candidate profile). This OVERRIDES the CERTIFICATIONS RULE above: the certifications section MUST contain exactly the candidate-provided certifications, with their name, issuer and date exactly as entered (do not shorten or reformat any part). If a certification has a link (the url after the date), add a \"url\" field with that exact link to its entry; leave \"url\" out when no link was given. Do NOT add, invent, or replace them with other certifications."
                 }
               }
             }
