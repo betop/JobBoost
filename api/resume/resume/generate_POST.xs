@@ -1747,6 +1747,24 @@ Regenerate if violated.
               }
             }
           
+            // Only the sections the admin enabled go into the JSON structure we send (disabled ones are removed
+            // from the schema instead of only being mentioned in the omit instruction).
+            conditional {
+              if (!$include_certifications_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:",\"certifications\":[{\"name\":\"[Cert Name]\",\"issuer\":\"[Issuer]\",\"date\":\"[Year]\"}]":""
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_key_projects_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:",\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"date\":\"[End Date]\",\"description\":\"[Action verb + process + result]\"}]":""
+                }
+              }
+            }
+
             var $result_schema {
               value = $input.skip_cover_letter == true ? "{\n  \"resume\": " ~ $resume_schema ~ "\n}" : "{\n  \"resume\": " ~ $resume_schema ~ ",\n  \"cover_letter\": \"<full tailored cover letter as HTML>\"\n}"
             }
