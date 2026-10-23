@@ -45,9 +45,19 @@ export interface DepositResponse {
   status: string;
 }
 
+export interface ModelUsageRate {
+  model: string;
+  label: string;
+  usage_rate: number;
+  // true when the model has its own override; false = uses the global rate
+  is_set: boolean;
+}
+
 export interface CreditSettings {
   usage_rate: number;
   low_balance_threshold: number;
+  model_rates?: Record<string, number>;
+  models?: ModelUsageRate[];
 }
 
 export type UsageAppKey = "resume_generation" | "assistant" | "mail_triage" | "other";
@@ -119,6 +129,14 @@ export const creditsService = {
   updateSettings: async (usageRate: number): Promise<CreditSettings> => {
     const response = await api.put("/dashboard/credits/settings", {
       usage_rate: usageRate,
+    });
+    return response.data;
+  },
+
+  // super_admin only. Merged into the stored map; a null rate clears that model's override.
+  updateModelRates: async (modelRates: Record<string, number | null>): Promise<CreditSettings> => {
+    const response = await api.put("/dashboard/credits/settings", {
+      model_rates: modelRates,
     });
     return response.data;
   },

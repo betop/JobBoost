@@ -1514,7 +1514,7 @@ query "resume/generate_legacy" verb=POST {
   
     // Usage rate in force right now: saved on the log row and used for the charge (log and ledger agree)
     function.run "credits/get_usage_rate" {
-      input = {admin_id: $billing_check.billing_admin_id}
+      input = {admin_id: $billing_check.billing_admin_id, model: $ai_model_id}
     } as $log_rate_info
 
     var $usage_rate {
@@ -1606,7 +1606,7 @@ query "resume/generate_legacy" verb=POST {
         conditional {
           if ($billing_check.free_trial && $match_status == 1) {
             function.run "credits/consume_free_generation" {
-              input = {admin_id: $billing_check.billing_admin_id}
+              input = {admin_id: $billing_check.billing_admin_id, model: $ai_model_id}
             } as $free_consumed
 
             var.update $free_trial_info {

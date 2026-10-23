@@ -85,7 +85,7 @@ function "credits/credit_charge_usage" {
     conditional {
       if ($rate == null || $rate <= 0) {
         function.run "credits/get_usage_rate" {
-          input = {admin_id: $input.admin_id}
+          input = {admin_id: $input.admin_id, model: $input.model}
         } as $rate_info
 
         var.update $rate {

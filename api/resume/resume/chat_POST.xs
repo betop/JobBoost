@@ -551,7 +551,7 @@ No explanations needed, just answer the question based on the provided informati
   
     // Usage rate in force right now: saved on the log row and used for the charge
     function.run "credits/get_usage_rate" {
-      input = {admin_id: $billing_check.billing_admin_id}
+      input = {admin_id: $billing_check.billing_admin_id, model: $ai_model_id}
     } as $log_rate_info
 
     var $usage_rate {

@@ -225,7 +225,7 @@ query "public/gmail-analyze" verb=POST {
 
     // Usage rate in force right now: saved on the log row and used for the charge
     function.run "credits/get_usage_rate" {
-      input = {admin_id: $billing_admin_id}
+      input = {admin_id: $billing_admin_id, model: "claude-haiku-4-5"}
     } as $log_rate_info
 
     var $usage_rate {

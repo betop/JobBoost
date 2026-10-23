@@ -474,6 +474,34 @@ export default function CreditsPage() {
     }
   };
 
+  const [modelRateInputs, setModelRateInputs] = useState<Record<string, string>>({});
+  const [modelRateSaving, setModelRateSaving] = useState<string | null>(null);
+
+  const handleSaveModelRate = async (model: string, label: string, clear = false) => {
+    let rate: number | null = null;
+    if (!clear) {
+      rate = parseFloat(modelRateInputs[model] ?? "");
+      if (!isFinite(rate) || rate < 1 || rate > 10) {
+        showToast("Usage rate must be between 1 and 10", "error");
+        return;
+      }
+    }
+    setModelRateSaving(model);
+    try {
+      const updated = await creditsService.updateModelRates({ [model]: rate });
+      queryClient.setQueryData(["credits-settings"], updated);
+      setModelRateInputs((prev) => ({ ...prev, [model]: "" }));
+      showToast(
+        clear ? `${label} now uses the global rate` : `${label} rate updated to ${rate}x`,
+        "success"
+      );
+    } catch (err: any) {
+      showToast(err.response?.data?.message || err.response?.data?.error || "Failed to update model rate", "error");
+    } finally {
+      setModelRateSaving(null);
+    }
+  };
+
   const handleDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount < 15) {
@@ -632,6 +660,55 @@ export default function CreditsPage() {
               Save
             </Button>
           </div>
+
+          {settings?.models && settings.models.length > 0 && (
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-semibold">Rate per model</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Overrides the global rate for usage on that model. A personal admin rate still wins.
+              </p>
+              <div className="mt-3 space-y-3">
+                {settings.models.map((m) => (
+                  <div key={m.model} className="flex items-end gap-3 flex-wrap">
+                    <div className="w-48">
+                      <div className="text-sm font-medium">{m.label}</div>
+                      <div className="text-xs text-gray-500">
+                        {m.usage_rate}x {m.is_set ? "(custom)" : "(global)"}
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      step="0.01"
+                      value={modelRateInputs[m.model] ?? ""}
+                      onChange={(e) =>
+                        setModelRateInputs((prev) => ({ ...prev, [m.model]: e.target.value }))
+                      }
+                      placeholder={String(m.usage_rate)}
+                      className="w-40 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    />
+                    <Button
+                      onClick={() => handleSaveModelRate(m.model, m.label)}
+                      loading={modelRateSaving === m.model}
+                      disabled={!modelRateInputs[m.model]}
+                    >
+                      Save
+                    </Button>
+                    {m.is_set && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleSaveModelRate(m.model, m.label, true)}
+                        disabled={modelRateSaving === m.model}
+                      >
+                        Use global
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <UsageSection

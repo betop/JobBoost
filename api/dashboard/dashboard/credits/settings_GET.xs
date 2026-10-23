@@ -1,5 +1,5 @@
 // Returns the global billing settings: the usage multiplier applied to raw AI cost and the
-// low-balance warning threshold. Any active admin or super_admin may read it.
+// low-balance warning threshold, plus the effective per-model rates (model_rates / models). Any active admin or super_admin may read it.
 query "dashboard/credits/settings" verb=GET {
   api_group = "dashboard"
   auth = "users"
@@ -28,6 +28,8 @@ query "dashboard/credits/settings" verb=GET {
 
   response = {
     usage_rate         : $rate_info.usage_rate
+    model_rates        : $rate_info.model_rates
+    models             : $rate_info.models
     low_balance_threshold: $rate_info.low_balance_threshold
   }
 

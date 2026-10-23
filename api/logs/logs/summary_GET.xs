@@ -104,6 +104,10 @@ query "logs/summary" verb=GET {
       value = 1.5
     }
 
+    var $default_model_rates {
+      value = {}
+    }
+
     conditional {
       if ($is_super) {
         function.run "credits/get_usage_rate" {
@@ -112,6 +116,10 @@ query "logs/summary" verb=GET {
 
         var.update $default_rate {
           value = $default_info.usage_rate
+        }
+
+        var.update $default_model_rates {
+          value = $default_info.model_rates
         }
       }
     }
@@ -219,7 +227,7 @@ query "logs/summary" verb=GET {
 
             // Price rate: the log's own rate, else the billing admin's personal rate, else the global rate
             var $g_rate {
-              value = $default_rate
+              value = ($default_model_rates|get:$g.model)|first_notnull:$default_rate
             }
 
             conditional {
@@ -231,13 +239,13 @@ query "logs/summary" verb=GET {
 
               elseif ($g.billing_admin_id != null) {
                 var $adm_key {
-                  value = $g.billing_admin_id|to_text
+                  value = ($g.billing_admin_id|to_text) ~ "|" ~ $g.model
                 }
 
                 conditional {
                   if (!($admin_rate_cache|has:$adm_key)) {
                     function.run "credits/get_usage_rate" {
-                      input = {admin_id: $g.billing_admin_id}
+                      input = {admin_id: $g.billing_admin_id, model: $g.model}
                     } as $adm_info
 
                     var.update $admin_rate_cache {

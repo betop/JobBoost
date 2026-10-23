@@ -187,7 +187,7 @@ query "logs/list" verb=GET {
             } as $lg_raw
 
             var $lg_rate {
-              value = $default_rate_info.usage_rate
+              value = ($default_rate_info.model_rates|get:($lg.ai_model|first_notnull:"claude-haiku-4-5"))|first_notnull:$default_rate_info.usage_rate
             }
 
             conditional {
@@ -199,13 +199,13 @@ query "logs/list" verb=GET {
 
               elseif ($lg.billing_admin_id != null) {
                 var.update $cache_key {
-                  value = $lg.billing_admin_id|to_text
+                  value = ($lg.billing_admin_id|to_text) ~ "|" ~ ($lg.ai_model|first_notnull:"claude-haiku-4-5")
                 }
 
                 conditional {
                   if (!($rate_cache|has:$cache_key)) {
                     function.run "credits/get_usage_rate" {
-                      input = {admin_id: $lg.billing_admin_id}
+                      input = {admin_id: $lg.billing_admin_id, model: $lg.ai_model|first_notnull:"claude-haiku-4-5"}
                     } as $adm_rate
 
                     var.update $rate_cache {
