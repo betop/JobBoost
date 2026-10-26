@@ -430,6 +430,7 @@ export default function TokensPage() {
       activate: "Activate this key?",
       delete: "Delete this key? This cannot be undone.",
       extend: "Save the new expiration for this key?",
+      ips: "Save the IP whitelist for this key?",
     };
     if (window.confirm(labels[action.type] ?? "Are you sure?")) {
       runAction(action);
@@ -603,7 +604,6 @@ export default function TokensPage() {
                   <UserPlus className="w-4 h-4" />
                 </button>
                 )}
-                {isSuperAdmin && (
                 <button
                   onClick={() => {
                     setIpToken(row);
@@ -615,7 +615,6 @@ export default function TokensPage() {
                 >
                   <Globe className="w-4 h-4" />
                 </button>
-                )}
                 <button
                   onClick={() => {
                     setExtendToken(row);
@@ -1032,8 +1031,8 @@ export default function TokensPage() {
             </Modal>
           )}
 
-          {/* IP whitelist modal (super_admin) */}
-          {isSuperAdmin && (
+          {/* IP whitelist modal (super_admin + admins on keys they manage) */}
+          {(
             <Modal
               isOpen={ipToken !== null}
               onClose={() => { setIpToken(null); setIpText(""); setIpError(null); }}
@@ -1062,8 +1061,7 @@ export default function TokensPage() {
                           setIpError(parsed.error);
                           return;
                         }
-                        setPendingAction({ type: "ips", id: ipToken.id, data: parsed.ips });
-                        setShowActionConfirm(true);
+                        requestAction({ type: "ips", id: ipToken.id, data: parsed.ips });
                       }}
                       loading={allowedIpsMutation.isPending}
                       className="flex-1"

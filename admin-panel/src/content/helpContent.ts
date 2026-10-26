@@ -259,11 +259,11 @@ export const helpSections: HelpSection[] = [
       { text: "Review legacy key requests: old requests that are still pending can be approved (this generates the key) or declined, with an optional note. New admin key requests are auto-approved.", superOnly: true },
       { text: "Extend or clear the expiration date (empty means never expires), revoke and re-activate a key, or delete it, for any key.", superOnly: true },
       { text: "Assign a key to admins so they can see it read-only in their list.", superOnly: true },
-      { text: "IP whitelist per key: one plain IPv4 or IPv6 address per line (or comma separated). CIDR ranges are not supported and a key can have at most 50 addresses. When the list is empty the key works from any IP.", superOnly: true },
+      { text: "IP whitelist per key: one plain IPv4 or IPv6 address per line (or comma separated). CIDR ranges are not supported and a key can have at most 50 addresses. When the list is empty the key works from any IP." },
     ],
     tips: [
       { text: "A user can only have one active key at a time; users who already have one are disabled in the picker." },
-      { text: "If a bidder gets \"Generation is not allowed from this IP address\", their current public IP is not in the key's whitelist. Ask a super admin to update the list (only super admins can edit IP whitelists)." },
+      { text: "If a bidder gets \"Generation is not allowed from this IP address\", their current public IP is not in the key's whitelist. Ask a super admin, or the admin who manages the key, to update the list." },
       { text: "The Allowed IPs column shows \"Any IP\" when no whitelist is set." },
       { text: "The Keys page asks super admins to confirm their password on entry, and again for sensitive actions.", superOnly: true },
     ],
@@ -385,7 +385,7 @@ export const helpSections: HelpSection[] = [
       { text: "The resume layout comes from the Resume Template set on the profile (see Create / edit a profile). Cover letter is generated in the same run." },
       { text: "Non-generation outcomes are explained in the progress window: job not qualified, not a job description, already applied (with the date), reposted job, or does not match the profile. Bidders can only close the window." },
       { text: "Low credit: when the billing admin's balance is below $5 a yellow notice appears, but the resume is still generated. At $0 the request is refused with \"Insufficient credit. The billing admin's credit balance is empty, please top up to continue.\"" },
-      { text: "\"Generation is not allowed from this IP address\": the key has an IP whitelist and the bidder's current public IP is not on it. A super admin must add the IP (or clear the list)." },
+      { text: "\"Generation is not allowed from this IP address\": the key has an IP whitelist and the bidder's current public IP is not on it. A super admin or the managing admin must add the IP (or clear the list)." },
       { text: "\"Extension version mismatch. Please update your extension to the latest version.\": the installed version is not the current release. The progress window shows \"Update required\". Download the latest version from /download, reinstall and try again." },
       { text: "\"Profile is not approved. Please contact your admin.\": the profile is an older one still pending approval. Unapproved profiles are not offered to the extension." },
       { text: "Keys of admin accounts get extra controls: a \"Resume only\" switch in the popup that skips the cover letter, and the option to Generate Anyway after a duplicate, not-a-JD, unfit, reposted or mismatch warning. AI errors can be retried." },
@@ -468,7 +468,7 @@ export const faqItems: FaqItem[] = [
   {
     id: "faq-ip",
     q: "Why do I see \"Generation is not allowed from this IP address\"?",
-    a: "The bidder's key has an IP whitelist and their current public IP is not on it (for example after a VPN or network change). A super admin can add the IP or clear the list on the Keys page; an empty list allows any IP.",
+    a: "The bidder's key has an IP whitelist and their current public IP is not on it (for example after a VPN or network change). A super admin, or the admin who manages the key, can add the IP or clear the list on the Keys page; an empty list allows any IP.",
   },
   {
     id: "faq-version",

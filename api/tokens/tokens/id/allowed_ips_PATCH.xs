@@ -9,16 +9,6 @@ query "tokens/{id}/allowed-ips" verb=PATCH {
   }
 
   stack {
-    db.get users {
-      field_name = "id"
-      field_value = $auth.id
-    } as $caller
-
-    precondition ($caller != null && $caller.type == "super_admin") {
-      error_type = "accessdenied"
-      error = "Only super_admin can change a key's IP whitelist"
-    }
-
     db.get access_token {
       field_name = "id"
       field_value = $input.id
@@ -27,6 +17,15 @@ query "tokens/{id}/allowed-ips" verb=PATCH {
     precondition ($t != null) {
       error_type = "notfound"
       error = "Token not found"
+    }
+
+    function.run "tokens/can_manage_user_keys" {
+      input = {caller_id: $auth.id, target_user_id: $t.user_id}
+    } as $scope
+
+    precondition ($t.user_id != null && $scope.allowed) {
+      error_type = "accessdenied"
+      error = "You can only manage keys for yourself and your own bidders"
     }
   
     function.run "security/normalize_ip_list" {

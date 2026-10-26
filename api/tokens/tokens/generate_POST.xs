@@ -10,20 +10,6 @@ query "tokens/generate" verb=POST {
   }
 
   stack {
-    db.get users {
-      field_name = "id"
-      field_value = $auth.id
-    } as $caller
-
-    var $ips_requested {
-      value = $input.allowed_ips != null && ($input.allowed_ips|count) > 0
-    }
-
-    precondition (!$ips_requested || ($caller != null && $caller.type == "super_admin")) {
-      error_type = "accessdenied"
-      error = "Only super_admin can change a key's IP whitelist"
-    }
-
     precondition ($input.user_id != null) {
       error_type = "badrequest"
       error = "user_id is required"
