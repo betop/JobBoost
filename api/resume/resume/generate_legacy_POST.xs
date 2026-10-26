@@ -45,20 +45,6 @@ query "resume/generate_legacy" verb=POST {
       error = "The job description is too short. Please paste the full job description text, not just a job title or link."
     }
   
-    // Reject federal government job postings
-    var $fed_text {
-      value = (($input.job_url|to_text) ~ " " ~ ($input.job_description|to_text))|to_lower
-    }
-  
-    var $is_federal_job {
-      value = ($fed_text|contains:"usajobs") || ($fed_text|contains:"federal government") || ($fed_text|contains:"federal agency") || ($fed_text|contains:"federal employee") || ($fed_text|contains:"u.s. government") || ($fed_text|contains:"us government") || ($fed_text|contains:"executive branch") || ($fed_text|contains:"general schedule") || ($fed_text|contains:"gs-0") || ($fed_text|contains:"gs-1") || ($fed_text|contains:"excepted service") || ($fed_text|contains:"competitive service") || ($fed_text|contains:".gov/") || ($fed_text|contains:".gov ")
-    }
-  
-    precondition (!$is_federal_job) {
-      error_type = "badrequest"
-      error = "Federal government jobs are not supported."
-    }
-  
     precondition ($input.token != null) {
       error_type = "accessdenied"
       error = "Missing authorization key"
