@@ -341,6 +341,7 @@ export default function TokensPage() {
       showToast("Key created", "success");
       setGeneratedToken(created.token);
       resetRequest();
+      setGenIpText("");
       refetchRequests();
       refetch();
     },
@@ -415,6 +416,13 @@ export default function TokensPage() {
     };
     if (data.expiration_date) payload.expiration_date = data.expiration_date;
     if (data.notes) payload.notes = data.notes;
+    const parsed = parseIpList(genIpText);
+    if (parsed.error) {
+      setGenIpError(parsed.error);
+      return;
+    }
+    setGenIpError(null);
+    if (parsed.ips.length > 0) payload.allowed_ips = parsed.ips;
     createRequestMutation.mutate(payload);
   };
 
@@ -974,6 +982,15 @@ export default function TokensPage() {
                   {...registerRequest("user_id")}
                 />
                 <Input label="Expiration Date (Optional)" type="date" {...registerRequest("expiration_date")} />
+                <Textarea
+                  label="Allowed IPs (Optional)"
+                  rows={3}
+                  placeholder={"203.0.113.10\n2001:db8::1"}
+                  value={genIpText}
+                  onChange={(e) => { setGenIpText(e.target.value); setGenIpError(null); }}
+                  error={genIpError ?? undefined}
+                  helperText={`${ALLOWED_IPS_HELP} One per line or comma separated.`}
+                />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
                   <textarea

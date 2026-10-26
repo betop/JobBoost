@@ -9,6 +9,7 @@ query "tokens/request" verb=POST {
     uuid user_id?
     timestamp expiration_date?
     text notes?
+    text[] allowed_ips?
   }
 
   stack {
@@ -60,6 +61,20 @@ query "tokens/request" verb=POST {
       error = "You can only manage keys for yourself and your own bidders"
     }
 
+    function.run "security/normalize_ip_list" {
+      input = {ips: $input.allowed_ips}
+    } as $norm
+
+    precondition (!$norm.too_many) {
+      error_type = "badrequest"
+      error = "A key can have at most 50 allowed IP addresses"
+    }
+
+    precondition ($norm.invalid_entry == null) {
+      error_type = "badrequest"
+      error = "Invalid IP address: " ~ $norm.invalid_entry ~ ". Use a plain IPv4 or IPv6 address (CIDR ranges are not supported)."
+    }
+
     // Normalize expiration_date: treat empty string as null
     var $exp_date {
       value = null
@@ -92,6 +107,7 @@ query "tokens/request" verb=POST {
         user_id            : $input.user_id
         created_by_admin_id: $auth_user.id
         expires_at         : $exp_date
+        allowed_ips        : $norm.entries
       }
     } as $issued
 
@@ -127,6 +143,7 @@ query "tokens/request" verb=POST {
     review_notes   : $req.review_notes
     token_id       : $issued.token_id
     token          : $issued.token
+    allowed_ips    : $norm.entries
   }
 
   guid = "KB-QCWZqXC_CGnRqU56m7jt0Voc"

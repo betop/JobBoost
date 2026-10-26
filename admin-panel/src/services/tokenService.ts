@@ -49,6 +49,7 @@ export interface CreateTokenRequestInput {
   user_id: string;
   expiration_date?: string;
   notes?: string;
+  allowed_ips?: string[];
 }
 
 export const tokenService = {

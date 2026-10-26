@@ -8,6 +8,7 @@ function "tokens/issue_access_token" {
     uuid user_id
     uuid created_by_admin_id
     timestamp expires_at?
+    text[] allowed_ips?
   }
 
   stack {
@@ -29,6 +30,7 @@ function "tokens/issue_access_token" {
         expires_at         : $input.expires_at
         is_used            : false
         is_active          : true
+        allowed_ips        : $input.allowed_ips|first_notnull:[]
       }
     } as $token
 
