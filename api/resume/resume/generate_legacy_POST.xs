@@ -488,7 +488,7 @@ query "resume/generate_legacy" verb=POST {
 
                 // Federal government check: flag comes from the extraction prompt above
                 var $is_federal_company {
-                  value = $extraction_json.is_federal_government_employer == "true" || $extraction_json.is_federal_government_employer == true
+                  value = $extraction_json.is_federal_government_employer == "true"
                 }
 
                 // Max 3 successful submissions to the same company per profile
@@ -535,7 +535,7 @@ query "resume/generate_legacy" verb=POST {
                 }
 
                 var $requires_in_person_interview {
-                  value = $extraction_json.requires_in_person_interview == "true" || $extraction_json.requires_in_person_interview == true
+                  value = $extraction_json.requires_in_person_interview == "true"
                 }
 
                 conditional {
