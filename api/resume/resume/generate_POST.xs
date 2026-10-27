@@ -1477,11 +1477,11 @@ Since the candidate profile does not include real certifications, generate plaus
 1. Certifications explicitly named in the job description, if consistent with the candidate's seniority and background, or otherwise
 2. Well-known, real, industry-standard certifications closely related to the job description's technologies or domain that a professional at the candidate's seniority level would plausibly hold (e.g. AWS Certified Solutions Architect, Microsoft Certified: Azure Developer Associate, PMP, Certified ScrumMaster, CompTIA Security+, Google Professional Data Engineer).
 
-Each certification MUST include name, issuer, and date.
+Each certification MUST include name and issuer only. Do NOT include any date, year, or url field.
 
 You MUST:
 - Use ONLY real, well-known certifying organizations (e.g. AWS, Microsoft, Google, PMI, Scrum Alliance, CompTIA, Cisco) — NOT fabricated ones.
-- Use a plausible past date consistent with the candidate's career timeline.
+- Choose certifications plausible for the candidate's career timeline and seniority.
 - NOT invent obscure or fictional certifications or include numeric metrics.
 
 ========================================================
@@ -1493,6 +1493,7 @@ There MUST be no more than 4 projects.
 Each project:
 - Must be derived from real work experience (profile career - company).
 - Must map to a specific company and period in career_breakdowns (same employer and overlapping dates).
+- Do NOT output any date, date range, year, start/end, or company field for this entry — selection uses the mapped period, but the output has no dates.
 - Must align with that company's real industry/product/culture context at that time. Example: if the mapped company context is healthcare, the project domain should reference healthcare workflows/data/users — not unrelated domains like edtech.
 - Must NOT mix unrelated domain language that conflicts with the mapped company's business context.
 - Must be a core idea. (e.g. Doctors want to search specific patients data from database using query like "Show me patients data between Jan - Mar this year")
@@ -1512,6 +1513,7 @@ There MUST be no more than 3 entries.
 Each entry:
 - Must derive from real work already reflected in career_breakdowns — a deeper, more specific extension of something the candidate actually did at a real employer, not a separate invented initiative.
 - Must map to a specific company and period in career_breakdowns (same employer and overlapping dates).
+- Do NOT output any date, date range, year, start/end, or company field for this entry — selection uses the mapped period, but the output has no dates.
 - Must align with that company's real industry/product/culture context at that time, and MUST NOT introduce a conflicting domain.
 - Description MUST open with a strong, specific verb from the ACTION VERB BANK in the BULLET RULE above. The opening verb MUST NOT be the same verb already used to open a career_breakdowns bullet for that same company. Apply BULLET RULE — Metrics (metric non-reuse) to this entry.
 - The "role" label (e.g. Lead Engineer, Technical Lead, Project Lead) MUST NOT imply seniority or authority beyond what the candidate's actual job_title at that company supports. If the real title was an individual-contributor title (e.g. Software Engineer), frame it as a specific initiative or contribution — do NOT imply a formal leadership title they did not hold.
@@ -1634,14 +1636,14 @@ Regenerate if violated.
             conditional {
               if (($user_certs|count) > 0) {
                 var.update $system_prompt {
-                  value = $system_prompt ~ "\n\n========================================================\nCANDIDATE CERTIFICATIONS OVERRIDE\n========================================================\n\nThe candidate has provided their own certifications (CERTIFICATIONS in the candidate profile). This OVERRIDES the CERTIFICATIONS RULE above: the certifications section MUST contain exactly the candidate-provided certifications, with their name, issuer and date exactly as entered (do not shorten or reformat any part). If a certification has a link (the url after the date), add a \"url\" field with that exact link to its entry; leave \"url\" out when no link was given. Do NOT add, invent, or replace them with other certifications."
+                  value = $system_prompt ~ "\n\n========================================================\nCANDIDATE CERTIFICATIONS OVERRIDE\n========================================================\n\nThe candidate has provided their own certifications (CERTIFICATIONS in the candidate profile). This OVERRIDES the CERTIFICATIONS RULE above: the certifications section MUST contain exactly the candidate-provided certifications, in the same order, with their name and issuer exactly as entered. The server overwrites the certifications section (name, issuer, date as Mon YYYY or YYYY, url) from the candidate's records after you respond, so you may list them with name and issuer only. Do NOT add, invent, or replace them with other certifications, and never include a day in any date."
                 }
               }
             }
           
             // Resume JSON schema example, hardcoded directly as a string (no Xano object construction).
             var $resume_schema {
-              value = "{\"header\":{\"name\":\"[NAME IN CAPS]\",\"location\":\"[City, State]\",\"email\":\"[Gmail]\",\"phone\":\"[Phone #]\",\"linkedin\":{\"display\":\"in/[username]\",\"url\":\"https://www.linkedin.com/in/[username]\"}},\"career_breakdowns\":[{\"company\":\"[Current Company]\",\"title\":\"[Current Position]\",\"date_range\":\"[Mon YYYY - Present]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]},{\"company\":\"[Former Company]\",\"title\":\"[Former Position]\",\"date_range\":\"[Mon YYYY - Mon YYYY]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]}],\"education\":[{\"institution\":\"[University]\",\"degree\":\"[DEGREE IN CAPS]\",\"location\":\"[City, State]\",\"major\":\"[Major]\",\"highlights\":\"[Accolades, extracurriculars]\",\"Relevant\":\"[Relevant coursework]\"}],\"certifications\":[{\"name\":\"[Cert Name]\",\"issuer\":\"[Issuer]\",\"date\":\"[Year]\"}],\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"date\":\"[End Date]\",\"description\":\"[Action verb + process + result]\"}],\"leadership_enterpreneurial_experience\":[{\"name\":\"[Initiative Name]\",\"role\":\"[Role]\",\"date\":\"[End Date]\",\"description\":\"[Responsibilities and results]\"}],\"technical_skills\":{\"programming\":\"xxx, xxx\",\"softwares\":\"xxx, xxx\",\"statistics_and_ml\":\"xxx, xxx\",\"project_management\":\"xxx, xxx\",\"languages\":\"xxx, xxx\"}}"
+              value = "{\"header\":{\"name\":\"[NAME IN CAPS]\",\"location\":\"[City, State]\",\"email\":\"[Gmail]\",\"phone\":\"[Phone #]\",\"linkedin\":{\"display\":\"in/[username]\",\"url\":\"https://www.linkedin.com/in/[username]\"}},\"career_breakdowns\":[{\"company\":\"[Current Company]\",\"title\":\"[Current Position]\",\"date_range\":\"[Mon YYYY - Present]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]},{\"company\":\"[Former Company]\",\"title\":\"[Former Position]\",\"date_range\":\"[Mon YYYY - Mon YYYY]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]}],\"education\":[{\"institution\":\"[University]\",\"degree\":\"[DEGREE IN CAPS]\",\"location\":\"[City, State]\",\"major\":\"[Major]\",\"highlights\":\"[Accolades, extracurriculars]\",\"Relevant\":\"[Relevant coursework]\"}],\"certifications\":[{\"name\":\"[Cert Name]\",\"issuer\":\"[Issuer]\"}],\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"description\":\"[Action verb + process + result]\"}],\"leadership_enterpreneurial_experience\":[{\"name\":\"[Initiative Name]\",\"role\":\"[Role]\",\"description\":\"[Responsibilities and results]\"}],\"technical_skills\":{\"programming\":\"xxx, xxx\",\"softwares\":\"xxx, xxx\",\"statistics_and_ml\":\"xxx, xxx\",\"project_management\":\"xxx, xxx\",\"languages\":\"xxx, xxx\"}}"
             }
           
             // Include/omit optional sections based on profile preferences.
@@ -1738,7 +1740,7 @@ Regenerate if violated.
             conditional {
               if (!$include_certifications_flag) {
                 var.update $resume_schema {
-                  value = $resume_schema|replace:",\"certifications\":[{\"name\":\"[Cert Name]\",\"issuer\":\"[Issuer]\",\"date\":\"[Year]\"}]":""
+                  value = $resume_schema|replace:",\"certifications\":[{\"name\":\"[Cert Name]\",\"issuer\":\"[Issuer]\"}]":""
                 }
               }
             }
@@ -1746,7 +1748,7 @@ Regenerate if violated.
             conditional {
               if (!$include_key_projects_flag) {
                 var.update $resume_schema {
-                  value = $resume_schema|replace:",\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"date\":\"[End Date]\",\"description\":\"[Action verb + process + result]\"}]":""
+                  value = $resume_schema|replace:",\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"description\":\"[Action verb + process + result]\"}]":""
                 }
               }
             }
@@ -1890,6 +1892,257 @@ Regenerate if violated.
                     function.run "resume/apply_profile_header" {
                       input = {resume: $parsed_response.resume, profile: $prof}
                     } as $resume_final
+
+                    // ==================== DATE / CERTIFICATION NORMALIZATION ====================
+                    // No resume date may include a day. Projects/leadership carry no dates at all.
+                    // Manual certifications (certification table) are owned by code: they replace whatever the AI returned.
+                    var $month_abbr {
+                      value = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+                    }
+
+                    var $resume_is_obj {
+                      value = $resume_final != null && ($resume_final|is_object)
+                    }
+
+                    conditional {
+                      if ($resume_is_obj) {
+                        // Portfolio projects: strip every date-like key (and company, used by the PDF date fallback)
+                        var $src_projects {
+                          value = $resume_final|get:"portfolio_projects":null
+                        }
+
+                        conditional {
+                          if ($src_projects != null && ($src_projects|is_array)) {
+                            var $clean_projects {
+                              value = []
+                            }
+
+                            foreach ($src_projects) {
+                              each as $pp {
+                                var $pp_clean {
+                                  value = $pp
+                                }
+
+                                conditional {
+                                  if ($pp|is_object) {
+                                    var.update $pp_clean {
+                                      value = $pp|unset:"date"|unset:"date_range"|unset:"start"|unset:"end"
+                                    }
+
+                                    var.update $pp_clean {
+                                      value = $pp_clean|unset:"year"|unset:"company"
+                                    }
+                                  }
+                                }
+
+                                array.push $clean_projects {
+                                  value = $pp_clean
+                                }
+                              }
+                            }
+
+                            var.update $resume_final {
+                              value = $resume_final|set:"portfolio_projects":$clean_projects
+                            }
+                          }
+                        }
+
+                        // Leadership entries: strip every date-like key
+                        var $src_leadership {
+                          value = $resume_final|get:"leadership_enterpreneurial_experience":null
+                        }
+
+                        conditional {
+                          if ($src_leadership != null && ($src_leadership|is_array)) {
+                            var $clean_leadership {
+                              value = []
+                            }
+
+                            foreach ($src_leadership) {
+                              each as $ld {
+                                var $ld_clean {
+                                  value = $ld
+                                }
+
+                                conditional {
+                                  if ($ld|is_object) {
+                                    var.update $ld_clean {
+                                      value = $ld|unset:"date"|unset:"date_range"|unset:"start"|unset:"end"
+                                    }
+
+                                    var.update $ld_clean {
+                                      value = $ld_clean|unset:"year"
+                                    }
+                                  }
+                                }
+
+                                array.push $clean_leadership {
+                                  value = $ld_clean
+                                }
+                              }
+                            }
+
+                            var.update $resume_final {
+                              value = $resume_final|set:"leadership_enterpreneurial_experience":$clean_leadership
+                            }
+                          }
+                        }
+
+                        // Certifications
+                        conditional {
+                          if (($user_certs|count) > 0 && $include_certifications_flag) {
+                            var $manual_certs {
+                              value = []
+                            }
+
+                            foreach ($user_certs) {
+                              each as $mc {
+                                var $mc_raw_date {
+                                  value = $mc.issued_date|first_notnull:""|to_text|trim
+                                }
+
+                                var $mc_date {
+                                  value = $mc_raw_date
+                                }
+
+                                // "YYYY-MM" or "YYYY-MM-DD..." -> "Mon YYYY"
+                                var $m_iso {
+                                  value = "/^(\\d{4})-(\\d{1,2})/"|regex_get_first_match:$mc_raw_date
+                                }
+
+                                // "Month DD, YYYY" -> "Mon YYYY"
+                                var $m_named {
+                                  value = "/^([A-Za-z]{3})[A-Za-z]*\\.?\\s+\\d{1,2}(st|nd|rd|th)?,?\\s+(\\d{4})$/"|regex_get_first_match:$mc_raw_date
+                                }
+
+                                // "MM/DD/YYYY" -> "Mon YYYY"
+                                var $m_slash {
+                                  value = "/^(\\d{1,2})[\\/.](\\d{1,2})[\\/.](\\d{4})$/"|regex_get_first_match:$mc_raw_date
+                                }
+
+                                conditional {
+                                  if (($m_iso|count) > 2) {
+                                    var $iso_month {
+                                      value = ($m_iso|get:2)|to_int
+                                    }
+
+                                    conditional {
+                                      if ($iso_month >= 1 && $iso_month <= 12) {
+                                        var.update $mc_date {
+                                          value = ($month_abbr|get:($iso_month - 1)) ~ " " ~ ($m_iso|get:1)
+                                        }
+                                      }
+
+                                      else {
+                                        var.update $mc_date {
+                                          value = $m_iso|get:1
+                                        }
+                                      }
+                                    }
+                                  }
+
+                                  elseif (($m_named|count) > 3) {
+                                    var $named_mon {
+                                      value = $m_named|get:1|to_lower|capitalize
+                                    }
+
+                                    var.update $mc_date {
+                                      value = $named_mon ~ " " ~ ($m_named|get:3)
+                                    }
+                                  }
+
+                                  elseif (($m_slash|count) > 3) {
+                                    var $slash_month {
+                                      value = ($m_slash|get:1)|to_int
+                                    }
+
+                                    conditional {
+                                      if ($slash_month >= 1 && $slash_month <= 12) {
+                                        var.update $mc_date {
+                                          value = ($month_abbr|get:($slash_month - 1)) ~ " " ~ ($m_slash|get:3)
+                                        }
+                                      }
+
+                                      else {
+                                        var.update $mc_date {
+                                          value = $m_slash|get:3
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+
+                                var $mc_url {
+                                  value = $mc.url|first_notnull:""|to_text|trim
+                                }
+
+                                conditional {
+                                  if ($mc_url != "" && !("/^https?:\\/\\//i"|regex_matches:$mc_url)) {
+                                    var.update $mc_url {
+                                      value = "https://" ~ $mc_url
+                                    }
+                                  }
+                                }
+
+                                array.push $manual_certs {
+                                  value = {
+                                    name  : $mc.name|first_notnull:""
+                                    issuer: $mc.issuer|first_notnull:""
+                                    date  : $mc_date
+                                    url   : $mc_url
+                                  }
+                                }
+                              }
+                            }
+
+                            var.update $resume_final {
+                              value = $resume_final|set:"certifications":$manual_certs
+                            }
+                          }
+
+                          elseif (($user_certs|count) == 0) {
+                            // AI-proposed certifications: never dated
+                            var $src_certs {
+                              value = $resume_final|get:"certifications":null
+                            }
+
+                            conditional {
+                              if ($src_certs != null && ($src_certs|is_array)) {
+                                var $clean_certs {
+                                  value = []
+                                }
+
+                                foreach ($src_certs) {
+                                  each as $ac {
+                                    var $ac_clean {
+                                      value = $ac
+                                    }
+
+                                    conditional {
+                                      if ($ac|is_object) {
+                                        var.update $ac_clean {
+                                          value = $ac|unset:"date"|unset:"date_range"|unset:"year"
+                                        }
+                                      }
+                                    }
+
+                                    array.push $clean_certs {
+                                      value = $ac_clean
+                                    }
+                                  }
+                                }
+
+                                var.update $resume_final {
+                                  value = $resume_final|set:"certifications":$clean_certs
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                    // ==================== END DATE / CERTIFICATION NORMALIZATION ====================
+
 
                     var.update $resume_text {
                       value = $resume_final|json_encode
