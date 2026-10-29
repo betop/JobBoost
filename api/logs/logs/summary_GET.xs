@@ -211,14 +211,39 @@ query "logs/summary" verb=GET {
           if ($is_super) {
             // Model prices for this group's price tier (rows are grouped by prompt size > 100K tokens,
             // so Haiku 5.5's tier is chosen per request, not per sum)
+            // big_prompt may come back as true/t/1 depending on the driver
+            var $big_str {
+              value = $g.big_prompt|to_text|to_lower
+            }
+
+            var $tier_label {
+              value = "base"
+            }
+
+            var $tier_prompt_tokens {
+              value = 0
+            }
+
+            conditional {
+              if ($big_str == "true" || $big_str == "t" || $big_str == "1") {
+                var.update $tier_label {
+                  value = "big"
+                }
+
+                var.update $tier_prompt_tokens {
+                  value = 100001
+                }
+              }
+            }
+
             var $tier_key {
-              value = $g.model ~ "|" ~ ($g.big_prompt ? "big" : "base")
+              value = $g.model ~ "|" ~ $tier_label
             }
 
             conditional {
               if (!($rates_cache|has:$tier_key)) {
                 function.run "ai/claude_haiku_rates" {
-                  input = {model: $g.model, prompt_tokens: $g.big_prompt ? 100001 : 0}
+                  input = {model: $g.model, prompt_tokens: $tier_prompt_tokens}
                 } as $model_rates
 
                 var.update $rates_cache {
@@ -281,6 +306,22 @@ query "logs/summary" verb=GET {
         }
       }
     }
+
+    var $real_income {
+      value = null
+    }
+
+    conditional {
+      if ($is_super) {
+        var $income_diff {
+          value = $est_total - $raw_total
+        }
+
+        var.update $real_income {
+          value = $income_diff|round:8
+        }
+      }
+    }
   }
 
   response = {
@@ -295,7 +336,7 @@ query "logs/summary" verb=GET {
     cache_read_tokens : $cr_total
     raw_cost_usd    : $is_super ? ($raw_total|round:8) : null
     est_cost_usd    : $is_super ? ($est_total|round:8) : null
-    real_income_usd : $is_super ? (($est_total - $raw_total)|round:8) : null
+    real_income_usd : $real_income
   }
 
   guid = "LgSummaryQ2wNcT8pLsY5kBd3eXaZ"
