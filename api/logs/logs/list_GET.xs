@@ -213,7 +213,7 @@ query "logs/list" verb=GET {
 
               elseif ($lg.billing_admin_id != null) {
                 var.update $cache_key {
-                  value = ($lg.billing_admin_id|to_text) ~ "|" ~ ($lg.ai_model|first_notnull:"claude-haiku-4-5")
+                  value = ($lg.billing_admin_id|to_text) ~ "__" ~ ($lg.ai_model|first_notnull:"claude-haiku-4-5")
                 }
 
                 conditional {

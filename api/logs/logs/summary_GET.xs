@@ -39,7 +39,7 @@ query "logs/summary" verb=GET {
     } as $where
 
     var $group_sql {
-      value = "SELECT is_matched, COALESCE(ai_model, 'claude-haiku-4-5') AS model, ((COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000) AS big_prompt, usage_rate, billing_admin_id, COUNT(*) AS n, COALESCE(SUM(input_tokens), 0) AS in_t, COALESCE(SUM(output_tokens), 0) AS out_t, COALESCE(SUM(cache_creation_input_tokens), 0) AS cw_t, COALESCE(SUM(cache_read_input_tokens), 0) AS cr_t, COALESCE(SUM(raw_cost_usd), 0) AS stored_raw, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN input_tokens END), 0) AS c_in_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN output_tokens END), 0) AS c_out_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_creation_input_tokens END), 0) AS c_cw_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_read_input_tokens END), 0) AS c_cr_t, COALESCE(SUM(CASE WHEN ai_provider = 'claude' THEN 1 ELSE 0 END), 0) AS claude_n, COALESCE(SUM(CASE WHEN is_applied = true OR is_matched = 1 THEN 1 ELSE 0 END), 0) AS applied_n FROM x1_7" ~ $where ~ " GROUP BY is_matched, COALESCE(ai_model, 'claude-haiku-4-5'), ((COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000), usage_rate, billing_admin_id"
+      value = "SELECT is_matched, COALESCE(ai_model, 'claude-haiku-4-5') AS model, (CASE WHEN (COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000 THEN 1 ELSE 0 END) AS big_prompt, usage_rate, billing_admin_id, COUNT(*) AS n, COALESCE(SUM(input_tokens), 0) AS in_t, COALESCE(SUM(output_tokens), 0) AS out_t, COALESCE(SUM(cache_creation_input_tokens), 0) AS cw_t, COALESCE(SUM(cache_read_input_tokens), 0) AS cr_t, COALESCE(SUM(raw_cost_usd), 0) AS stored_raw, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN input_tokens END), 0) AS c_in_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN output_tokens END), 0) AS c_out_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_creation_input_tokens END), 0) AS c_cw_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_read_input_tokens END), 0) AS c_cr_t, COALESCE(SUM(CASE WHEN ai_provider = 'claude' THEN 1 ELSE 0 END), 0) AS claude_n, COALESCE(SUM(CASE WHEN is_applied = true OR is_matched = 1 THEN 1 ELSE 0 END), 0) AS applied_n FROM x1_7" ~ $where ~ " GROUP BY is_matched, COALESCE(ai_model, 'claude-haiku-4-5'), (CASE WHEN (COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000 THEN 1 ELSE 0 END), usage_rate, billing_admin_id"
     }
 
     db.direct_query {
@@ -212,8 +212,41 @@ query "logs/summary" verb=GET {
             // Model prices for this group's price tier (rows are grouped by prompt size > 100K tokens,
             // so Haiku 5.5's tier is chosen per request, not per sum)
             // big_prompt may come back as true/t/1 depending on the driver
-            var $big_str {
-              value = $g.big_prompt|to_text|to_lower
+            // direct_query returns numeric columns as text: cast before arithmetic/comparisons
+            var $stored_raw_num {
+              value = $g.stored_raw|to_decimal
+            }
+
+            var $c_in_num {
+              value = $g.c_in_t|to_decimal
+            }
+
+            var $c_out_num {
+              value = $g.c_out_t|to_decimal
+            }
+
+            var $c_cw_num {
+              value = $g.c_cw_t|to_decimal
+            }
+
+            var $c_cr_num {
+              value = $g.c_cr_t|to_decimal
+            }
+
+            var $log_rate_num {
+              value = 0
+            }
+
+            conditional {
+              if ($g.usage_rate != null) {
+                var.update $log_rate_num {
+                  value = $g.usage_rate|to_decimal
+                }
+              }
+            }
+
+            var $big_flag {
+              value = $g.big_prompt|first_notnull:0
             }
 
             var $tier_label {
@@ -225,7 +258,7 @@ query "logs/summary" verb=GET {
             }
 
             conditional {
-              if ($big_str == "true" || $big_str == "t" || $big_str == "1") {
+              if ($big_flag == 1) {
                 var.update $tier_label {
                   value = "big"
                 }
@@ -237,7 +270,7 @@ query "logs/summary" verb=GET {
             }
 
             var $tier_key {
-              value = $g.model ~ "|" ~ $tier_label
+              value = $g.model ~ "__" ~ $tier_label
             }
 
             conditional {
@@ -258,19 +291,27 @@ query "logs/summary" verb=GET {
 
             // Price rate: the log's own rate, else the billing admin's personal rate, else the global rate
             var $g_rate {
-              value = ($default_model_rates|get:$g.model)|first_notnull:$default_rate
+              value = $default_model_rates|get:$g.model
             }
 
             conditional {
-              if ($g.usage_rate != null && $g.usage_rate > 0) {
+              if ($g_rate == null) {
                 var.update $g_rate {
-                  value = $g.usage_rate
+                  value = $default_rate
+                }
+              }
+            }
+
+            conditional {
+              if ($log_rate_num > 0) {
+                var.update $g_rate {
+                  value = $log_rate_num
                 }
               }
 
               elseif ($g.billing_admin_id != null) {
                 var $adm_key {
-                  value = ($g.billing_admin_id|to_text) ~ "|" ~ $g.model
+                  value = ($g.billing_admin_id|to_text) ~ "__" ~ $g.model
                 }
 
                 conditional {
@@ -292,7 +333,7 @@ query "logs/summary" verb=GET {
             }
 
             var $g_raw {
-              value = ($g.stored_raw|to_decimal) + ((($g.c_in_t * $m_rates.input_per_million) + ($g.c_out_t * $m_rates.output_per_million) + ($g.c_cw_t * $m_rates.cache_write_per_million) + ($g.c_cr_t * $m_rates.cache_read_per_million)) / 1000000)
+              value = $stored_raw_num + ((($c_in_num * $m_rates.input_per_million) + ($c_out_num * $m_rates.output_per_million) + ($c_cw_num * $m_rates.cache_write_per_million) + ($c_cr_num * $m_rates.cache_read_per_million)) / 1000000)
             }
 
             var.update $raw_total {
