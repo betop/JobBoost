@@ -1484,6 +1484,32 @@ query "resume/generate_legacy" verb=POST {
       value = ($main_usage|get:"cache_read_input_tokens"|first_notnull:0) + $extraction_cache_read_tokens
     }
   
+    // Raw provider cost priced PER AI CALL (extraction + generation): the Haiku 5.5 price tier is
+    // chosen by each request's own prompt size, so the two calls are never priced on their summed tokens.
+    function.run "ai/claude_haiku_cost" {
+      input = {
+        model                : $ai_model_id
+        input_tokens         : $extraction_input_tokens|first_notnull:0
+        output_tokens        : $extraction_output_tokens|first_notnull:0
+        cache_creation_tokens: $extraction_cache_creation_tokens|first_notnull:0
+        cache_read_tokens    : $extraction_cache_read_tokens|first_notnull:0
+      }
+    } as $extraction_raw_cost
+
+    function.run "ai/claude_haiku_cost" {
+      input = {
+        model                : $ai_model_id
+        input_tokens         : $main_usage|get:"input_tokens"|first_notnull:0
+        output_tokens        : $main_usage|get:"output_tokens"|first_notnull:0
+        cache_creation_tokens: $main_usage|get:"cache_creation_input_tokens"|first_notnull:0
+        cache_read_tokens    : $main_usage|get:"cache_read_input_tokens"|first_notnull:0
+      }
+    } as $main_raw_cost
+
+    var $raw_cost_usd {
+      value = ($extraction_raw_cost + $main_raw_cost)|round:8
+    }
+
     // Usage rate in force right now: saved on the log row and used for the charge (log and ledger agree)
     function.run "credits/get_usage_rate" {
       input = {admin_id: $billing_check.billing_admin_id, model: $ai_model_id}
@@ -1518,6 +1544,7 @@ query "resume/generate_legacy" verb=POST {
             cache_read_input_tokens    : $cache_read_input_tokens
             usage_rate: $usage_rate
             ai_model: $ai_model_id
+            raw_cost_usd: $raw_cost_usd
             charged_amount: $log_charged
             content_id   : $resume_content_id
             is_applied   : true
@@ -1538,6 +1565,7 @@ query "resume/generate_legacy" verb=POST {
             cache_read_input_tokens    : $cache_read_input_tokens
             usage_rate: $usage_rate
             ai_model: $ai_model_id
+            raw_cost_usd: $raw_cost_usd
             charged_amount: $log_charged
             resume_filename      : $resume_filename
             cover_letter_filename: $cover_letter_filename
@@ -1562,6 +1590,7 @@ query "resume/generate_legacy" verb=POST {
             model                : $ai_model_id
             admin_id             : $billing_check.billing_admin_id
             usage_rate           : $usage_rate
+            call_raw_cost_usd: $raw_cost_usd
             input_tokens         : $input_tokens
             output_tokens        : $output_tokens
             cache_creation_tokens: $cache_creation_input_tokens

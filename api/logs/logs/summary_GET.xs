@@ -1,7 +1,8 @@
 //  Totals for the generation-logs stat cards, over ALL logs matching the same filters as logs/list
 //  (not only the visible page). Counts by status, tokens, applied, and - super_admin only - the estimated cost.
 //  Cost uses the billing price logic: token sums per group (model, price rate, billing admin) x the rate that
-//  applies to those logs. Prices are linear per request here (every generation prompt is far below 100K tokens).
+//  applies to those logs. Rows are also grouped by price tier (prompt > 100K tokens) and rows with a stored per-call
+//  raw_cost_usd use it as-is. super_admin only: raw_cost_usd (actual), est_cost_usd (billed), real_income_usd = billed - actual.
 query "logs/summary" verb=GET {
   api_group = "logs"
   auth = "users"
@@ -38,7 +39,7 @@ query "logs/summary" verb=GET {
     } as $where
 
     var $group_sql {
-      value = "SELECT is_matched, COALESCE(ai_model, 'claude-haiku-4-5') AS model, usage_rate, billing_admin_id, COUNT(*) AS n, COALESCE(SUM(input_tokens), 0) AS in_t, COALESCE(SUM(output_tokens), 0) AS out_t, COALESCE(SUM(cache_creation_input_tokens), 0) AS cw_t, COALESCE(SUM(cache_read_input_tokens), 0) AS cr_t, COALESCE(SUM(CASE WHEN ai_provider = 'claude' THEN 1 ELSE 0 END), 0) AS claude_n, COALESCE(SUM(CASE WHEN is_applied = true OR is_matched = 1 THEN 1 ELSE 0 END), 0) AS applied_n FROM x1_7" ~ $where ~ " GROUP BY is_matched, COALESCE(ai_model, 'claude-haiku-4-5'), usage_rate, billing_admin_id"
+      value = "SELECT is_matched, COALESCE(ai_model, 'claude-haiku-4-5') AS model, ((COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000) AS big_prompt, usage_rate, billing_admin_id, COUNT(*) AS n, COALESCE(SUM(input_tokens), 0) AS in_t, COALESCE(SUM(output_tokens), 0) AS out_t, COALESCE(SUM(cache_creation_input_tokens), 0) AS cw_t, COALESCE(SUM(cache_read_input_tokens), 0) AS cr_t, COALESCE(SUM(raw_cost_usd), 0) AS stored_raw, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN input_tokens END), 0) AS c_in_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN output_tokens END), 0) AS c_out_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_creation_input_tokens END), 0) AS c_cw_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_read_input_tokens END), 0) AS c_cr_t, COALESCE(SUM(CASE WHEN ai_provider = 'claude' THEN 1 ELSE 0 END), 0) AS claude_n, COALESCE(SUM(CASE WHEN is_applied = true OR is_matched = 1 THEN 1 ELSE 0 END), 0) AS applied_n FROM x1_7" ~ $where ~ " GROUP BY is_matched, COALESCE(ai_model, 'claude-haiku-4-5'), ((COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000), usage_rate, billing_admin_id"
     }
 
     db.direct_query {
@@ -208,21 +209,26 @@ query "logs/summary" verb=GET {
 
         conditional {
           if ($is_super) {
-            // Model prices (prompt_tokens 0 = the base tier, correct for per-generation prompts)
+            // Model prices for this group's price tier (rows are grouped by prompt size > 100K tokens,
+            // so Haiku 5.5's tier is chosen per request, not per sum)
+            var $tier_key {
+              value = $g.model ~ "|" ~ ($g.big_prompt ? "big" : "base")
+            }
+
             conditional {
-              if (!($rates_cache|has:$g.model)) {
+              if (!($rates_cache|has:$tier_key)) {
                 function.run "ai/claude_haiku_rates" {
-                  input = {model: $g.model, prompt_tokens: 0}
+                  input = {model: $g.model, prompt_tokens: $g.big_prompt ? 100001 : 0}
                 } as $model_rates
 
                 var.update $rates_cache {
-                  value = $rates_cache|set:$g.model:$model_rates
+                  value = $rates_cache|set:$tier_key:$model_rates
                 }
               }
             }
 
             var $m_rates {
-              value = $rates_cache|get:$g.model
+              value = $rates_cache|get:$tier_key
             }
 
             // Price rate: the log's own rate, else the billing admin's personal rate, else the global rate
@@ -261,7 +267,7 @@ query "logs/summary" verb=GET {
             }
 
             var $g_raw {
-              value = (($g.in_t * $m_rates.input_per_million) + ($g.out_t * $m_rates.output_per_million) + ($g.cw_t * $m_rates.cache_write_per_million) + ($g.cr_t * $m_rates.cache_read_per_million)) / 1000000
+              value = ($g.stored_raw|to_decimal) + ((($g.c_in_t * $m_rates.input_per_million) + ($g.c_out_t * $m_rates.output_per_million) + ($g.c_cw_t * $m_rates.cache_write_per_million) + ($g.c_cr_t * $m_rates.cache_read_per_million)) / 1000000)
             }
 
             var.update $raw_total {
@@ -289,6 +295,7 @@ query "logs/summary" verb=GET {
     cache_read_tokens : $cr_total
     raw_cost_usd    : $is_super ? ($raw_total|round:8) : null
     est_cost_usd    : $is_super ? ($est_total|round:8) : null
+    real_income_usd : $is_super ? (($est_total - $raw_total)|round:8) : null
   }
 
   guid = "LgSummaryQ2wNcT8pLsY5kBd3eXaZ"

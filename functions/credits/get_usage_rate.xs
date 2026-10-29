@@ -1,6 +1,7 @@
 // Returns the usage multiplier applied to raw AI provider cost, and the low-balance threshold.
 // Precedence: per-admin users.usage_rate (> 0, is_custom=true)
-// > billing_setting.model_rates[model] (> 0) > billing_setting.usage_rate (> 0) > 1.5.
+// > billing_setting.model_rates[model] (> 0) > built-in model default (claude-haiku-4-5 = 1.3,
+// claude-haiku-5-5 = 5) > billing_setting.usage_rate (> 0) > 1.5.
 // Also returns model_rates (model id -> effective non-admin rate for every selectable model)
 // and models (same with labels) for the settings screen.
 function "credits/get_usage_rate" {
@@ -51,6 +52,11 @@ function "credits/get_usage_rate" {
       value = ["claude-haiku-4-5", "claude-haiku-5-5"]
     }
 
+    // Built-in per-model rates used when the super admin has not set one (is_set = false)
+    var $builtin_model_rates {
+      value = {"claude-haiku-4-5": 1.3, "claude-haiku-5-5": 5}
+    }
+
     var $model_rates {
       value = {}
     }
@@ -66,7 +72,7 @@ function "credits/get_usage_rate" {
         }
 
         var $am_rate {
-          value = $global_rate
+          value = ($builtin_model_rates|get:$am)|first_notnull:$global_rate
         }
 
         var $am_is_set {
@@ -109,10 +115,20 @@ function "credits/get_usage_rate" {
           value = $stored_model_rates|get:$input.model
         }
 
+        var $model_builtin {
+          value = $builtin_model_rates|get:$input.model
+        }
+
         conditional {
           if ($model_stored != null && $model_stored > 0) {
             var.update $usage_rate {
               value = $model_stored
+            }
+          }
+
+          elseif ($model_builtin != null && $model_builtin > 0) {
+            var.update $usage_rate {
+              value = $model_builtin
             }
           }
         }

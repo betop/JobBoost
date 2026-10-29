@@ -179,6 +179,8 @@ export interface LogsSummaryResponse {
   cache_read_tokens: number;
   raw_cost_usd: number | null;
   est_cost_usd: number | null;
+  // super_admin only: est_cost_usd (billed) - raw_cost_usd (actual provider cost)
+  real_income_usd?: number | null;
 }
 
 /** Query string for logs endpoints. Arrays are sent as `name[]=a&name[]=b` (repeated plain keys keep only the last value). */

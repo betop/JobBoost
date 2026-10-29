@@ -3,7 +3,8 @@
 //  - sort_field: created_at (default) | position_title | company_name | user_name | profile_name; sort_dir: asc | desc (default)
 //  - search / profile_ids / user_ids / matched / regenerated / ai_models / date_from / date_to: see logs/filter_sql
 //  Returns {items, total}. Each item carries user_name / profile_name. Billing fields are for super_admin only;
-//  est_cost_usd = raw provider cost x price rate (same logic as billing), computed for the rows of this page.
+//  est_cost_usd = billed price = raw provider cost x price rate (same logic as billing); raw_cost_usd = actual
+//  provider cost (no rate). Both are computed for the rows of this page and returned to super_admin ONLY.
 query "logs/list" verb=GET {
   api_group = "logs"
   auth = "users"
@@ -126,7 +127,7 @@ query "logs/list" verb=GET {
     conditional {
       if ($auth_user != null && $auth_user.type == "super_admin") {
         var.update $billing_cols {
-          value = ", usage_rate, charged_amount, billing_admin_id"
+          value = ", usage_rate, charged_amount, billing_admin_id, raw_cost_usd AS stored_raw_cost_usd"
         }
       }
     }
@@ -184,7 +185,20 @@ query "logs/list" verb=GET {
                 cache_creation_tokens: $lg.cache_creation_input_tokens|first_notnull:0
                 cache_read_tokens    : $lg.cache_read_input_tokens|first_notnull:0
               }
-            } as $lg_raw
+            } as $lg_token_raw
+
+            // Actual (raw provider) cost: stored per-call cost when the row has it, else from its 4 token buckets
+            var $lg_raw {
+              value = $lg_token_raw
+            }
+
+            conditional {
+              if ($lg.stored_raw_cost_usd != null) {
+                var.update $lg_raw {
+                  value = $lg.stored_raw_cost_usd|to_decimal
+                }
+              }
+            }
 
             var $lg_rate {
               value = ($default_rate_info.model_rates|get:($lg.ai_model|first_notnull:"claude-haiku-4-5"))|first_notnull:$default_rate_info.usage_rate

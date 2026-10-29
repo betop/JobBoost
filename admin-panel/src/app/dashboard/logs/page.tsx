@@ -201,6 +201,13 @@ function logCost(log: GenerationLog): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Actual (raw provider) cost of a log, without the price rate; returned to super_admin only. */
+function logRawCost(log: GenerationLog): number | null {
+  if (log.raw_cost_usd == null) return null;
+  const n = Number(log.raw_cost_usd);
+  return Number.isFinite(n) ? n : null;
+}
+
 function sumCost(rows: GenerationLog[]): number {
   return rows.reduce((s, l) => s + (logCost(l) ?? 0), 0);
 }
@@ -1019,6 +1026,8 @@ export default function LogsPage() {
     applied_count: summary?.applied ?? 0,
   };
   const periodCost = summary?.est_cost_usd ?? 0;
+  const periodRawCost = summary?.raw_cost_usd ?? 0;
+  const periodIncome = summary?.real_income_usd ?? periodCost - periodRawCost;
 
   // All active users — used for the user filter dropdown
   const { data: allUsers } = useQuery({
@@ -1204,7 +1213,7 @@ export default function LogsPage() {
       ) : (
         <div className={`space-y-3 mb-8 transition-opacity duration-200 ${logsLoading ? "opacity-50" : "opacity-100"}`}>
           {/* Row 1: Total, Applied, Est. Cost */}
-          <div className={`grid gap-3 ${isSuperAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
+          <div className={`grid gap-3 ${isSuperAdmin ? "grid-cols-4" : "grid-cols-2"}`}>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
               <div className="bg-blue-500 w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Activity className="w-4 h-4 text-white" />
@@ -1232,6 +1241,18 @@ export default function LogsPage() {
               <div>
                 <p className="text-xs text-gray-500 font-medium">Est. Cost</p>
                 <p className="text-xl font-bold text-gray-900">{formatCost(periodCost)}</p>
+              </div>
+            </div>
+            )}
+            {isSuperAdmin && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3 flex items-center gap-3">
+              <div className="bg-emerald-600 w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0">
+                <DollarSign className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Real Income</p>
+                <p className="text-xl font-bold text-gray-900">{formatCost(periodIncome)}</p>
+                <p className="text-[10px] text-gray-400">Billed − actual cost {formatCost(periodRawCost)}</p>
               </div>
             </div>
             )}
@@ -1519,6 +1540,7 @@ export default function LogsPage() {
                         { field: "company_name",  label: "Company",     align: "left",  hidden: false },
                         { field: null,            label: "AI model",    align: "left",  hidden: false },
                         { field: null,            label: "Est. Cost",   align: "right", hidden: !isSuperAdmin },
+                        { field: null,            label: "Actual Cost", align: "right", hidden: !isSuperAdmin },
                         { field: null,            label: "Actions",     align: "left",  hidden: false },
                       ] as { field: SortField | null; label: string; align: string; hidden: boolean }[]
                     ).filter((col) => !col.hidden).map(({ field, label, align }) => (
@@ -1744,6 +1766,13 @@ export default function LogsPage() {
                       {isSuperAdmin && (
                       <td className="px-4 py-3 text-right font-mono text-xs text-emerald-700 font-semibold">
                         {logCost(log) == null ? "—" : <span title={costTooltip(log)}>{formatCost(logCost(log) as number)}</span>}
+                      </td>
+                      )}
+
+                      {/* Actual Cost (raw provider cost, no rate) */}
+                      {isSuperAdmin && (
+                      <td className="px-4 py-3 text-right font-mono text-xs text-gray-600">
+                        {logRawCost(log) == null ? "—" : formatCost(logRawCost(log) as number)}
                       </td>
                       )}
 

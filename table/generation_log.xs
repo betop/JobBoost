@@ -42,6 +42,10 @@ table generation_log {
     decimal? charged_amount?
     uuid? billing_admin_id?
     text? ai_model?
+
+    // Raw provider cost (USD, no rate) priced per AI call at write time (extraction + generation).
+    // Null on older rows and regenerations: then it is recomputed from the token buckets.
+    decimal? raw_cost_usd?
   }
 
   index = [

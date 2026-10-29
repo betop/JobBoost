@@ -412,7 +412,7 @@ export default function CreditsPage() {
 
   const [usageAdminId, setUsageAdminId] = useState("");
 
-  // Per-admin price rate (super_admin only): blank = use the global rate
+  // Per-admin price rate (super_admin only): blank = use the per-model rate
   const [rateTarget, setRateTarget] = useState<{ id: string; name: string } | null>(null);
   const [adminRateInput, setAdminRateInput] = useState("");
   const [adminRateSaving, setAdminRateSaving] = useState(false);
@@ -441,7 +441,7 @@ export default function CreditsPage() {
       await userService.update(rateTarget.id, payload);
       queryClient.invalidateQueries({ queryKey: ["credits-admins"] });
       showToast(
-        payload.clear_usage_rate ? `${rateTarget.name} now uses the global rate` : `${rateTarget.name}: price rate ${payload.usage_rate}x`,
+        payload.clear_usage_rate ? `${rateTarget.name} now uses the per-model rates` : `${rateTarget.name}: price rate ${payload.usage_rate}x`,
         "success"
       );
       setRateTarget(null);
@@ -492,7 +492,7 @@ export default function CreditsPage() {
       queryClient.setQueryData(["credits-settings"], updated);
       setModelRateInputs((prev) => ({ ...prev, [model]: "" }));
       showToast(
-        clear ? `${label} now uses the global rate` : `${label} rate updated to ${rate}x`,
+        clear ? `${label} now uses its default rate` : `${label} rate updated to ${rate}x`,
         "success"
       );
     } catch (err: any) {
@@ -596,7 +596,7 @@ export default function CreditsPage() {
         v != null ? (
           <span className="font-semibold text-gray-900">{v}×</span>
         ) : (
-          <span className="text-gray-400">Global{settings ? ` (${settings.usage_rate}×)` : ""}</span>
+          <span className="text-gray-400">Per-model rate</span>
         ),
     },
     {
@@ -628,8 +628,7 @@ export default function CreditsPage() {
         <div>
           <h1 className="text-3xl font-bold">Credits</h1>
           <p className="text-gray-600 mt-2">
-            Monitor and manage admin credit balances. Admins are billed{" "}
-            {settings ? `${settings.usage_rate}x` : "a multiple of"} the raw AI provider cost for
+            Monitor and manage admin credit balances. Admins are billed the raw AI provider cost × the rate of the model used for
             resume generation and chat assistant usage.
           </p>
         </div>
@@ -637,7 +636,7 @@ export default function CreditsPage() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-lg font-semibold">Usage rate</h2>
           <p className="text-sm text-gray-600 mt-1">
-            Admins are billed raw AI provider cost × this rate. Current rate:{" "}
+            Fallback rate, only used for a model with no per-model rate and no built-in default. Current rate:{" "}
             <span className="font-semibold text-gray-900">
               {settings ? `${settings.usage_rate}x` : "—"}
             </span>
@@ -665,7 +664,7 @@ export default function CreditsPage() {
             <div className="mt-6 border-t border-gray-200 pt-4">
               <h3 className="text-sm font-semibold">Rate per model</h3>
               <p className="text-xs text-gray-500 mt-1">
-                Overrides the global rate for usage on that model. A personal admin rate still wins.
+                Overrides the built-in default for usage on that model (Haiku 4.5: 1.3x, Haiku 5.5: 5x). A personal admin rate still wins.
               </p>
               <div className="mt-3 space-y-3">
                 {settings.models.map((m) => (
@@ -673,7 +672,7 @@ export default function CreditsPage() {
                     <div className="w-48">
                       <div className="text-sm font-medium">{m.label}</div>
                       <div className="text-xs text-gray-500">
-                        {m.usage_rate}x {m.is_set ? "(custom)" : "(global)"}
+                        {m.usage_rate}x {m.is_set ? "(custom)" : "(default)"}
                       </div>
                     </div>
                     <input
@@ -701,7 +700,7 @@ export default function CreditsPage() {
                         onClick={() => handleSaveModelRate(m.model, m.label, true)}
                         disabled={modelRateSaving === m.model}
                       >
-                        Use global
+                        Use default
                       </Button>
                     )}
                   </div>
@@ -751,8 +750,8 @@ export default function CreditsPage() {
         >
           <div className="p-6 space-y-4">
             <p className="text-sm text-gray-600">
-              Multiplier applied to this admin&apos;s raw AI cost (1 – 10). Leave empty to use the global rate
-              {settings ? ` (${settings.usage_rate}×)` : ""}.
+              Multiplier applied to this admin&apos;s raw AI cost (1 – 10). Leave empty to use the per-model rate
+              {settings?.models?.length ? ` (${settings.models.map((m) => `${m.label} ${m.usage_rate}×`).join(", ")})` : ""}.
             </p>
             <div>
               <label className="text-sm font-medium block mb-1">Price rate (×)</label>
@@ -763,7 +762,7 @@ export default function CreditsPage() {
                 step="0.01"
                 value={adminRateInput}
                 onChange={(e) => setAdminRateInput(e.target.value)}
-                placeholder={settings ? `Global (${settings.usage_rate}×)` : "Global"}
+                placeholder="Per-model rate"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
               />
             </div>

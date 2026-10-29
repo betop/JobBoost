@@ -16,6 +16,10 @@ function "credits/credit_charge_usage" {
       description = "LEGACY: provider cost in USD, only used when no token bucket is passed. When any token bucket is given the cost is computed from the tokens (ai/claude_haiku_cost)."
     }
 
+    decimal call_raw_cost_usd? {
+      description = "Raw provider cost already priced per AI call (sum of ai/claude_haiku_cost of each call, e.g. extraction + generation). When set it is used as-is: per-call pricing keeps the Haiku 5.5 price tier per request. Token buckets are still saved on the ledger row."
+    }
+
     decimal usage_rate? {
       description = "Rate in force when the usage happened (saved on the log row). When null the admin's current rate (credits/get_usage_rate) is used."
     }
@@ -77,6 +81,12 @@ function "credits/credit_charge_usage" {
       error = "super_admin accounts are not billable"
     }
 
+    // Model id for the price lookup and the ledger (empty = Haiku 4.5). The rate lookup gets the
+    // model as passed: every production caller passes it; legacy callers without a model keep the global rate.
+    var $model {
+      value = $input.model|first_notnull:"claude-haiku-4-5"
+    }
+
     // Rate: explicit (saved on the log) wins, otherwise the current setting
     var $rate {
       value = $input.usage_rate
@@ -105,10 +115,16 @@ function "credits/credit_charge_usage" {
     }
 
     conditional {
-      if ($has_tokens) {
+      if ($input.call_raw_cost_usd != null) {
+        var.update $raw_cost {
+          value = $input.call_raw_cost_usd
+        }
+      }
+
+      elseif ($has_tokens) {
         function.run "ai/claude_haiku_cost" {
           input = {
-            model                : $input.model
+            model                : $model
             input_tokens         : $input.input_tokens|first_notnull:0
             output_tokens        : $input.output_tokens|first_notnull:0
             cache_creation_tokens: $input.cache_creation_tokens|first_notnull:0
@@ -168,7 +184,7 @@ function "credits/credit_charge_usage" {
         cache_read_tokens: $input.cache_read_tokens|first_notnull:0
         raw_cost_usd     : $raw_cost
         usage_rate       : $rate
-        ai_model         : $input.model|first_notnull:"claude-haiku-4-5"
+        ai_model         : $model
         note             : $input.free_trial ? ("Free trial generation (raw cost $" ~ $raw_cost ~ ")") : ("AI usage charge (raw cost $" ~ $raw_cost ~ " x" ~ $rate ~ ")")
       }
     } as $txn

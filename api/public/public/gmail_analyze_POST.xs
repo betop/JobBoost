@@ -265,6 +265,7 @@ query "public/gmail-analyze" verb=POST {
           try {
             function.run "credits/credit_charge_usage" {
               input = {
+                model                : "claude-haiku-4-5"
                 admin_id             : $billing_admin_id
                 usage_rate           : $usage_rate
                 input_tokens         : $input_tokens
