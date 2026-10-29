@@ -1,5 +1,7 @@
 {
   "backendApiUrl": "https://api.shsws-solutions.com/api:W5ffWHW-/public/gmail-analyze",
   "backendApiKey": "",
-  "maxEmailsPerRun": 0
+  "maxEmailsPerRun": 0,
+  "googleWebClientId": "",
+  "googleAuthMode": ""
 }

@@ -101,3 +101,13 @@ Actions applied:
 - `MARK_READ`: removes `UNREAD`
 - `STAR`: adds `STARRED` and removes `UNREAD`
 - `KEEP_UNREAD`: ensures `UNREAD`
+
+## Gmail sign-in in browsers without Chrome sign-in (AdsPower etc.)
+`chrome.identity.getAuthToken` needs Chrome browser sign-in, which Chromium-based browsers such as AdsPower do not have
+("The user turned off browser signin"). The extension then falls back to Google's OAuth page via
+`chrome.identity.launchWebAuthFlow` and remembers that mode. Setup (once):
+1. Google Cloud Console (same project as `manifest.json > oauth2.client_id`) -> APIs & Services -> Credentials ->
+   Create OAuth client ID -> type **Web application**.
+2. Authorized redirect URI: `https://pnnfaeobjhpobemmggnnfdkinnadfapb.chromiumapp.org/` (from the manifest `key`).
+3. Put its client ID in `config.json` as `"googleWebClientId"`. Optional `"googleAuthMode": "web"` forces this flow everywhere.
+Tokens last ~1 hour and are renewed silently while the browser profile stays signed in to that Google account.

@@ -59,13 +59,35 @@ function isConfiguredClientId() {
   return clientId && !clientId.includes("REPLACE_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID");
 }
 
-async function getGmailToken(interactive) {
+// Gmail auth has two modes:
+// - "chrome": chrome.identity.getAuthToken with manifest.oauth2.client_id (needs Chrome browser sign-in).
+// - "web": chrome.identity.launchWebAuthFlow against Google OAuth with config.json googleWebClientId
+//   (a "Web application" OAuth client whose redirect URI is chrome.identity.getRedirectURL()).
+//   Used by Chromium browsers without Chrome sign-in (AdsPower, browser sign-in turned off).
+// The extension falls back to "web" automatically when Chrome sign-in is unavailable and remembers it;
+// config.json googleAuthMode "web" forces it.
+const AUTH_MODE_KEY = "gmailAuthMode";
+const WEB_TOKEN_KEY = "gmailWebToken";
+const LOGIN_HINT_KEY = "gmailLoginHint";
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+function tokenStore() {
+  return chrome.storage.session || chrome.storage.local;
+}
+
+function isBrowserSigninUnavailable(err) {
+  const m = String(err?.message || err || "");
+  return /browser sign-?in|not signed in|sign-?in is (disabled|not allowed)|unsupported|not supported|not available/i.test(m);
+}
+
+function getChromeAuthToken(interactive) {
   if (!isConfiguredClientId()) {
-    throw new Error(
-      "Google OAuth client_id is not set in manifest.json (replace the placeholder in manifest.json > oauth2.client_id)."
+    return Promise.reject(
+      new Error(
+        "Google OAuth client_id is not set in manifest.json (replace the placeholder in manifest.json > oauth2.client_id)."
+      )
     );
   }
-
   return new Promise((resolve, reject) => {
     chrome.identity.getAuthToken({ interactive }, (token) => {
       const err = chrome.runtime.lastError;
@@ -74,6 +96,111 @@ async function getGmailToken(interactive) {
       resolve(token);
     });
   });
+}
+
+function launchWebAuthFlow(url, interactive) {
+  return new Promise((resolve, reject) => {
+    chrome.identity.launchWebAuthFlow({ url, interactive }, (redirectUrl) => {
+      const err = chrome.runtime.lastError;
+      if (err) return reject(new Error(err.message || "Google sign-in failed"));
+      if (!redirectUrl) return reject(new Error("Google sign-in returned no result"));
+      resolve(redirectUrl);
+    });
+  });
+}
+
+async function readCachedWebToken() {
+  const { [WEB_TOKEN_KEY]: cached } = await tokenStore().get(WEB_TOKEN_KEY);
+  if (cached?.token && Number(cached.expiresAt) - TOKEN_REFRESH_MARGIN_MS > Date.now()) return cached.token;
+  return null;
+}
+
+async function clearCachedWebToken() {
+  await tokenStore().remove(WEB_TOKEN_KEY);
+}
+
+// One OAuth round trip. prompt "none" succeeds silently when the browser already has a Google session that
+// granted the scopes; "select_account" shows Google's account picker (and the consent screen the first time).
+async function requestWebToken({ clientId, interactive, prompt }) {
+  const redirectUri = chrome.identity.getRedirectURL();
+  const scopes = chrome.runtime.getManifest()?.oauth2?.scopes || [];
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "token",
+    redirect_uri: redirectUri,
+    scope: scopes.join(" "),
+    include_granted_scopes: "true",
+    prompt
+  });
+  const { [LOGIN_HINT_KEY]: loginHint } = await chrome.storage.local.get(LOGIN_HINT_KEY);
+  if (loginHint && prompt === "none") params.set("login_hint", loginHint);
+
+  const redirectUrl = await launchWebAuthFlow(`https://accounts.google.com/o/oauth2/v2/auth?${params}`, interactive);
+  const result = new URLSearchParams(new URL(redirectUrl).hash.replace(/^#/, ""));
+  const error = result.get("error");
+  if (error) {
+    if (error === "redirect_uri_mismatch") {
+      throw new Error(`Google rejected the redirect URI. Add ${redirectUri} to the OAuth client's Authorized redirect URIs.`);
+    }
+    throw new Error(`Google sign-in failed: ${error}`);
+  }
+  const token = result.get("access_token");
+  if (!token) throw new Error("Google sign-in returned no access token");
+  const expiresIn = Number(result.get("expires_in")) || 3600;
+  await tokenStore().set({ [WEB_TOKEN_KEY]: { token, expiresAt: Date.now() + expiresIn * 1000 } });
+
+  // Remember the account so later silent renewals target the same Gmail account.
+  try {
+    const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (resp.ok) {
+      const info = await resp.json();
+      if (info.email) await chrome.storage.local.set({ [LOGIN_HINT_KEY]: info.email });
+    }
+  } catch {
+    // Non-fatal; silent renewal just has no login hint
+  }
+  return token;
+}
+
+async function getWebAuthToken(interactive, { forceAccountPicker = false } = {}) {
+  const config = await getConfig().catch(() => ({}));
+  const clientId = String(config.googleWebClientId || "").trim();
+  if (!clientId) {
+    throw new Error(
+      `This browser has no Chrome sign-in (e.g. AdsPower). Set googleWebClientId in config.json to a Google "Web application" OAuth client with redirect URI ${chrome.identity.getRedirectURL()}`
+    );
+  }
+
+  if (!forceAccountPicker) {
+    const cached = await readCachedWebToken();
+    if (cached) return cached;
+    try {
+      return await requestWebToken({ clientId, interactive: false, prompt: "none" });
+    } catch (e) {
+      if (!interactive) throw new Error("Not signed in to Gmail yet. Click Authenticate.");
+    }
+  }
+  return requestWebToken({ clientId, interactive: true, prompt: "select_account" });
+}
+
+async function getGmailToken(interactive, { forceAccountPicker = false } = {}) {
+  const config = await getConfig().catch(() => ({}));
+  const { [AUTH_MODE_KEY]: savedMode } = await chrome.storage.local.get(AUTH_MODE_KEY);
+  const useWeb = config.googleAuthMode === "web" || savedMode === "web";
+
+  if (!useWeb) {
+    try {
+      return await getChromeAuthToken(interactive);
+    } catch (e) {
+      if (!isBrowserSigninUnavailable(e)) throw e;
+    }
+  }
+
+  const token = await getWebAuthToken(interactive, { forceAccountPicker });
+  if (savedMode !== "web") await chrome.storage.local.set({ [AUTH_MODE_KEY]: "web" });
+  return token;
 }
 
 function normalizeStage(stage) {
@@ -468,6 +595,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const resp = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
             headers: { Authorization: `Bearer ${token}` }
           });
+          // A revoked web-flow token: drop it so the next call renews it
+          if (resp.status === 401) await clearCachedWebToken();
           if (resp.ok) {
             const info = await resp.json();
             email = info.email || null;
@@ -484,7 +613,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     if (msg?.type === "AUTH_INTERACTIVE") {
       try {
-        await getGmailToken(true);
+        await getGmailToken(true, { forceAccountPicker: true });
         sendResponse({ ok: true });
       } catch (e) {
         sendResponse({ ok: false, error: e?.message || String(e) });
