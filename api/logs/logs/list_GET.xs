@@ -140,14 +140,23 @@ query "logs/list" verb=GET {
       value = "SELECT COUNT(*) AS total FROM x1_7" ~ $where
     }
 
+    // Raw SQL ignores the request data source: rewrite x1_ table names (incl. subqueries and $where) first
+    function.run "db/sql_for_datasource" {
+      input = {sql: $query}
+    } as $query_ds
+
+    function.run "db/sql_for_datasource" {
+      input = {sql: $count_query}
+    } as $count_query_ds
+
     db.direct_query {
-      sql = "{{ $query }};"
+      sql = "{{ $query_ds }};"
       parser = "template_engine"
       response_type = "list"
     } as $logs
 
     db.direct_query {
-      sql = "{{ $count_query }};"
+      sql = "{{ $count_query_ds }};"
       parser = "template_engine"
       response_type = "single"
     } as $count_row

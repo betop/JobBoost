@@ -42,8 +42,13 @@ query "logs/summary" verb=GET {
       value = "SELECT is_matched, COALESCE(ai_model, 'claude-haiku-4-5') AS model, (CASE WHEN (COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000 THEN 1 ELSE 0 END) AS big_prompt, usage_rate, billing_admin_id, COUNT(*) AS n, COALESCE(SUM(input_tokens), 0) AS in_t, COALESCE(SUM(output_tokens), 0) AS out_t, COALESCE(SUM(cache_creation_input_tokens), 0) AS cw_t, COALESCE(SUM(cache_read_input_tokens), 0) AS cr_t, COALESCE(SUM(raw_cost_usd), 0) AS stored_raw, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN input_tokens END), 0) AS c_in_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN output_tokens END), 0) AS c_out_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_creation_input_tokens END), 0) AS c_cw_t, COALESCE(SUM(CASE WHEN raw_cost_usd IS NULL THEN cache_read_input_tokens END), 0) AS c_cr_t, COALESCE(SUM(CASE WHEN ai_provider = 'claude' THEN 1 ELSE 0 END), 0) AS claude_n, COALESCE(SUM(CASE WHEN is_applied = true OR is_matched = 1 THEN 1 ELSE 0 END), 0) AS applied_n FROM x1_7" ~ $where ~ " GROUP BY is_matched, COALESCE(ai_model, 'claude-haiku-4-5'), (CASE WHEN (COALESCE(input_tokens, 0) + COALESCE(cache_creation_input_tokens, 0) + COALESCE(cache_read_input_tokens, 0)) > 100000 THEN 1 ELSE 0 END), usage_rate, billing_admin_id"
     }
 
+    // Raw SQL ignores the request data source: rewrite x1_ table names (incl. $where subqueries) first
+    function.run "db/sql_for_datasource" {
+      input = {sql: $group_sql}
+    } as $group_sql_ds
+
     db.direct_query {
-      sql = "{{ $group_sql }};"
+      sql = "{{ $group_sql_ds }};"
       parser = "template_engine"
       response_type = "list"
     } as $groups
