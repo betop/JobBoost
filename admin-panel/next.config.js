@@ -1,5 +1,10 @@
 // A Vercel deploy of the git branch "staging" targets the Xano "staging" branch by default (see src/config/xano.ts)
 const xanoBranch = process.env.XANO_BRANCH || (process.env.VERCEL_GIT_COMMIT_REF === "staging" ? "staging" : "");
+// Same rule as src/config/xano.ts: a non-live branch never uses live data (unset/"live" -> "test")
+const requestedDataSource = (process.env.XANO_DATA_SOURCE || "").trim();
+const xanoDataSource = xanoBranch
+  ? (requestedDataSource && requestedDataSource !== "live" ? requestedDataSource : "test")
+  : requestedDataSource;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -9,7 +14,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_XANO_HOST: process.env.XANO_HOST || "",
     NEXT_PUBLIC_XANO_BRANCH: xanoBranch,
-    NEXT_PUBLIC_XANO_DATA_SOURCE: process.env.XANO_DATA_SOURCE || "",
+    NEXT_PUBLIC_XANO_DATA_SOURCE: xanoDataSource,
   },
   reactStrictMode: true,
   swcMinify: true,

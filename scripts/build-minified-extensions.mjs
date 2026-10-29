@@ -52,6 +52,29 @@ if (!["prod", "staging"].includes(ENV)) {
 const STAGING = ENV === "staging";
 const XANO_BRANCH = "staging";
 const NAME_SUFFIX = STAGING ? "-staging" : "";
+const XANO_DATA_SOURCE = "test";
+const DATA_SOURCE_MARKER = "__swiftcvDataSource";
+const STAGING_DATA_SOURCE_SHIM =
+  `/* staging build: send every Xano API request to the "${XANO_DATA_SOURCE}" data source */\n` +
+  `(() => {\n` +
+  `  const orig = globalThis.fetch;\n` +
+  `  if (typeof orig !== "function" || orig.${DATA_SOURCE_MARKER}) return;\n` +
+  `  const wrapped = function (input, init) {\n` +
+  `    try {\n` +
+  `      const url = typeof input === "string" ? input : (input && input.url) || String(input);\n` +
+  `      if (url.indexOf("api.shsws-solutions.com/") !== -1) {\n` +
+  `        const opts = Object.assign({}, init);\n` +
+  `        const headers = new Headers(opts.headers || (typeof input !== "string" && input && input.headers) || {});\n` +
+  `        headers.set("X-Data-Source", "${XANO_DATA_SOURCE}");\n` +
+  `        opts.headers = headers;\n` +
+  `        return orig.call(this, input, opts);\n` +
+  `      }\n` +
+  `    } catch (e) {}\n` +
+  `    return orig.call(this, input, init);\n` +
+  `  };\n` +
+  `  wrapped.${DATA_SOURCE_MARKER} = true;\n` +
+  `  globalThis.fetch = wrapped;\n` +
+  `})();\n`;
 // https://api.shsws-solutions.com/api:<canonical id>   (the id may contain - and _; a branch is ":<label>")
 const XANO_API_URL_RE = /(https:\/\/api\.shsws-solutions\.com\/api:[A-Za-z0-9_-]+)(?![A-Za-z0-9_:-])/g;
 const outOpt = opt("--out");
@@ -183,6 +206,11 @@ async function verifyTree(dir) {
         if (!STAGING && hasBranch) errors.push(`prod build has a branch-specific API url in ${f}: ${m[0]}`);
       }
     }
+    if (f.endsWith(".js") && !f.endsWith(".min.js") && txt.includes("api.shsws-solutions.com/")) {
+      const hasShim = txt.includes(DATA_SOURCE_MARKER);
+      if (STAGING && !hasShim) errors.push(`staging build calls the API without the X-Data-Source shim: ${f}`);
+      if (!STAGING && hasShim) errors.push(`prod build contains the staging X-Data-Source shim: ${f}`);
+    }
     if (/const EXTENSION_ENV\s*=\s*"staging"/.test(txt) || /EXTENSION_ENV\s*=\s*"staging"/.test(txt))
       errors.push(`EXTENSION_ENV still "staging" in ${f}`);
   }
@@ -219,6 +247,11 @@ async function stage(name) {
     if (ext === ".js") text = text.replace(/const EXTENSION_ENV\s*=\s*"staging"/g, 'const EXTENSION_ENV = "prod"');
     if (STAGING) {
       text = text.replace(XANO_API_URL_RE, `$1:${XANO_BRANCH}`);
+      // Staging must read/write ONLY the Xano "test" data source: every script that calls the API gets a
+      // fetch wrapper adding the X-Data-Source header (Xano CORS allows any header).
+      if (ext === ".js" && !file.endsWith(".min.js") && text.includes("api.shsws-solutions.com/")) {
+        text = STAGING_DATA_SOURCE_SHIM + text;
+      }
       if (file === "manifest.json") {
         const m = JSON.parse(text);
         m.name = `${m.name} (Staging)`;

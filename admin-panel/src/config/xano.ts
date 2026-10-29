@@ -3,7 +3,8 @@
 // Environment variables (server-side; set per Vercel environment):
 //   XANO_HOST          Xano instance origin. Default: https://api.shsws-solutions.com
 //   XANO_BRANCH        Xano branch label to call, e.g. "staging". Empty/unset = the live (production) branch.
-//   XANO_DATA_SOURCE   Xano data source to use, e.g. "test". Empty/unset = "live".
+//   XANO_DATA_SOURCE   Xano data source to use, e.g. "test". Empty/unset = "live" on production; a non-live
+//                      branch always uses a non-live data source (default "test"), never live data.
 //
 // A non-live branch is reached by appending ":<branch>" to the API group canonical id
 // (https://<host>/api:<canonical>:<branch>/...). Branches only copy logic: tables/data are SHARED
@@ -16,7 +17,11 @@ const onStagingGitBranch = process.env.VERCEL_GIT_COMMIT_REF === "staging";
 
 export const XANO_HOST = (process.env.XANO_HOST || "https://api.shsws-solutions.com").replace(/\/+$/, "");
 export const XANO_BRANCH = (process.env.XANO_BRANCH || (onStagingGitBranch ? "staging" : "")).trim();
-export const XANO_DATA_SOURCE = (process.env.XANO_DATA_SOURCE || "").trim();
+// Any non-live branch (staging) reads/writes ONLY the "test" data source: unset or "live" is forced to "test".
+const requestedDataSource = (process.env.XANO_DATA_SOURCE || "").trim();
+export const XANO_DATA_SOURCE = XANO_BRANCH
+  ? (requestedDataSource && requestedDataSource !== "live" ? requestedDataSource : "test")
+  : requestedDataSource;
 
 export const XANO_CANONICALS: Record<string, string> = {
   auth: "Vbfe5lun",

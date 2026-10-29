@@ -20,7 +20,7 @@
 
 ## Test data source (created 2026-10-14)
 A Xano data source named `test` exists (amber in the Xano footer). Select it per request with the header
-`X-Data-Source: test` (the admin panel does this when `XANO_DATA_SOURCE=test`). It has the same schema as `live`
+`X-Data-Source: test` (the admin panel always does this on a non-live branch: `XANO_DATA_SOURCE` unset or `live` is forced to `test`). It has the same schema as `live`
 but starts EMPTY: copy live data with Xano's own tool - dashboard -> status footer -> data source indicator ->
 **Manage Data Sources -> Migrate** -> source `live`, destination `test`, select all tables -> confirm. The Meta API has
 no migrate endpoint, and the credential tables (`users` password hashes, `access_token` keys) should be copied
@@ -64,7 +64,10 @@ npm run build:extensions:staging
 ```
 The staging build rewrites every `https://api.shsws-solutions.com/api:<group>` to `...:staging`, renames the
 extension "(Staging)" and fails if any URL is left unrewritten (or if a prod build contains a branch URL).
-The extension cannot send an `X-Data-Source` header, so extension traffic uses the live data source.
+The staging build also prepends a `fetch` wrapper to every extension script that calls the API, adding
+`X-Data-Source: test` (Xano CORS allows any header), so the staging extension reads/writes ONLY test data.
+The build fails if an API-calling script lacks the wrapper (or if a prod build contains it). Access keys and
+profiles must exist in the `test` data source (Migrate) for the staging extension to log in.
 
 ## Release flow
 1. Work on a feature branch, merge into `staging`. Push `staging` -> Vercel builds the staging admin panel.
