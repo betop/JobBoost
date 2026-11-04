@@ -258,6 +258,16 @@ query "resume/generate_legacy" verb=POST {
           where = $db.generation_log.job_url == $input.job_url && $db.generation_log.profile_id == $input.profile_id && $db.generation_log.is_matched == 1
           return = {type: "single"}
         } as $potential_duplicate
+        
+        // Per-profile opt-out: when check_duplicate_url is explicitly false, ignore the
+        // same-job-URL match so generation continues to the next validations (null/true = check)
+        conditional {
+          if (($prof.check_duplicate_url|json_encode) == "false") {
+            var.update $potential_duplicate {
+              value = null
+            }
+          }
+        }
       
         conditional {
           if ($potential_duplicate != null) {

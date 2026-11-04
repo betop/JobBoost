@@ -32,6 +32,8 @@ export interface Profile {
   include_achievements: boolean;
   use_legacy_api: boolean;
   block_lead_roles: boolean;
+  /** Reject a job URL this profile already generated for (default true) */
+  check_duplicate_url?: boolean | null;
   tailor_job_title: boolean;
   allowed_languages: string;
   /** Spoken languages for the resume Languages section, comma separated */
@@ -82,6 +84,7 @@ export interface CreateProfileInput {
   include_achievements?: boolean;
   use_legacy_api?: boolean;
   block_lead_roles?: boolean;
+  check_duplicate_url?: boolean;
   tailor_job_title?: boolean;
   allowed_languages?: string;
   spoken_languages?: string;

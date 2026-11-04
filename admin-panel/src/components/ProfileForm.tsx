@@ -77,6 +77,7 @@ const profileSchema = z.object({
   include_achievements: z.boolean().optional().default(true),
   use_legacy_api: z.boolean().optional().default(false),
   block_lead_roles: z.boolean().optional().default(false),
+  check_duplicate_url: z.boolean().optional().default(true),
   tailor_job_title: z.boolean().optional().default(true),
   allowed_languages: z.string().optional().default("English"),
   spoken_languages: z.string().optional().default(""),
@@ -123,6 +124,7 @@ function defaultValuesFor(profile?: Profile): ProfileFormData {
       include_achievements: true,
       use_legacy_api: false,
       block_lead_roles: false,
+      check_duplicate_url: true,
       tailor_job_title: true,
       allowed_languages: "English",
       spoken_languages: "",
@@ -144,6 +146,7 @@ function defaultValuesFor(profile?: Profile): ProfileFormData {
     include_achievements: profile.include_achievements ?? false,
     use_legacy_api: profile.use_legacy_api ?? false,
     block_lead_roles: profile.block_lead_roles ?? false,
+    check_duplicate_url: profile.check_duplicate_url !== false,
     tailor_job_title: profile.tailor_job_title ?? true,
     allowed_languages: profile.allowed_languages ?? "English",
     spoken_languages: profile.spoken_languages ?? "",
@@ -475,6 +478,16 @@ export default function ProfileForm({ mode, profile, submitting, onSubmit, onCan
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
                 <input type="checkbox" checked={field.value ?? false} onChange={(e) => field.onChange(e.target.checked)} className={checkboxClass} />
                 Block lead-level and architect roles (don&apos;t generate a resume for jobs classified as &quot;lead&quot; seniority or with &quot;architect&quot; in the title)
+              </label>
+            )}
+          />
+          <Controller
+            name="check_duplicate_url"
+            control={control}
+            render={({ field }) => (
+              <label className="mt-3 flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                <input type="checkbox" checked={field.value ?? true} onChange={(e) => field.onChange(e.target.checked)} className={checkboxClass} />
+                Block duplicate job URLs (don&apos;t generate again for a job URL this profile already has a resume for)
               </label>
             )}
           />

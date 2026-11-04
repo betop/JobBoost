@@ -336,6 +336,15 @@ export default function ProfileViewPage() {
                   >
                     Block Lead Roles: {profile.block_lead_roles ? "On" : "Off"}
                   </span>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      profile.check_duplicate_url !== false
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    Block Duplicate URLs: {profile.check_duplicate_url !== false ? "On" : "Off"}
+                  </span>
                 </div>
               </div>
 

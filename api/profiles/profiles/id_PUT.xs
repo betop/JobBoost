@@ -26,6 +26,7 @@ query "profiles/{id}" verb=PUT {
     bool use_legacy_api?
     bool hide?
     bool block_lead_roles?
+    bool check_duplicate_url?
     bool tailor_job_title?
     text allowed_languages?
     json resume_sections? {
@@ -272,6 +273,18 @@ query "profiles/{id}" verb=PUT {
       if ($block_lead_roles_changed != "") {
         var.update $payload.block_lead_roles {
           value = $input.block_lead_roles
+        }
+      }
+    }
+  
+    var $check_duplicate_url_changed {
+      value = $input.check_duplicate_url|json_encode
+    }
+  
+    conditional {
+      if ($check_duplicate_url_changed != "") {
+        var.update $payload.check_duplicate_url {
+          value = $input.check_duplicate_url
         }
       }
     }

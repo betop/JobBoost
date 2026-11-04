@@ -134,6 +134,7 @@ export default function ProfilesPage() {
         include_achievements: full.include_achievements,
         use_legacy_api: full.use_legacy_api,
         block_lead_roles: full.block_lead_roles,
+        check_duplicate_url: full.check_duplicate_url !== false,
         tailor_job_title: full.tailor_job_title,
         allowed_languages: full.allowed_languages,
         default_compensation: full.default_compensation,

@@ -27,6 +27,9 @@ table profile {
     bool use_legacy_api?
     bool hide?
     bool block_lead_roles?
+    bool check_duplicate_url?=true {
+      description = "When false, resume generation skips the same-job-URL duplicate check; null/true = check"
+    }
     bool tailor_job_title?=true
     text allowed_languages?="English"
     json resume_sections? {
