@@ -13,6 +13,7 @@ import {
   FileArchive,
   ExternalLink,
 } from "lucide-react";
+import ReleaseNotes from "@/components/ReleaseNotes";
 import { useUIStore } from "@/store/uiStore";
 import { useAuthStore } from "@/store/authStore";
 import PasswordConfirmModal from "@/components/PasswordConfirmModal";
@@ -417,10 +418,13 @@ export default function ExtensionManagement() {
                 value={form.changelog}
                 disabled={uploading}
                 onChange={(e) => setForm({ ...form, changelog: e.target.value })}
-                rows={4}
+                rows={8}
                 placeholder="What's new in this version?"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Markdown supported: <code># Heading</code>, <code>## Section</code>, <code>- bullet</code>, <code>**bold**</code>, <code>[link](https://...)</code>. Long notes are collapsed on the download page.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -578,7 +582,7 @@ export default function ExtensionManagement() {
                       <FileArchive className="w-4 h-4" />
                       {live.file_name ? `${live.file_name} (${formatBytes(live.file_size)})` : "No file uploaded"}
                     </p>
-                    {live.changelog && <p className="text-gray-700 whitespace-pre-line pt-2">{live.changelog}</p>}
+                    {live.changelog && <ReleaseNotes text={live.changelog} collapsedHeight={140} compact className="pt-3 max-w-2xl" />}
                   </div>
                   {live.file_url && (
                     <a
@@ -622,7 +626,7 @@ export default function ExtensionManagement() {
                             <FileArchive className="w-3.5 h-3.5" />
                             {v.file_name ? `${v.file_name} (${formatBytes(v.file_size)})` : "No file"}
                           </p>
-                          {v.changelog && <p className="text-sm text-gray-700 mt-2 whitespace-pre-line">{v.changelog}</p>}
+                          {v.changelog && <ReleaseNotes text={v.changelog} collapsedHeight={72} compact className="mt-2 max-w-2xl" />}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           {!isLive && (

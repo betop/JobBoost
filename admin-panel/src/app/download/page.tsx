@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, Copy, Check, Puzzle, PackageX, ShieldQuestion } from "lucide-react";
 import { PublicDownload, extensionService, formatBytes, formatDate } from "@/services/extensionService";
+import ReleaseNotes from "@/components/ReleaseNotes";
 
 export default function DownloadPage() {
   const [items, setItems] = useState<PublicDownload[] | null>(null);
@@ -86,9 +87,9 @@ export default function DownloadPage() {
                     {x.file_size ? ` - ${formatBytes(x.file_size)}` : ""}
                   </p>
                   {x.changelog && (
-                    <div className="mt-4">
-                      <h3 className="text-sm font-semibold text-gray-700 mb-1">What&apos;s new</h3>
-                      <p className="text-sm text-gray-700 whitespace-pre-line">{x.changelog}</p>
+                    <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50/60 p-4 sm:p-5">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-primary-700 mb-2">What&apos;s new in v{x.version}</h3>
+                      <ReleaseNotes text={x.changelog} collapsedHeight={150} fadeClassName="from-gray-50" />
                     </div>
                   )}
                   <a
