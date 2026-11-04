@@ -37,7 +37,7 @@ export interface Profile {
   /** Spoken languages for the resume Languages section, comma separated */
   spoken_languages?: string | null;
   /** Section/item visibility (see utils/resumeSections.ts); null = defaults */
-  resume_sections?: Partial<Record<string, boolean>> | null;
+  resume_sections?: Partial<Record<string, boolean | number>> | null;
   ai_model?: string;
   certifications?: Certification[];
   default_compensation?: string;
@@ -85,7 +85,7 @@ export interface CreateProfileInput {
   tailor_job_title?: boolean;
   allowed_languages?: string;
   spoken_languages?: string;
-  resume_sections?: Partial<Record<string, boolean>>;
+  resume_sections?: Partial<Record<string, boolean | number>>;
   ai_model?: string;
   certifications?: Certification[];
   clear_certifications?: boolean;

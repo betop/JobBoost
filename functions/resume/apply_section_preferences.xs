@@ -4,6 +4,8 @@
 // - normalizes kept dates to "Mon YYYY" via resume/format_month_year
 // - education location only comes from the education table (never the AI text)
 // - strips spoken human languages out of technical_skills; languages come from the profile
+// - drops internships when the work history spans more than 5 years and trims bullets per
+//   entry to prefs.bullets_current / bullets_former / bullets_internship
 // The PDF renderer flattens header into the root with root keys winning, so every header
 // key that is removed / set is also removed / set at the root when present there.
 // Never throws: on any problem the original resume is returned.
@@ -28,7 +30,7 @@ function "resume/apply_section_preferences" {
     }
 
     json work_records? {
-      description = "Rows of the work_experience table (company_name, job_title, start_date, end_date, is_current)"
+      description = "Rows of the work_experience table (company_name, job_title, employment_type, start_date, end_date, is_current)"
     }
   }
 
@@ -90,6 +92,13 @@ function "resume/apply_section_preferences" {
                       elseif ($given == "false") {
                         var.update $prefs {
                           value = $prefs|set:$pk:false
+                        }
+                      }
+
+                      elseif ("/^[0-9]+$/"|regex_matches:$given) {
+                        // Integer prefs (bullet counts), already clamped by the resolver
+                        var.update $prefs {
+                          value = $prefs|set:$pk:($given|to_int)
                         }
                       }
                     }
@@ -259,6 +268,32 @@ function "resume/apply_section_preferences" {
               value = []
             }
 
+            // Experience span in months (earliest start -> latest end, today for current /
+            // open-ended rows). Stays -1 when unknown, in which case internships are kept.
+            var $exp_today {
+              value = now|format_timestamp:"Y-m-d":"UTC"
+            }
+
+            var $exp_today_year {
+              value = $exp_today|substr:0:4|to_int
+            }
+
+            var $exp_today_month {
+              value = $exp_today|substr:5:2|to_int
+            }
+
+            var $exp_today_months {
+              value = ($exp_today_year * 12) + $exp_today_month
+            }
+
+            var $exp_min_start {
+              value = 0
+            }
+
+            var $exp_max_end {
+              value = 0
+            }
+
             conditional {
               if ($input.work_records != null && ($input.work_records|is_array)) {
                 foreach ($input.work_records) {
@@ -281,6 +316,86 @@ function "resume/apply_section_preferences" {
                           value = ($wr|get:"is_current":false) == true
                         }
 
+                        var $wr_title {
+                          value = $wr|get:"job_title":null|first_notnull:""|to_text
+                        }
+
+                        var $wr_type {
+                          value = $wr|get:"employment_type":null|first_notnull:""|to_text
+                        }
+
+                        var $wr_title_intern {
+                          value = "/\\bintern(ship)?\\b/i"|regex_matches:$wr_title
+                        }
+
+                        var $wr_type_intern {
+                          value = "/\\bintern(ship)?\\b/i"|regex_matches:$wr_type
+                        }
+
+                        var $wr_intern {
+                          value = $wr_title_intern || $wr_type_intern
+                        }
+
+                        var $wr_has_start {
+                          value = "/^[0-9]{4}-[0-9]{2}/"|regex_matches:$wr_start
+                        }
+
+                        var $wr_has_end {
+                          value = "/^[0-9]{4}-[0-9]{2}/"|regex_matches:$wr_end
+                        }
+
+                        conditional {
+                          if ($wr_has_start) {
+                            var $wr_start_year {
+                              value = $wr_start|substr:0:4|to_int
+                            }
+
+                            var $wr_start_month {
+                              value = $wr_start|substr:5:2|to_int
+                            }
+
+                            var $wr_start_m {
+                              value = ($wr_start_year * 12) + $wr_start_month
+                            }
+
+                            conditional {
+                              if ($exp_min_start == 0 || $wr_start_m < $exp_min_start) {
+                                var.update $exp_min_start {
+                                  value = $wr_start_m
+                                }
+                              }
+                            }
+                          }
+                        }
+
+                        var $wr_end_m {
+                          value = $exp_today_months
+                        }
+
+                        conditional {
+                          if (!$wr_current && $wr_has_end) {
+                            var $wr_end_year {
+                              value = $wr_end|substr:0:4|to_int
+                            }
+
+                            var $wr_end_month {
+                              value = $wr_end|substr:5:2|to_int
+                            }
+
+                            var.update $wr_end_m {
+                              value = ($wr_end_year * 12) + $wr_end_month
+                            }
+                          }
+                        }
+
+                        conditional {
+                          if ($wr_end_m > $exp_max_end) {
+                            var.update $exp_max_end {
+                              value = $wr_end_m
+                            }
+                          }
+                        }
+
                         // Numeric sort keys from the ISO dates (2021-03-01 -> 20210301)
                         var $wr_start_digits {
                           value = "/[^0-9]/"|regex_replace:"":$wr_start
@@ -301,7 +416,7 @@ function "resume/apply_section_preferences" {
                         conditional {
                           if ($wr_name != "") {
                             array.push $work_rows {
-                              value = {name: $wr_name, start: $wr_start, end: $wr_end, start_key: $wr_start_key, end_key: $wr_end_key, is_current: $wr_current}
+                              value = {name: $wr_name, start: $wr_start, end: $wr_end, start_key: $wr_start_key, end_key: $wr_end_key, is_current: $wr_current, is_intern: $wr_intern}
                             }
                           }
                         }
@@ -310,6 +425,35 @@ function "resume/apply_section_preferences" {
                   }
                 }
               }
+            }
+
+            var $exp_months {
+              value = -1
+            }
+
+            conditional {
+              if ($exp_min_start > 0 && $exp_max_end >= $exp_min_start) {
+                var.update $exp_months {
+                  value = $exp_max_end - $exp_min_start
+                }
+              }
+            }
+
+            // More than 5 years of experience: internships are dropped
+            var $drop_internships {
+              value = $exp_months > 60
+            }
+
+            var $bullets_current {
+              value = $prefs|get:"bullets_current":5
+            }
+
+            var $bullets_former {
+              value = $prefs|get:"bullets_former":3
+            }
+
+            var $bullets_internship {
+              value = $prefs|get:"bullets_internship":2
             }
 
             var $src_jobs {
@@ -328,10 +472,19 @@ function "resume/apply_section_preferences" {
                   value = []
                 }
 
+                // Index among KEPT entries; the first kept entry is the current / most recent one
+                var $kept_idx {
+                  value = 0
+                }
+
                 foreach ($src_jobs) {
                   each as $job {
                     var $job_clean {
                       value = $job
+                    }
+
+                    var $job_skip {
+                      value = false
                     }
 
                     conditional {
@@ -490,6 +643,128 @@ function "resume/apply_section_preferences" {
                           }
                         }
 
+                        // Internship test: entry title / job_title, or a matched work_experience row
+                        var $job_title_raw {
+                          value = $job|get:"title":null|first_notnull:""|to_text
+                        }
+
+                        var $job_title_alt {
+                          value = $job|get:"job_title":null|first_notnull:""|to_text
+                        }
+
+                        var $job_title_intern {
+                          value = "/\\bintern(ship)?\\b/i"|regex_matches:$job_title_raw
+                        }
+
+                        var $job_alt_intern {
+                          value = "/\\bintern(ship)?\\b/i"|regex_matches:$job_title_alt
+                        }
+
+                        var $job_is_intern {
+                          value = $job_title_intern || $job_alt_intern
+                        }
+
+                        // Row match counts as internship only when every matched row is an internship
+                        // (an intern -> full-time path at the same company is consolidated and kept)
+                        var $intern_rows {
+                          value = 0
+                        }
+
+                        var $non_intern_rows {
+                          value = 0
+                        }
+
+                        conditional {
+                          if (!$job_is_intern && $job_company != "") {
+                            foreach ($work_rows) {
+                              each as $irow {
+                                var $irow_name {
+                                  value = $irow|get:"name":""
+                                }
+
+                                var $irow_same {
+                                  value = $irow_name == $job_company || ($irow_name|contains:$job_company) || ($job_company|contains:$irow_name)
+                                }
+
+                                conditional {
+                                  if ($irow_same && ($irow|get:"is_intern":false) == true) {
+                                    var.update $intern_rows {
+                                      value = $intern_rows + 1
+                                    }
+                                  }
+
+                                  elseif ($irow_same) {
+                                    var.update $non_intern_rows {
+                                      value = $non_intern_rows + 1
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+
+                        conditional {
+                          if ($intern_rows > 0 && $non_intern_rows == 0) {
+                            var.update $job_is_intern {
+                              value = true
+                            }
+                          }
+                        }
+
+                        conditional {
+                          if ($drop_internships && $job_is_intern) {
+                            var.update $job_skip {
+                              value = true
+                            }
+                          }
+
+                          else {
+                            // Bullet trimming: first kept entry = current, internships = internship, else former
+                            var $bullet_limit {
+                              value = $bullets_former
+                            }
+
+                            conditional {
+                              if ($job_is_intern) {
+                                var.update $bullet_limit {
+                                  value = $bullets_internship
+                                }
+                              }
+
+                              elseif ($kept_idx == 0) {
+                                var.update $bullet_limit {
+                                  value = $bullets_current
+                                }
+                              }
+                            }
+
+                            var $job_bullets {
+                              value = $job_clean|get:"bullets":null
+                            }
+
+                            conditional {
+                              if ($job_bullets != null && ($job_bullets|is_array) && ($job_bullets|count) > $bullet_limit) {
+                                var.update $job_clean {
+                                  value = $job_clean|set:"bullets":($job_bullets|slice:0:$bullet_limit)
+                                }
+                              }
+                            }
+
+                            var $job_highlights {
+                              value = $job_clean|get:"highlights":null
+                            }
+
+                            conditional {
+                              if ($job_highlights != null && ($job_highlights|is_array) && ($job_highlights|count) > $bullet_limit) {
+                                var.update $job_clean {
+                                  value = $job_clean|set:"highlights":($job_highlights|slice:0:$bullet_limit)
+                                }
+                              }
+                            }
+                          }
+                        }
+
                         conditional {
                           if ($prefs.work_position_title == false) {
                             var.update $job_clean {
@@ -557,8 +832,16 @@ function "resume/apply_section_preferences" {
                       }
                     }
 
-                    array.push $clean_jobs {
-                      value = $job_clean
+                    conditional {
+                      if (!$job_skip) {
+                        array.push $clean_jobs {
+                          value = $job_clean
+                        }
+
+                        var.update $kept_idx {
+                          value = $kept_idx + 1
+                        }
+                      }
                     }
                   }
                 }

@@ -15,7 +15,23 @@ export type ResumeSectionKey =
   | "certifications" | "cert_name" | "cert_issuer" | "cert_date" | "cert_link"
   | "portfolio_projects" | "leadership" | "technical_skills" | "languages";
 
-export type ResumeSections = Record<ResumeSectionKey, boolean>;
+export type BulletCountKey = "bullets_current" | "bullets_former" | "bullets_internship";
+
+/** Booleans per section/item plus the work-experience bullet counts, all stored in profile.resume_sections */
+export type ResumeSections = Record<ResumeSectionKey, boolean> & Record<BulletCountKey, number>;
+
+export const BULLET_COUNT_FIELDS: { key: BulletCountKey; label: string; hint: string; default: number }[] = [
+  { key: "bullets_current", label: "Current company", hint: "Most recent position", default: 5 },
+  { key: "bullets_former", label: "Former companies", hint: "Each earlier position", default: 3 },
+  { key: "bullets_internship", label: "Internships", hint: "Only shown when total experience is 5 years or less", default: 2 },
+];
+export const BULLET_MIN = 1;
+export const BULLET_MAX = 10;
+
+export const clampBullets = (v: unknown, fallback: number): number => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(BULLET_MAX, Math.max(BULLET_MIN, n)) : fallback;
+};
 
 export interface SectionItem {
   key: ResumeSectionKey;
@@ -124,7 +140,7 @@ export const DEFAULT_RESUME_SECTIONS: ResumeSections = RESUME_SECTION_GROUPS.red
   if (g.key) acc[g.key] = g.default ?? true;
   g.items.forEach((i) => { acc[i.key] = i.default; });
   return acc;
-}, {} as ResumeSections);
+}, Object.fromEntries(BULLET_COUNT_FIELDS.map((f) => [f.key, f.default])) as unknown as ResumeSections);
 
 /** Same resolution as the backend: defaults, then legacy include_* flags, then stored booleans. */
 export function resolveResumeSections(profile?: {
@@ -141,9 +157,14 @@ export function resolveResumeSections(profile?: {
     try { stored = JSON.parse(stored); } catch { stored = null; }
   }
   if (stored && typeof stored === "object") {
-    (Object.keys(out) as ResumeSectionKey[]).forEach((k) => {
-      const v = (stored as Record<string, unknown>)[k];
-      if (typeof v === "boolean") out[k] = v;
+    const rec = stored as Record<string, unknown>;
+    (Object.keys(out) as (keyof ResumeSections)[]).forEach((k) => {
+      const v = rec[k];
+      if (k.startsWith("bullets_")) {
+        if (v != null && v !== "") (out as Record<string, number | boolean>)[k] = clampBullets(v, out[k] as number);
+      } else if (typeof v === "boolean") {
+        (out as Record<string, number | boolean>)[k] = v;
+      }
     });
   }
   return out;

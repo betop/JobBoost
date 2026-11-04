@@ -1,6 +1,8 @@
-// Resolve which resume sections / fields the user wants rendered, as a flat object of booleans.
+// Resolve which resume sections / fields the user wants rendered, as a flat object of booleans
+// plus integer bullet counts (bullets_current / bullets_former / bullets_internship, 1..10).
 // Order: built-in defaults -> legacy profile flags (include_certifications, include_key_projects)
-// -> profile.resume_sections overrides (only known keys with boolean values are honoured).
+// -> profile.resume_sections overrides (known boolean keys take boolean values; bullet-count
+// keys take a number or numeric string, rounded and clamped to 1..10).
 // Never throws: on any problem the defaults (plus whatever was resolved so far) are returned.
 function "resume/resolve_section_preferences" {
   description = "Resolve resume section/field visibility preferences from a profile record"
@@ -45,7 +47,14 @@ function "resume/resolve_section_preferences" {
         leadership             : true
         technical_skills       : true
         languages              : false
+        bullets_current        : 5
+        bullets_former         : 3
+        bullets_internship     : 2
       }
+    }
+
+    var $count_keys {
+      value = ["bullets_current", "bullets_former", "bullets_internship"]
     }
 
     try_catch {
@@ -110,12 +119,53 @@ function "resume/resolve_section_preferences" {
 
                 foreach ($pref_keys) {
                   each as $key {
+                    var $is_count_key {
+                      value = $count_keys|contains:$key
+                    }
+
                     var $override {
                       value = ($sections|get:$key:null)|json_encode
                     }
 
                     conditional {
-                      if ($override == "true") {
+                      if ($is_count_key) {
+                        // Bullet counts: number or numeric string, rounded and clamped to 1..10
+                        var $count_raw {
+                          value = ($sections|get:$key:null)|first_notnull:""|to_text|trim
+                        }
+
+                        var $count_numeric {
+                          value = "/^[0-9]+(\\.[0-9]+)?$/"|regex_matches:$count_raw
+                        }
+
+                        conditional {
+                          if ($count_numeric) {
+                            var $count_value {
+                              value = $count_raw|to_decimal|round:0|to_int
+                            }
+
+                            conditional {
+                              if ($count_value < 1) {
+                                var.update $count_value {
+                                  value = 1
+                                }
+                              }
+
+                              elseif ($count_value > 10) {
+                                var.update $count_value {
+                                  value = 10
+                                }
+                              }
+                            }
+
+                            var.update $prefs {
+                              value = $prefs|set:$key:$count_value
+                            }
+                          }
+                        }
+                      }
+
+                      elseif ($override == "true") {
                         var.update $prefs {
                           value = $prefs|set:$key:true
                         }

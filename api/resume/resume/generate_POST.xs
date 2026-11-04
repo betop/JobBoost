@@ -1179,8 +1179,166 @@ query "resume/generate" verb=POST {
               }
             }
           
+            // Resume section / item visibility and bullet counts (profile.resume_sections, legacy include_* folded in)
+            function.run "resume/resolve_section_preferences" {
+              input = {profile: $prof}
+            } as $section_prefs
+
+            // Total experience span: earliest start_date -> latest end (today for current / open-ended rows).
+            // Month arithmetic on the "YYYY-MM-DD" date text; $exp_months stays -1 when unknown.
+            var $exp_today {
+              value = now|format_timestamp:"Y-m-d":"UTC"
+            }
+
+            var $exp_today_year {
+              value = $exp_today|substr:0:4|to_int
+            }
+
+            var $exp_today_month {
+              value = $exp_today|substr:5:2|to_int
+            }
+
+            var $exp_today_months {
+              value = ($exp_today_year * 12) + $exp_today_month
+            }
+
+            var $exp_min_start {
+              value = 0
+            }
+
+            var $exp_max_end {
+              value = 0
+            }
+
+            foreach ($work) {
+              each as $ew {
+                var $ew_start {
+                  value = $ew|get:"start_date":null|first_notnull:""|to_text|trim
+                }
+
+                var $ew_end {
+                  value = $ew|get:"end_date":null|first_notnull:""|to_text|trim
+                }
+
+                var $ew_has_start {
+                  value = "/^[0-9]{4}-[0-9]{2}/"|regex_matches:$ew_start
+                }
+
+                var $ew_has_end {
+                  value = "/^[0-9]{4}-[0-9]{2}/"|regex_matches:$ew_end
+                }
+
+                conditional {
+                  if ($ew_has_start) {
+                    var $ew_start_year {
+                      value = $ew_start|substr:0:4|to_int
+                    }
+
+                    var $ew_start_month {
+                      value = $ew_start|substr:5:2|to_int
+                    }
+
+                    var $ew_start_m {
+                      value = ($ew_start_year * 12) + $ew_start_month
+                    }
+
+                    conditional {
+                      if ($exp_min_start == 0 || $ew_start_m < $exp_min_start) {
+                        var.update $exp_min_start {
+                          value = $ew_start_m
+                        }
+                      }
+                    }
+                  }
+                }
+
+                var $ew_end_m {
+                  value = $exp_today_months
+                }
+
+                conditional {
+                  if (($ew|get:"is_current":false) != true && $ew_has_end) {
+                    var $ew_end_year {
+                      value = $ew_end|substr:0:4|to_int
+                    }
+
+                    var $ew_end_month {
+                      value = $ew_end|substr:5:2|to_int
+                    }
+
+                    var.update $ew_end_m {
+                      value = ($ew_end_year * 12) + $ew_end_month
+                    }
+                  }
+                }
+
+                conditional {
+                  if ($ew_end_m > $exp_max_end) {
+                    var.update $exp_max_end {
+                      value = $ew_end_m
+                    }
+                  }
+                }
+              }
+            }
+
+            var $exp_months {
+              value = -1
+            }
+
+            conditional {
+              if ($exp_min_start > 0 && $exp_max_end >= $exp_min_start) {
+                var.update $exp_months {
+                  value = $exp_max_end - $exp_min_start
+                }
+              }
+            }
+
+            var $total_experience_years {
+              value = ($exp_months|to_decimal) / 12
+            }
+
+            // Internships are only included for candidates with 5 years of experience or less (unknown = include)
+            var $include_internships {
+              value = $exp_months <= 60
+            }
+
+            // Rows sent to the AI (internships dropped when excluded); the FULL $work list is still
+            // passed to resume/apply_section_preferences.
+            var $work_for_prompt {
+              value = []
+            }
+
+            foreach ($work) {
+              each as $wf {
+                var $wf_title {
+                  value = $wf|get:"job_title":null|first_notnull:""|to_text
+                }
+
+                var $wf_type {
+                  value = $wf|get:"employment_type":null|first_notnull:""|to_text
+                }
+
+                var $wf_title_intern {
+                  value = "/\\bintern(ship)?\\b/i"|regex_matches:$wf_title
+                }
+
+                var $wf_type_intern {
+                  value = "/\\bintern(ship)?\\b/i"|regex_matches:$wf_type
+                }
+
+                conditional {
+                  if ($include_internships || (!$wf_title_intern && !$wf_type_intern)) {
+                    array.push $work_for_prompt {
+                      value = $wf
+                    }
+                  }
+                }
+              }
+            }
+
             // Build work experience text
-            // The most recent entry (first) uses $last_position_title_for_prompt as the job title
+            // The most recent EMITTED entry (first of $work_for_prompt) uses $last_position_title_for_prompt as the job title
             var $work_text {
               value = ""
             }
@@ -1189,7 +1347,7 @@ query "resume/generate" verb=POST {
               value = 0
             }
           
-            foreach ($work) {
+            foreach ($work_for_prompt) {
               each as $w {
                 // Dates go to the AI as "Mon YYYY" (never raw ISO with a day)
                 function.run "resume/format_month_year" {
@@ -1386,7 +1544,7 @@ WORK EXPERIENCE — COMPANY CONSOLIDATION
 ========================================================
 
 If multiple roles share the same company name:
-1. If the internship was completed during your time at university, remove it from the career breakdown list.
+1. __INTERNSHIP_RULE__
 2. There MUST NOT be duplicate company entries — all roles from the same company MUST be merged into ONE single career_breakdowns entry.
 3. The Title MUST be the title of the most recent role held at that company.
 4. The Period MUST cover the entire time at that company, from the first date joined to Present (if still employed) or the final departure date.
@@ -1473,12 +1631,13 @@ Metrics:
 - Do NOT restate the same accomplishment in more than one place in the resume. This applies across career_breakdowns, portfolio_projects, and leadership_enterpreneurial_experience — each real accomplishment appears once with one consistent set of facts.
 
 Bullet counts:
-- The current/most recent position MUST have more bullets than every former position.
-- EVERY former (non-current) position that is NOT an internship MUST have EXACTLY 3 bullets — uniformly, with no exceptions and no gradual reduction as positions get older.
-- Internship positions MAY have fewer than 3 bullets.
-- Before returning the JSON, go through career_breakdowns one entry at a time and count bullets. If any former non-internship entry has fewer than 3, add bullets until it has exactly 3.
+- The current/most recent position MUST have EXACTLY __BULLETS_CURRENT__ bullets (if the most recent position is an internship, the internship count below applies instead).
+- EVERY former (non-current) position that is NOT an internship MUST have EXACTLY __BULLETS_FORMER__ bullets — uniformly, with no exceptions and no gradual reduction as positions get older.
+- EVERY internship position MUST have EXACTLY __BULLETS_INTERNSHIP__ bullets.
+- These counts override the number of bullets shown in the JSON structure example.
+- Before returning the JSON, go through career_breakdowns one entry at a time and count bullets. If any entry does not have exactly its required count, add or remove bullets until it matches.
 
-If the three-part formula is not followed, a bullet lacks a metric, every bullet in a position shares the same sentence template, or ANY former non-internship position has fewer than 3 bullets, you MUST regenerate.
+If the three-part formula is not followed, a bullet lacks a metric, every bullet in a position shares the same sentence template, or ANY position does not have exactly its required number of bullets, you MUST regenerate.
 
 ========================================================
 EDUCATION RULE
@@ -1558,8 +1717,8 @@ Before returning JSON, you MUST verify:
 
 - Resume is tailored to the job description (technical_skills, bullets, portfolio_projects, and leadership entries emphasize relevant work).
 - No duplicate company entries. Company consolidation correct. start_date and end_date correct.
-- Current/most recent position has more bullets than every former position.
-- Every non-internship former position has exactly 3 bullets — checked individually for every entry, not just the 2nd.
+- Current/most recent position has exactly __BULLETS_CURRENT__ bullets (internship count if it is an internship).
+- Every non-internship former position has exactly __BULLETS_FORMER__ bullets and every internship has exactly __BULLETS_INTERNSHIP__ bullets — checked individually for every entry, not just the 2nd.
 - Every bullet follows the [action verb][process][result] formula, includes a specific plausible metric, no two bullets in the same position share the same sentence template, and no bullet reuses distinctive JD verbs like "leverage" or "harden".
 - __TITLE_TAILORING_VALIDATION__
 - No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents", "no downtime").
@@ -1603,9 +1762,38 @@ Remember today's year is 2026.
               }
             }
           
+            // Per-profile bullet counts and internship inclusion (from $section_prefs / $include_internships)
+            var $bullets_current_text {
+              value = $section_prefs|get:"bullets_current":5|to_text
+            }
+
+            var $bullets_former_text {
+              value = $section_prefs|get:"bullets_former":3|to_text
+            }
+
+            var $bullets_internship_text {
+              value = $section_prefs|get:"bullets_internship":2|to_text
+            }
+
+            var $internship_rule_text {
+              value = "Do NOT include any internship positions."
+            }
+
+            conditional {
+              if ($include_internships) {
+                var.update $internship_rule_text {
+                  value = "Internship positions listed in the candidate profile MUST be kept as their own career_breakdowns entries."
+                }
+              }
+            }
+
             var.update $resume_system_prompt {
               value = $resume_system_prompt
                 |replace:"__TITLE_TAILORING_RULE__":$title_tailoring_rule_text
+                |replace:"__BULLETS_CURRENT__":$bullets_current_text
+                |replace:"__BULLETS_FORMER__":$bullets_former_text
+                |replace:"__BULLETS_INTERNSHIP__":$bullets_internship_text
+                |replace:"__INTERNSHIP_RULE__":$internship_rule_text
                 |replace:"__TITLE_TAILORING_VALIDATION__":$title_tailoring_validation_text
             }
           
@@ -1674,9 +1862,7 @@ Regenerate if violated.
             // Flags come from resume/resolve_section_preferences; they drive the omit instruction
             // and the schema stripping further below.
             // Resume section / item visibility (profile.resume_sections, legacy include_* folded in)
-            function.run "resume/resolve_section_preferences" {
-              input = {profile: $prof}
-            } as $section_prefs
+            // $section_prefs is resolved earlier (before the work experience text / prompt substitution)
 
             var $include_key_projects_flag {
               value = ($section_prefs|get:"portfolio_projects":true) == true

@@ -137,3 +137,16 @@ export async function downloadResumePDF(resumeText: string | object, filename: s
   const { dataUri, filename: outName } = generator.generateResumePDF(resumeText, pdfName, tpl);
   triggerDownload(dataUriToBlob(dataUri), outName);
 }
+
+/**
+ * Render a resume with the swiftcv generator and return an object URL for an <iframe> preview
+ * (same code path as the extension). The caller must URL.revokeObjectURL() it when replaced.
+ */
+export async function renderResumePreviewUrl(resume: object, templateId = 11): Promise<string> {
+  const PDFGenerator = await loadSwiftcvGenerator();
+  const generator = new PDFGenerator();
+  await generator.init();
+  const tpl = Math.max(1, Math.min(20, Math.round(Number(templateId)) || 11));
+  const { dataUri } = generator.generateResumePDF(resume, "preview.pdf", tpl);
+  return URL.createObjectURL(dataUriToBlob(dataUri));
+}

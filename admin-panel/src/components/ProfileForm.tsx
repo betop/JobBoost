@@ -18,8 +18,13 @@ import Button from "@/components/Button";
 import JobCategoryInput from "@/components/JobCategoryInput";
 import ResumeAutofill from "@/components/ResumeAutofill";
 import TemplatePicker from "@/components/TemplatePicker";
+import ResumeTemplatePreview from "@/components/ResumeTemplatePreview";
 import {
   RESUME_SECTION_GROUPS,
+  BULLET_COUNT_FIELDS,
+  BULLET_MIN,
+  BULLET_MAX,
+  clampBullets,
   resolveResumeSections,
   type ResumeSectionKey,
   type ResumeSections,
@@ -81,7 +86,7 @@ const profileSchema = z.object({
   ai_model: z.string().optional().default("claude-haiku-4-5"),
   certifications: z.array(z.object({ name: z.string().optional(), issuer: z.string().optional(), date: z.string().optional(), url: z.string().optional() })).optional().default([]),
   default_compensation: z.string().optional(),
-  resume_sections: z.record(z.string(), z.boolean()),
+  resume_sections: z.record(z.string(), z.union([z.boolean(), z.number()])),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -206,6 +211,7 @@ export default function ProfileForm({ mode, profile, submitting, onSubmit, onCan
   const sections = watch("resume_sections") as ResumeSections;
   const setSection = (key: ResumeSectionKey, value: boolean) =>
     setValue(`resume_sections.${key}`, value, { shouldDirty: true });
+  const templateId = watch("resume_template") ?? 11;
 
   /** Merge parsed resume data into the candidate fields only (no auto-save; settings are kept) */
   function handleAutofill(data: CreateProfileInput) {
@@ -541,6 +547,7 @@ export default function ProfileForm({ mode, profile, submitting, onSubmit, onCan
           />
         </div>
 
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(380px,46%)] gap-6 items-start">
         <div>
           <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
             <div>
@@ -557,7 +564,7 @@ export default function ProfileForm({ mode, profile, submitting, onSubmit, onCan
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-4">
             {RESUME_SECTION_GROUPS.map((group) => {
               const sectionOn = group.key ? sections?.[group.key] ?? false : true;
               return (
@@ -600,6 +607,30 @@ export default function ProfileForm({ mode, profile, submitting, onSubmit, onCan
                       ))}
                     </div>
                   )}
+                  {group.key === "work_experience" && (
+                    <div className="mt-4 ml-6">
+                      <p className="text-xs font-medium text-gray-700 mb-2">Bullets per position</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {BULLET_COUNT_FIELDS.map((f) => (
+                          <label key={f.key} className="text-xs text-gray-600" title={f.hint}>
+                            <span className="block mb-1">{f.label}</span>
+                            <input
+                              type="number"
+                              min={BULLET_MIN}
+                              max={BULLET_MAX}
+                              disabled={!sectionOn || !sections?.work_bullets}
+                              value={(sections?.[f.key] as number | undefined) ?? f.default}
+                              onChange={(e) =>
+                                setValue(`resume_sections.${f.key}`, clampBullets(e.target.value, f.default), { shouldDirty: true })
+                              }
+                              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">Internships are included only when total work experience is 5 years or less.</p>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -618,6 +649,11 @@ export default function ProfileForm({ mode, profile, submitting, onSubmit, onCan
               <p className="text-xs text-gray-500 mt-1 ml-6">Only used by the legacy generation API.</p>
             </div>
           </div>
+        </div>
+
+        <div className="xl:sticky xl:top-32">
+          <ResumeTemplatePreview templateId={templateId} sections={sections} />
+        </div>
         </div>
       </div>
     </form>
