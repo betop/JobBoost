@@ -1191,8 +1191,17 @@ query "resume/generate" verb=POST {
           
             foreach ($work) {
               each as $w {
+                // Dates go to the AI as "Mon YYYY" (never raw ISO with a day)
+                function.run "resume/format_month_year" {
+                  input = {value: ($w.end_date|to_text|first_notnull:"")}
+                } as $work_end_fmt
+
+                function.run "resume/format_month_year" {
+                  input = {value: ($w.start_date|to_text|first_notnull:"")}
+                } as $work_start_fmt
+
                 var $end_label {
-                  value = $w.end_date|to_text|first_notnull:""
+                  value = $work_end_fmt|first_notnull:""
                 }
               
                 conditional {
@@ -1251,7 +1260,7 @@ query "resume/generate" verb=POST {
                 }
               
                 var.update $work_text {
-                  value = $work_text ~ ($title_display|first_notnull:"") ~ " | " ~ ($w.company_name|first_notnull:"") ~ " | " ~ ($location_display|first_notnull:"") ~ " | " ~ ($w.start_date|to_text|first_notnull:"") ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
+                  value = $work_text ~ ($title_display|first_notnull:"") ~ " | " ~ ($w.company_name|first_notnull:"") ~ " | " ~ ($location_display|first_notnull:"") ~ " | " ~ ($work_start_fmt|first_notnull:"") ~ " - " ~ $end_label ~ " | " ~ $promotion_note_display ~ "\n"
                 }
               
                 var.update $work_idx {
@@ -1267,8 +1276,37 @@ query "resume/generate" verb=POST {
           
             foreach ($education) {
               each as $e {
+                function.run "resume/format_month_year" {
+                  input = {value: ($e.end_date|to_text|first_notnull:"")}
+                } as $edu_date_fmt
+
+                var $edu_line {
+                  value = ($e.degree_title|first_notnull:"") ~ " in " ~ ($e.field_of_study|first_notnull:"") ~ " from " ~ ($e.university_name|first_notnull:"")
+                }
+
+                var.update $edu_line {
+                  value = $edu_line ~ " (" ~ ($edu_date_fmt|first_notnull:"") ~ ")"
+                }
+
+                var $edu_row_location {
+                  value = $e.location|first_notnull:""|trim
+                }
+
+                var $prof_location_text {
+                  value = $prof.location|first_notnull:""|trim
+                }
+
+                // Education location only when both the row and the profile have one (never guessed)
+                conditional {
+                  if ($edu_row_location != "" && $prof_location_text != "") {
+                    var.update $edu_line {
+                      value = $edu_line ~ " | Location: " ~ $edu_row_location
+                    }
+                  }
+                }
+
                 var.update $edu_text {
-                  value = $edu_text ~ ($e.degree_title|first_notnull:"") ~ " in " ~ ($e.field_of_study|first_notnull:"") ~ " from " ~ ($e.university_name|first_notnull:"") ~ " (" ~ ($e.end_date|to_text|first_notnull:"") ~ ") "
+                  value = $edu_text ~ $edu_line ~ "\n"
                 }
               }
             }
@@ -1629,18 +1667,47 @@ Regenerate if violated.
           
             // Resume JSON schema example, hardcoded directly as a string (no Xano object construction).
             var $resume_schema {
-              value = "{\"header\":{\"name\":\"[NAME IN CAPS]\",\"location\":\"[City, State]\",\"email\":\"[Gmail]\",\"phone\":\"[Phone #]\",\"linkedin\":{\"display\":\"in/[username]\",\"url\":\"https://www.linkedin.com/in/[username]\"}},\"career_breakdowns\":[{\"company\":\"[Current Company]\",\"title\":\"[Current Position]\",\"date_range\":\"[Mon YYYY - Present]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]},{\"company\":\"[Former Company]\",\"title\":\"[Former Position]\",\"date_range\":\"[Mon YYYY - Mon YYYY]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]}],\"education\":[{\"institution\":\"[University]\",\"degree\":\"[DEGREE IN CAPS]\",\"location\":\"[City, State]\",\"major\":\"[Major]\",\"highlights\":\"[Accolades, extracurriculars]\",\"Relevant\":\"[Relevant coursework]\"}],\"certifications\":[{\"name\":\"[Cert Name]\",\"issuer\":\"[Issuer]\"}],\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"description\":\"[Action verb + process + result]\"}],\"leadership_enterpreneurial_experience\":[{\"name\":\"[Initiative Name]\",\"role\":\"[Role]\",\"description\":\"[Responsibilities and results]\"}],\"technical_skills\":{\"programming\":\"xxx, xxx\",\"softwares\":\"xxx, xxx\",\"statistics_and_ml\":\"xxx, xxx\",\"project_management\":\"xxx, xxx\",\"languages\":\"xxx, xxx\"}}"
+              value = "{\"header\":{\"name\":\"[NAME IN CAPS]\",\"location\":\"[City, State]\",\"email\":\"[Gmail]\",\"phone\":\"[Phone #]\",\"linkedin\":{\"display\":\"in/[username]\",\"url\":\"https://www.linkedin.com/in/[username]\"}},\"career_breakdowns\":[{\"company\":\"[Current Company]\",\"title\":\"[Current Position]\",\"date_range\":\"[Mon YYYY - Present]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]},{\"company\":\"[Former Company]\",\"title\":\"[Former Position]\",\"date_range\":\"[Mon YYYY - Mon YYYY]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]}],\"education\":[{\"institution\":\"[University]\",\"degree\":\"[DEGREE IN CAPS]\",\"location\":\"[City, State]\",\"year\":\"[Mon YYYY]\",\"major\":\"[Major]\",\"highlights\":\"[Accolades, extracurriculars]\",\"Relevant\":\"[Relevant coursework]\"}],\"certifications\":[{\"name\":\"[Cert Name]\",\"issuer\":\"[Issuer]\"}],\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"description\":\"[Action verb + process + result]\"}],\"leadership_enterpreneurial_experience\":[{\"name\":\"[Initiative Name]\",\"role\":\"[Role]\",\"description\":\"[Responsibilities and results]\"}],\"technical_skills\":{\"programming\":\"xxx, xxx\",\"softwares\":\"xxx, xxx\",\"statistics_and_ml\":\"xxx, xxx\",\"project_management\":\"xxx, xxx\"}}"
             }
           
             // Include/omit optional sections based on profile preferences.
-            // The schema itself is now a static string (see $resume_schema below), so this only
-            // controls the trailing "do not include" instruction, not schema-object mutation.
+            // Flags come from resume/resolve_section_preferences; they drive the omit instruction
+            // and the schema stripping further below.
+            // Resume section / item visibility (profile.resume_sections, legacy include_* folded in)
+            function.run "resume/resolve_section_preferences" {
+              input = {profile: $prof}
+            } as $section_prefs
+
             var $include_key_projects_flag {
-              value = ($prof.include_key_projects|json_encode) != "false"
+              value = ($section_prefs|get:"portfolio_projects":true) == true
             }
-          
+
             var $include_certifications_flag {
-              value = ($prof.include_certifications|json_encode) != "false"
+              value = ($section_prefs|get:"certifications":true) == true
+            }
+
+            var $include_leadership_flag {
+              value = ($section_prefs|get:"leadership":true) == true
+            }
+
+            var $include_technical_skills_flag {
+              value = ($section_prefs|get:"technical_skills":true) == true
+            }
+
+            var $include_education_flag {
+              value = ($section_prefs|get:"education":true) == true
+            }
+
+            var $include_work_experience_flag {
+              value = ($section_prefs|get:"work_experience":true) == true
+            }
+
+            var $include_summary_flag {
+              value = ($section_prefs|get:"summary":true) == true
+            }
+
+            var $include_headline_flag {
+              value = ($section_prefs|get:"headline":true) == true
             }
           
             // Build omit instruction for the AI prompt
@@ -1660,6 +1727,38 @@ Regenerate if violated.
               if (!$include_certifications_flag) {
                 array.push $omit_sections_list {
                   value = "certifications"
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_leadership_flag) {
+                array.push $omit_sections_list {
+                  value = "leadership_enterpreneurial_experience"
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_technical_skills_flag) {
+                array.push $omit_sections_list {
+                  value = "technical_skills"
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_education_flag) {
+                array.push $omit_sections_list {
+                  value = "education"
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_work_experience_flag) {
+                array.push $omit_sections_list {
+                  value = "career_breakdowns"
                 }
               }
             }
@@ -1737,6 +1836,73 @@ Regenerate if violated.
                   value = $resume_schema|replace:",\"portfolio_projects\":[{\"name\":\"[Project Name] ([Technologies])\",\"description\":\"[Action verb + process + result]\"}]":""
                 }
               }
+            }
+
+            conditional {
+              if (!$include_leadership_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:",\"leadership_enterpreneurial_experience\":[{\"name\":\"[Initiative Name]\",\"role\":\"[Role]\",\"description\":\"[Responsibilities and results]\"}]":""
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_technical_skills_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:",\"technical_skills\":{\"programming\":\"xxx, xxx\",\"softwares\":\"xxx, xxx\",\"statistics_and_ml\":\"xxx, xxx\",\"project_management\":\"xxx, xxx\"}":""
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_education_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:",\"education\":[{\"institution\":\"[University]\",\"degree\":\"[DEGREE IN CAPS]\",\"location\":\"[City, State]\",\"year\":\"[Mon YYYY]\",\"major\":\"[Major]\",\"highlights\":\"[Accolades, extracurriculars]\",\"Relevant\":\"[Relevant coursework]\"}]":""
+                }
+              }
+            }
+
+            conditional {
+              if (!$include_work_experience_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:",\"career_breakdowns\":[{\"company\":\"[Current Company]\",\"title\":\"[Current Position]\",\"date_range\":\"[Mon YYYY - Present]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]},{\"company\":\"[Former Company]\",\"title\":\"[Former Position]\",\"date_range\":\"[Mon YYYY - Mon YYYY]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]}]":""
+                }
+              }
+            }
+
+            // Summary goes right after the header object (inserted before the headline so the anchor still matches)
+            conditional {
+              if ($include_summary_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:"[username]\"}}":"[username]\"}},\"summary\":\"[2-3 sentence professional summary tailored to the job description]\""
+                }
+              }
+            }
+
+            // Headline: professional title inside the header object
+            conditional {
+              if ($include_headline_flag) {
+                var.update $resume_schema {
+                  value = $resume_schema|replace:"https://www.linkedin.com/in/[username]\"}}":"https://www.linkedin.com/in/[username]\"},\"title\":\"[Professional Title]\"}"
+                }
+              }
+            }
+
+            // Section / format rules (spoken languages, date format, education location, summary)
+            var $section_rules_text {
+              value = "\n\n========================================================\nSECTION AND FORMAT RULES (OVERRIDE)\n========================================================\n\n- technical_skills MUST NOT contain spoken/human languages (e.g. English, Spanish, French). Programming languages belong under programming.\n- Every date anywhere in the resume MUST be 'Mon YYYY' (e.g. Jun 2025) or 'Present'. Never include a day and never use numeric formats like 01-01-2025.\n- Education location MUST be copied from the candidate profile EDUCATION line; if none is given there, leave location empty. Never guess a university's city."
+            }
+
+            conditional {
+              if ($include_summary_flag) {
+                var.update $section_rules_text {
+                  value = $section_rules_text ~ "\n- summary: 2-3 sentences, maximum 60 words, no first person (no I, me, my), no em dashes, tailored to the job description using only the candidate's real experience."
+                }
+              }
+            }
+
+            var.update $system_prompt {
+              value = $system_prompt ~ $section_rules_text
             }
 
             var $result_schema {
@@ -2128,6 +2294,11 @@ Regenerate if violated.
                       }
                     }
                     // ==================== END DATE / CERTIFICATION NORMALIZATION ====================
+
+                    // Section / item visibility, date normalization, DB-only education location, spoken languages
+                    function.run "resume/apply_section_preferences" {
+                      input = {resume: $resume_final, profile: $prof, education_records: $education, prefs: $section_prefs}
+                    } as $resume_final
 
 
                     var.update $resume_text {

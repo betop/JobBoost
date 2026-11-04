@@ -28,6 +28,12 @@ query "profiles/{id}" verb=PUT {
     bool block_lead_roles?
     bool tailor_job_title?
     text allowed_languages?
+    json resume_sections? {
+      description = "Flat object of booleans for resume section/item visibility (omit to keep current)"
+    }
+    text spoken_languages? {
+      description = "Comma-separated spoken languages; send an empty string to clear"
+    }
     text ai_model?
     text default_compensation?
     uuid billing_admin_id?
@@ -290,6 +296,26 @@ query "profiles/{id}" verb=PUT {
       }
     }
   
+    var $resume_sections_changed {
+      value = $input.resume_sections|json_encode
+    }
+
+    conditional {
+      if ($resume_sections_changed != "" && $resume_sections_changed != "null") {
+        var.update $payload.resume_sections {
+          value = $input.resume_sections
+        }
+      }
+    }
+
+    conditional {
+      if ($input.spoken_languages != null) {
+        var.update $payload.spoken_languages {
+          value = $input.spoken_languages
+        }
+      }
+    }
+
     conditional {
       if ($input.ai_model != null) {
         function.run "ai/resolve_model" {
@@ -575,6 +601,8 @@ query "profiles/{id}" verb=PUT {
     github         : $p.github_url
     job_category   : $p.job_category
     resume_template: $p.resume_template
+    resume_sections: $p.resume_sections
+    spoken_languages: $p.spoken_languages
     created_at     : $p.created_at
     billing_admin_id: $p.billing_admin_id
     education      : $education_out

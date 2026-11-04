@@ -325,7 +325,7 @@ export default function ProfileViewPage() {
                         : "bg-gray-100 text-gray-600"
                     }`}
                   >
-                    Tailor Job Title: {profile.tailor_job_title ? "On" : "Off"}
+                    Tailor Position Title: {profile.tailor_job_title ? "On" : "Off"}
                   </span>
                   <span
                     className={`px-2.5 py-1 rounded-full text-xs font-semibold ${

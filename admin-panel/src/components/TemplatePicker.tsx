@@ -32,7 +32,7 @@ const TEMPLATES: TemplateInfo[] = [
   { id: 8,  name: "Indigo Sidebar",         style: "Dark left sidebar",            accent: "#4f46e5", dark: "#1e1b4b", medium: "#6366f1", leftSidebar: true, sidebar: "#1e1b4b" },
   { id: 9,  name: "Rose Pink",              style: "Full-width accent header",     accent: "#ec4899", dark: "#831843", medium: "#f472b6", headerBand: true },
   { id: 10, name: "Slate Professional",     style: "Triple-dot separator",         accent: "#64748b", dark: "#1e293b", medium: "#94a3b8" },
-  { id: 11, name: "STAR Method Plain",      style: "Plain serif, underlined headers, no summary", accent: "#000000", dark: "#000000", medium: "#000000", centered: true, plain: true },
+  { id: 11, name: "STAR Method Plain",      style: "Plain, centered, underlined headers", accent: "#000000", dark: "#000000", medium: "#000000", centered: true, plain: true },
   { id: 12, name: "Forest Executive",       style: "Split header, short rules",    accent: "#16a34a", dark: "#14532d", medium: "#4ade80", splitHeader: true },
   { id: 13, name: "Navy Command",           style: "Thick top bar, navy rules",    accent: "#1e40af", dark: "#1e3a8a", medium: "#3b82f6", topBar: true },
   { id: 14, name: "Charcoal Tech",          style: "Boxed section headers",        accent: "#334155", dark: "#0f172a", medium: "#64748b" },

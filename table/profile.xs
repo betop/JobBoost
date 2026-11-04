@@ -11,7 +11,7 @@ table profile {
     text linkedin_url?
     text github_url?
     text job_category?
-    int resume_template?=1
+    int resume_template?=11
     timestamp updated_at?
     bool is_approved?
     uuid created_by? {
@@ -29,6 +29,14 @@ table profile {
     bool block_lead_roles?
     bool tailor_job_title?=true
     text allowed_languages?="English"
+    json resume_sections? {
+      description = "Per-profile resume section/item visibility: flat JSON object of booleans (e.g. {\"summary\": false, \"work_company_name\": true}); null = use defaults"
+    }
+
+    text spoken_languages? {
+      description = "Candidate's spoken languages, comma separated (e.g. \"English (Native), Spanish (Professional)\"); rendered in the optional Languages section"
+    }
+
     text default_compensation?
     text ai_model?="claude-haiku-4-5"
   }

@@ -34,6 +34,10 @@ export interface Profile {
   block_lead_roles: boolean;
   tailor_job_title: boolean;
   allowed_languages: string;
+  /** Spoken languages for the resume Languages section, comma separated */
+  spoken_languages?: string | null;
+  /** Section/item visibility (see utils/resumeSections.ts); null = defaults */
+  resume_sections?: Partial<Record<string, boolean>> | null;
   ai_model?: string;
   certifications?: Certification[];
   default_compensation?: string;
@@ -80,6 +84,8 @@ export interface CreateProfileInput {
   block_lead_roles?: boolean;
   tailor_job_title?: boolean;
   allowed_languages?: string;
+  spoken_languages?: string;
+  resume_sections?: Partial<Record<string, boolean>>;
   ai_model?: string;
   certifications?: Certification[];
   clear_certifications?: boolean;

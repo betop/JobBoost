@@ -14,7 +14,7 @@ import {
   VerticalAlign, IParagraphOptions,
 } from "docx";
 import {
-  ResumeData, TextSegment, normalizeResumeData, parseMarkers, getSkillGroups,
+  ResumeData, TextSegment, normalizeResumeData, parseMarkers, getSkillGroups, formatMonthYear, getLanguages,
 } from "./resumeData";
 import {
   getDocxTemplateStyle, resolveColor, DocxTemplateStyle, HeaderStyle,
@@ -75,24 +75,27 @@ const right = (ctx: Ctx) => [{ type: "right" as const, position: ctx.tabPos }];
 
 interface ContactPart { text: string; url?: string }
 
-function contactParts(d: AnyRec, sidebarOrder = false): ContactPart[] {
+function linkPart(v: unknown): ContactPart | null {
+  if (!v) return null;
+  const o = (typeof v === "object" ? v : { display: v, url: v }) as AnyRec;
+  const url = str(o.url || o.display).trim();
+  const text = str(o.display || o.url).trim()
+    .replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+  if (!text) return null;
+  return { text, url: url ? (/^https?:\/\//i.test(url) ? url : `https://${url.replace(/^\/+/, "")}`) : undefined };
+}
+
+/** Same items and order as swiftcv _contactParts: location, email, phone, LinkedIn, GitHub. */
+function contactParts(d: AnyRec, noLinks = false): ContactPart[] {
   const parts: ContactPart[] = [];
-  const li = d.linkedin
-    ? (typeof d.linkedin === "object" ? d.linkedin : { display: d.linkedin, url: d.linkedin })
-    : null;
-  if (sidebarOrder) {
-    // swiftcv template 8 order: email, phone, location, linkedin (no links)
-    if (d.email) parts.push({ text: str(d.email) });
-    if (d.phone) parts.push({ text: str(d.phone) });
-    if (d.location) parts.push({ text: str(d.location) });
-    if (li && li.display) parts.push({ text: str(li.display) });
-    return parts;
-  }
   if (d.location) parts.push({ text: str(d.location) });
   if (d.email) parts.push({ text: str(d.email), url: `mailto:${d.email}` });
   if (d.phone) parts.push({ text: str(d.phone) });
-  if (li && li.display) parts.push({ text: str(li.display), url: li.url ? str(li.url) : undefined });
-  return parts;
+  const li = linkPart(d.linkedin);
+  if (li) parts.push({ ...li, text: li.text.replace(/^linkedin\.com\//i, "") });
+  const gh = linkPart(d.github);
+  if (gh) parts.push(gh);
+  return noLinks ? parts.map((p) => ({ text: p.text })) : parts;
 }
 
 function contactRuns(parts: ContactPart[], hs: HeaderStyle, st: DocxTemplateStyle, onBand: boolean): Run[] {
@@ -294,22 +297,30 @@ function buildBody(d: AnyRec, ctx: Ctx): Paragraph[] {
   if (jobs.length) {
     c.push(sectionHeading("Work Experience", ctx));
     jobs.forEach((job, idx) => {
-      const dateStr = job.date_range || [job.start, job.end || "Present"].filter(Boolean).join(" – ");
-      c.push(new Paragraph({
-        spacing: { before: idx > 0 ? 200 : 0, after: 20 }, keepNext: true, tabStops: right(ctx),
-        children: [
-          run(str(job.title || job.job_title), { size: 10.5, bold: true, color: st.dark }),
-          run(`\t${dateStr}`, { size: 9, color: GRAY }),
-        ],
-      }));
+      const dateStr = formatMonthYear(job.date_range || (job.start ? `${job.start} - ${job.end || "Present"}` : ""));
+      // Position title and company can each be hidden per profile; whichever exists leads row 1
+      const titleTxt = str(job.title || job.job_title);
+      const row1 = titleTxt || str(job.company);
+      const row2 = titleTxt ? str(job.company) : "";
+      if (row1 || dateStr) {
+        c.push(new Paragraph({
+          spacing: { before: idx > 0 ? 200 : 0, after: 20 }, keepNext: true, tabStops: right(ctx),
+          children: [
+            run(row1, { size: 10.5, bold: true, color: st.dark }),
+            ...(dateStr ? [run(`\t${dateStr}`, { size: 9, color: GRAY })] : []),
+          ],
+        }));
+      }
       const displayText = job.promotion_note || job.location || "";
-      c.push(new Paragraph({
-        spacing: { after: 80 }, keepNext: true, tabStops: right(ctx),
-        children: [
-          run(str(job.company), { size: 10, color: BODY_MUTED }),
-          ...(displayText ? [run(`\t${displayText}`, { size: 8, color: GRAY })] : []),
-        ],
-      }));
+      if (row2 || displayText) {
+        c.push(new Paragraph({
+          spacing: { after: 80 }, keepNext: true, tabStops: right(ctx),
+          children: [
+            run(row2, { size: 10, color: BODY_MUTED }),
+            ...(displayText ? [run(`\t${displayText}`, { size: 8, color: GRAY })] : []),
+          ],
+        }));
+      }
       const bullets: string[] = job.highlights || job.bullets || [];
       bullets.forEach((b, bi) => c.push(bulletParagraph(b, bi === bullets.length - 1)));
     });
@@ -320,16 +331,18 @@ function buildBody(d: AnyRec, ctx: Ctx): Paragraph[] {
   if (edus.length) {
     c.push(sectionHeading("Education", ctx));
     edus.forEach((edu, idx) => {
-      const year = edu.year || edu.end || "";
+      const year = formatMonthYear(edu.year || edu.date || edu.end || "");
+      const institution = str(edu.school || edu.institution);
+      const degreeRaw = str(edu.degree || edu.degree_name);
       c.push(new Paragraph({
         spacing: { before: idx > 0 ? 120 : 0, after: 20 }, keepNext: true, tabStops: right(ctx),
         children: [
-          run(str(edu.degree || edu.degree_name), { size: 10, bold: true, color: BODY }),
+          run(degreeRaw || institution, { size: 10, bold: true, color: BODY }),
           ...(edu.major ? [run(`  ·  ${edu.major}`, { size: 9.5, color: BODY_MUTED })] : []),
           ...(year ? [run(`\t${year}`, { size: 9.5, color: GRAY })] : []),
         ],
       }));
-      const subParts = [edu.school || edu.institution || "", edu.location].filter(Boolean).join("  ·  ");
+      const subParts = [degreeRaw ? institution : "", edu.location].filter(Boolean).join("  ·  ");
       if (subParts) c.push(new Paragraph({ spacing: { after: 40 }, children: [run(subParts, { size: 9.5, bold: true, color: BODY_MUTED })] }));
       if (edu.highlights) c.push(new Paragraph({ spacing: { after: 20 }, children: [run(str(edu.highlights), { size: 9.5, color: BODY_MUTED })] }));
       const relevant = edu.Relevant || edu.relevant || "";
@@ -350,14 +363,30 @@ function buildBody(d: AnyRec, ctx: Ctx): Paragraph[] {
   if (certs.length) {
     c.push(sectionHeading("Certifications", ctx));
     certs.forEach((cert, idx) => {
+      const name = str(cert.name || cert.cert_name).trim();
+      const issuer = str(cert.issuer || cert.provider || cert.organization).trim();
+      const date = formatMonthYear(cert.date || cert.issued_date || cert.year || "");
+      const rawUrl = str(cert.url || cert.link || cert.credential_url).trim();
+      const url = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : "";
+      const lead = name || issuer;
+      const tail = name ? issuer : "";
       c.push(new Paragraph({
-        spacing: { before: idx > 0 ? 100 : 0, after: 20 }, keepNext: true, tabStops: right(ctx),
+        spacing: { before: idx > 0 ? 100 : 0, after: 20 }, keepNext: !!url, tabStops: right(ctx),
         children: [
-          run(str(cert.name || cert.cert_name), { size: 10, bold: true, color: BODY }),
-          ...(cert.issuer ? [run(`  ·  ${cert.issuer}`, { size: 9.5, color: BODY_MUTED })] : []),
-          ...(cert.date ? [run(`\t${cert.date}`, { size: 9, color: GRAY })] : []),
+          ...(lead ? [url
+            ? new ExternalHyperlink({ link: url, children: [new TextRun({ text: lead, font: FONT, size: pt(10), bold: true, color: BODY })] })
+            : run(lead, { size: 10, bold: true, color: BODY })] : []),
+          ...(tail ? [run(`  ·  ${tail}`, { size: 9.5, color: BODY_MUTED })] : []),
+          ...(date ? [run(`\t${date}`, { size: 9, color: GRAY })] : []),
         ],
       }));
+      if (url) {
+        const display = url.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "");
+        c.push(new Paragraph({
+          spacing: { after: 20 },
+          children: [new ExternalHyperlink({ link: url, children: [new TextRun({ text: display, font: FONT, size: pt(8.5), color: st.accent })] })],
+        }));
+      }
       const vp = cert.value_proposition || cert.description || "";
       if (vp) c.push(new Paragraph({ spacing: { after: 40 }, children: [run(str(vp), { size: 9.5, color: BODY_MUTED })] }));
     });
@@ -395,7 +424,7 @@ function buildBody(d: AnyRec, ctx: Ctx): Paragraph[] {
   if (leadership.length) {
     c.push(sectionHeading("Leadership/Entrepreneurial Experience", ctx));
     leadership.forEach((role, idx) => {
-      const dateStr = role.date || role.date_range || [role.start, role.end || "Present"].filter(Boolean).join(" – ");
+      const dateStr = formatMonthYear(role.date || role.date_range || (role.start ? `${role.start} - ${role.end || "Present"}` : ""));
       c.push(new Paragraph({
         spacing: { before: idx > 0 ? 120 : 0, after: 20 }, keepNext: true, tabStops: right(ctx),
         children: [
@@ -423,6 +452,13 @@ function buildBody(d: AnyRec, ctx: Ctx): Paragraph[] {
         ],
       }));
     });
+  }
+
+  // Spoken languages (optional section) — never part of technical skills
+  const languages = getLanguages(d as ResumeData);
+  if (languages.length) {
+    c.push(sectionHeading("Languages", ctx));
+    c.push(new Paragraph({ spacing: { after: 60 }, children: [run(languages.join(", "), { size: 10, color: BODY })] }));
   }
 
   // Achievements (legacy-only, renders last)

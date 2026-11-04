@@ -23,6 +23,15 @@ query profiles verb=POST {
     bool block_lead_roles?
     bool tailor_job_title?
     text allowed_languages?
+    json resume_sections? {
+      description = "Flat object of booleans for resume section/item visibility (null = defaults)"
+    }
+    text spoken_languages? {
+      description = "Comma-separated spoken languages"
+    }
+    int resume_template? {
+      description = "Resume template id; defaults to 11"
+    }
     text ai_model? {
       description = "Claude model used to generate for this profile (claude-haiku-4-5 | claude-haiku-5-5); default Haiku 4.5"
     }
@@ -95,6 +104,70 @@ query profiles verb=POST {
       }
     }
   
+    // Resume template: default 11; non-super-admins may only pick templates the super admin left visible
+    var $resume_template {
+      value = 11
+    }
+
+    conditional {
+      if ($input.resume_template != null) {
+        conditional {
+          if ($auth_user.type != "super_admin") {
+            db.get template_visibility {
+              field_name = "id"
+              field_value = 1
+            } as $cfg
+
+            conditional {
+              if ($cfg != null && $cfg.admin_visible_template_ids != null && $cfg.admin_visible_template_ids != "") {
+                var $template_allowed {
+                  value = false
+                }
+
+                foreach (($cfg.admin_visible_template_ids|split:",")) {
+                  each as $tid {
+                    conditional {
+                      if (($tid|trim) != "" && $input.resume_template == ($tid|trim|to_int)) {
+                        var.update $template_allowed {
+                          value = true
+                        }
+                      }
+                    }
+                  }
+                }
+
+                precondition ($template_allowed) {
+                  error_type = "accessdenied"
+                  error = "Selected template is hidden by super admin"
+                }
+              }
+            }
+          }
+        }
+
+        var.update $resume_template {
+          value = $input.resume_template
+        }
+      }
+    }
+
+    // Section visibility: store only a real object; anything else stays null (= defaults)
+    var $resume_sections_encoded {
+      value = $input.resume_sections|json_encode
+    }
+
+    var $resume_sections {
+      value = null
+    }
+
+    conditional {
+      if ($resume_sections_encoded != "" && $resume_sections_encoded != "null") {
+        var.update $resume_sections {
+          value = $input.resume_sections
+        }
+      }
+    }
+
     // Validate the chosen model (unknown / retired -> Haiku 4.5)
     function.run "ai/resolve_model" {
       input = {ai_model: $input.ai_model}
@@ -123,6 +196,9 @@ query profiles verb=POST {
         tailor_job_title      : ($input.tailor_job_title|json_encode) != "" ? $input.tailor_job_title : true
         allowed_languages     : ($input.allowed_languages != null && $input.allowed_languages != "") ? $input.allowed_languages : "English"
         default_compensation  : $input.default_compensation
+        resume_template       : $resume_template
+        resume_sections       : $resume_sections
+        spoken_languages      : $input.spoken_languages
       }
     } as $p
   
@@ -282,6 +358,9 @@ query profiles verb=POST {
         linkedin       : $p.linkedin_url
         github         : $p.github_url
         created_at     : $p.created_at
+        resume_template: $p.resume_template
+        resume_sections: $p.resume_sections
+        spoken_languages: $p.spoken_languages
         billing_admin_id: $p.billing_admin_id
         education      : $education_out
         work_experience: $work_out

@@ -842,11 +842,7 @@ class PDFGenerator {
     doc.line(7, sy, sideW - 7, sy); sy += 5;
     // Sidebar contact items (ensure visible on dark sidebar)
     doc.setFont(this._activeFont, "normal"); doc.setFontSize(7.5); doc.setTextColor(255,255,255);
-    const sideItems = [];
-    if (r.email) sideItems.push(r.email);
-    if (r.phone) sideItems.push(r.phone);
-    if (r.location) sideItems.push(r.location);
-    if (r.linkedin) sideItems.push(typeof r.linkedin === "object" ? r.linkedin.display : r.linkedin);
+    const sideItems = this._contactParts(r).map((p) => p.text);
     sideItems.forEach(item => {
       const ls = doc.splitTextToSize(item, sideW - 12);
       ls.forEach(l => { doc.text(l, 7, sy); sy += 4; });
@@ -982,19 +978,56 @@ class PDFGenerator {
 
   _renderTemplate_12(doc, r) {
     const m = this.marginH;
-    const nameY = this.currentY;
-    doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(...this.C.dark);
-    doc.text((r.name || "").toUpperCase(), m, nameY);
-    this.currentY += 8;
+    const cw = this.contentWidth;
+    const topY = this.currentY;
+    const gap = 8;
+
+    // Right column: one contact item per line, right-aligned, so it can never run into the name
+    const contactPt = 8.5;
+    const contactLH = 4.2;
+    const parts = this._contactParts(r);
+    doc.setFont(this._activeFont, "normal"); doc.setFontSize(contactPt);
+    let rightW = parts.reduce((w, p) => Math.max(w, doc.getTextWidth(p.text)), 0);
+    rightW = Math.min(rightW, cw * 0.55);
+    let ry = topY - 3;
+    parts.forEach((p) => {
+      const lines = doc.splitTextToSize(p.text, rightW);
+      lines.forEach((ln, i) => {
+        const lw = doc.getTextWidth(ln);
+        const x = m + this.contentWidth - lw;
+        if (p.url && i === 0 && lines.length === 1) {
+          doc.setTextColor(...this.C.accent);
+          doc.textWithLink(ln, x, ry, { url: p.url });
+        } else {
+          doc.setTextColor(...this.C.gray);
+          doc.text(ln, x, ry);
+        }
+        ry += contactLH;
+      });
+    });
+
+    // Left column: name shrinks (22pt -> 14pt) and then wraps to fit the remaining width
+    const leftW = cw - (parts.length ? rightW + gap : 0);
+    const name = (r.name || "").toUpperCase();
+    let namePt = 22;
+    doc.setFont(this._activeFont, "bold");
+    doc.setFontSize(namePt);
+    while (namePt > 14 && doc.getTextWidth(name) > leftW) {
+      namePt -= 1;
+      doc.setFontSize(namePt);
+    }
+    doc.setTextColor(...this.C.dark);
+    const nameLines = doc.splitTextToSize(name, leftW);
+    const nameLH = namePt * 0.352778 * 1.15;
+    let ly = topY;
+    nameLines.forEach((ln) => { doc.text(ln, m, ly); ly += nameLH; });
+    ly += 8 - nameLH;
     if (r.title) {
       doc.setFont(this._activeFont, "normal"); doc.setFontSize(11); doc.setTextColor(...this.C.accent);
-      doc.text(r.title, m, this.currentY); this.currentY += 5;
+      const tLines = doc.splitTextToSize(r.title, leftW);
+      tLines.forEach((ln) => { doc.text(ln, m, ly); ly += 5; });
     }
-    const contactY = nameY;
-    const savedY = this.currentY;
-    this.currentY = contactY;
-    this._renderContactLine(doc, r, 8, false, { alignRight: true });
-    this.currentY = Math.max(savedY, this.currentY + 1);
+    this.currentY = Math.max(ly, ry + 1);
     doc.setDrawColor(...this.C.accent); doc.setLineWidth(1.1);
     doc.line(m, this.currentY, this.pageWidth - m, this.currentY);
     this.currentY += 6;
@@ -1085,12 +1118,12 @@ class PDFGenerator {
     const name = (r.name || "").toUpperCase();
     doc.setFont(this._activeFont, "bold"); doc.setFontSize(22); doc.setTextColor(...this.C.dark);
     const nameW = doc.getTextWidth(name);
-    doc.text(name, this.pageWidth - m - nameW, this.currentY);
+    doc.text(name, m + this.contentWidth - nameW, this.currentY);
     this.currentY += 8;
     if (r.title) {
       doc.setFont(this._activeFont, "italic"); doc.setFontSize(11); doc.setTextColor(...this.C.accent);
       const tW = doc.getTextWidth(r.title);
-      doc.text(r.title, this.pageWidth - m - tW, this.currentY); this.currentY += 5.5;
+      doc.text(r.title, m + this.contentWidth - tW, this.currentY); this.currentY += 5.5;
     }
     this._renderContactLine(doc, r, 8.5, false, { alignRight: true });
     this.currentY += 1;
@@ -1280,7 +1313,9 @@ class PDFGenerator {
   //  sectionHeaderFn(doc, title) — called instead of _sectionHeader
   // ═══════════════════════════════════════════════════════════════════════════
 
-  _renderCommonSections(doc, r, sectionHeaderFn) {
+  _renderCommonSections(doc, r, rawHeaderFn) {
+    // Never leave a section title stranded at the bottom of a page without any of its content
+    const sectionHeaderFn = (d, title) => { this._checkPageBreak(d, 26); rawHeaderFn(d, title); };
     if (r.summary) {
       sectionHeaderFn(doc, "SUMMARY");
       const m = this.marginH, cw = this.contentWidth;
@@ -1344,6 +1379,15 @@ class PDFGenerator {
       this.currentY += 1;
     }
 
+    // Spoken languages (optional section, enabled per profile) — never mixed into technical skills
+    const languages = this._getLanguages(r);
+    if (languages.length) {
+      sectionHeaderFn(doc, "LANGUAGES");
+      this._checkPageBreak(doc, 10);
+      const endY = this._renderText(doc, languages.join(", "), this.marginH, this.currentY, this.contentWidth, 10, this.C.body, "normal", this.LH.base);
+      this.currentY = endY + this.LH.base + this.SP.skillsRow;
+    }
+
     // Legacy-only — not part of the current schema, renders last when present in older data.
     const achievements = r.achievement || r.awards_recognition || r.awards || [];
     if (achievements.length) {
@@ -1366,61 +1410,171 @@ class PDFGenerator {
       software: "Software",
       statistics_and_ml: "Statistics & ML",
       project_management: "Project Management",
-      languages: "Languages",
+      languages: "Programming Languages",
     };
     const humanize = (key) => labels[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-    if (r.technical_skills && typeof r.technical_skills === "object") {
+    // Spoken languages (English, Spanish, ...) belong in the Languages section, never in skills
+    const clean = (v) => (Array.isArray(v) ? v : String(v == null ? "" : v).split(","))
+      .map((x) => String(x).trim())
+      .filter((x) => x && !this._isSpokenLanguage(x))
+      .join(", ");
+    const skip = (k) => /^(spoken_languages|human_languages|spoken languages)$/i.test(String(k));
+
+    if (r.technical_skills && typeof r.technical_skills === "object" && !Array.isArray(r.technical_skills)) {
       return Object.keys(r.technical_skills)
-        .filter((k) => r.technical_skills[k] != null && String(r.technical_skills[k]).trim() !== "")
-        .map((k) => ({ category: humanize(k), values: String(r.technical_skills[k]) }));
+        .filter((k) => !skip(k))
+        .map((k) => ({ category: humanize(k), values: clean(r.technical_skills[k]) }))
+        .filter((row) => row.values !== "");
     }
     if (r.skills && r.skills.length) {
-      return r.skills.map((row) => {
-        const v = row.values || row.skills || "";
-        return { category: row.category || "", values: Array.isArray(v) ? v.join(", ") : String(v) };
-      });
+      return r.skills
+        .filter((row) => !skip(row.category || ""))
+        .map((row) => ({ category: row.category || "", values: clean(row.values || row.skills || "") }))
+        .filter((row) => row.values !== "");
     }
     return [];
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  Date / language helpers
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Any date or date range -> "Mon YYYY" / "Mon YYYY - Present". A resume never shows a day
+  // (e.g. "01-01-2025" -> "Jan 2025"). Unrecognised text is returned trimmed and unchanged.
+  _fmtDate(value) {
+    if (value == null) return "";
+    const s = String(value).trim();
+    if (!s) return "";
+    const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const named = (word) => MON.findIndex((x) => x.toLowerCase() === String(word).slice(0, 3).toLowerCase());
+    const one = (raw) => {
+      const t = String(raw).trim().replace(/[.,]$/, "");
+      if (!t) return "";
+      if (/^(present|current|now|ongoing)$/i.test(t)) return "Present";
+      const mon = (n, y) => (n >= 1 && n <= 12 ? `${MON[n - 1]} ${y}` : String(y));
+      let m;
+      if ((m = t.match(/^(\d{4})[-/.](\d{1,2})(?:[-/.]\d{1,2})?(?:[T\s].*)?$/))) return mon(+m[2], m[1]);
+      if ((m = t.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) {
+        // US order (MM-DD-YYYY) unless the first part cannot be a month
+        return +m[1] > 12 ? mon(+m[2], m[3]) : mon(+m[1], m[3]);
+      }
+      if ((m = t.match(/^(\d{1,2})[-/.](\d{4})$/))) return mon(+m[1], m[2]);
+      if ((m = t.match(/^([A-Za-z]{3,})\.?\s+(?:\d{1,2}(?:st|nd|rd|th)?,?\s+)?(\d{4})$/)) && named(m[1]) >= 0) {
+        return `${MON[named(m[1])]} ${m[2]}`;
+      }
+      if ((m = t.match(/^\d{1,2}(?:st|nd|rd|th)?\s+([A-Za-z]{3,})\.?,?\s+(\d{4})$/)) && named(m[1]) >= 0) {
+        return `${MON[named(m[1])]} ${m[2]}`;
+      }
+      return t;
+    };
+    const parts = s.split(/\s+(?:-|–|—|to)\s+|\s*[–—]\s*/i).filter((p) => p.trim() !== "");
+    if (parts.length === 2) return `${one(parts[0])} - ${one(parts[1])}`;
+    return one(s);
+  }
+
+  _isSpokenLanguage(item) {
+    const SPOKEN = new Set([
+      "english","spanish","french","german","portuguese","italian","dutch","polish","russian","ukrainian",
+      "turkish","arabic","hindi","chinese","mandarin","cantonese","japanese","korean","vietnamese","thai",
+      "indonesian","malay","swedish","norwegian","danish","finnish","greek","czech","romanian","hungarian",
+      "hebrew","bengali","urdu","punjabi","tamil","telugu","tagalog","filipino","persian","farsi","swahili",
+      "serbian","croatian","bulgarian","slovak",
+    ]);
+    const base = String(item || "")
+      .replace(/\(.*?\)/g, " ")
+      .replace(/\b(native|fluent|professional|conversational|basic|proficient|bilingual|intermediate|advanced|working|proficiency|full|limited|elementary)\b/gi, " ")
+      .replace(/[-–:]/g, " ")
+      .trim()
+      .toLowerCase();
+    return SPOKEN.has(base);
+  }
+
+  _getLanguages(r) {
+    const raw = r.languages || r.spoken_languages;
+    if (!raw) return [];
+    const list = Array.isArray(raw)
+      ? raw.map((l) => {
+          if (!l || typeof l !== "object") return l;
+          const lvl = l.proficiency || l.level;
+          return (l.language || l.name || "") + (lvl ? ` (${lvl})` : "");
+        })
+      : String(raw).split(",");
+    return list.map((l) => String(l || "").trim()).filter(Boolean);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  Shared contact line renderer
   // ═══════════════════════════════════════════════════════════════════════════
 
+  _linkPart(v) {
+    if (!v) return null;
+    const o = typeof v === "object" ? v : { display: v, url: v };
+    const url = String(o.url || o.display || "").trim();
+    const display = String(o.display || o.url || "").trim()
+      .replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+    if (!display) return null;
+    return { text: display, url: url ? (/^https?:\/\//i.test(url) ? url : `https://${url.replace(/^\/+/, "")}`) : null };
+  }
+
+  // Header contact items in display order: location, email, phone, LinkedIn, GitHub
+  _contactParts(r) {
+    const parts = [];
+    if (r.location) parts.push({ text: String(r.location), url: null });
+    if (r.email)    parts.push({ text: String(r.email),    url: `mailto:${r.email}` });
+    if (r.phone)    parts.push({ text: String(r.phone),    url: null });
+    const li = this._linkPart(r.linkedin);
+    if (li) parts.push({ text: li.text.replace(/^linkedin\.com\//i, ""), url: li.url });
+    const gh = this._linkPart(r.github);
+    if (gh) parts.push(gh);
+    return parts;
+  }
+
+  // Draws the contact items separated by " · ", wrapping onto extra lines when they don't fit
+  // in opts.maxWidth (default: right margin minus start x). Honors centered / opts.alignRight / opts.x.
   _renderContactLine(doc, r, ptSize, centered, opts) {
-    const m = this.marginH;
-    const contactParts = [];
-    if (r.location) contactParts.push({ text: r.location, url: null });
-    if (r.email)    contactParts.push({ text: r.email,    url: `mailto:${r.email}` });
-    if (r.phone)    contactParts.push({ text: r.phone,    url: null });
-    if (r.linkedin) {
-      const li = typeof r.linkedin === "object" ? r.linkedin : { display: r.linkedin, url: r.linkedin };
-      if (li.display) contactParts.push({ text: li.display, url: li.url });
-    }
+    opts = opts || {};
+    const contactParts = this._contactParts(r);
     if (!contactParts.length) return;
 
     doc.setFont(this._activeFont, "normal");
     doc.setFontSize(ptSize || 9);
-    const textColor = opts && opts.textColor ? opts.textColor : this.C.gray;
-    const linkColor = opts && opts.linkColor ? opts.linkColor : this.C.accent;
+    const textColor = opts.textColor || this.C.gray;
+    const linkColor = opts.linkColor || this.C.accent;
     doc.setTextColor(...textColor);
-    const sep = " \u00B7 ";
-    const totalW = contactParts.reduce((acc, p, i) => acc + doc.getTextWidth(p.text) + (i > 0 ? doc.getTextWidth(sep) : 0), 0);
-    let cx = centered ? (this.pageWidth - totalW) / 2 : m;
-    if (opts && opts.alignRight) {
-      cx = this.pageWidth - m - totalW;
-    }
-    contactParts.forEach((part, i) => {
-      if (i > 0) { doc.text(sep, cx, this.currentY); cx += doc.getTextWidth(sep); }
-      if (part.url) {
-        doc.setTextColor(...linkColor);
-        doc.textWithLink(part.text, cx, this.currentY, { url: part.url });
-        doc.setTextColor(...textColor);
-      } else {
-        doc.text(part.text, cx, this.currentY);
-      }
-      cx += doc.getTextWidth(part.text);
+    const sep = " · ";
+    const sepW = doc.getTextWidth(sep);
+    const left = opts.x != null ? opts.x : this.marginH;
+    const maxW = opts.maxWidth || (this.pageWidth - this.marginH - left);
+    const lineH = (ptSize || 9) * 0.352778 * 1.45;
+
+    // Greedy line packing
+    const lines = [[]];
+    let w = 0;
+    contactParts.forEach((p) => {
+      const pw = doc.getTextWidth(p.text);
+      const cur = lines[lines.length - 1];
+      if (cur.length && w + sepW + pw > maxW) { lines.push([p]); w = pw; }
+      else { w += (cur.length ? sepW : 0) + pw; cur.push(p); }
+    });
+
+    lines.forEach((line, li) => {
+      const totalW = line.reduce((acc, p, i) => acc + doc.getTextWidth(p.text) + (i > 0 ? sepW : 0), 0);
+      let cx = left;
+      if (centered) cx = left + (maxW - totalW) / 2;
+      if (opts.alignRight) cx = left + maxW - totalW;
+      line.forEach((part, i) => {
+        if (i > 0) { doc.setTextColor(...textColor); doc.text(sep, cx, this.currentY); cx += sepW; }
+        if (part.url) {
+          doc.setTextColor(...linkColor);
+          doc.textWithLink(part.text, cx, this.currentY, { url: part.url });
+          doc.setTextColor(...textColor);
+        } else {
+          doc.text(part.text, cx, this.currentY);
+        }
+        cx += doc.getTextWidth(part.text);
+      });
+      if (li < lines.length - 1) this.currentY += lineH;
     });
     this.currentY += 5;
   }
@@ -1448,39 +1602,8 @@ class PDFGenerator {
       this.currentY += 5.5;
     }
 
-    // ── Contact line ─────────────────────────────────────────────────────────
-    // Build parts; handle linkedin as object {display, url}
-    const contactParts = [];
-    if (r.location) contactParts.push({ text: r.location, url: null });
-    if (r.email)    contactParts.push({ text: r.email,    url: `mailto:${r.email}` });
-    if (r.phone)    contactParts.push({ text: r.phone,    url: null });
-    if (r.linkedin) {
-      const li = typeof r.linkedin === "object" ? r.linkedin : { display: r.linkedin, url: r.linkedin };
-      contactParts.push({ text: li.display, url: li.url });
-    }
-
-    if (contactParts.length) {
-      doc.setFont(this._activeFont, "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(...this.C.gray);
-      const sep = " \u00B7 ";  // middle dot
-      let cx = m;
-      contactParts.forEach((part, i) => {
-        if (i > 0) {
-          doc.text(sep, cx, this.currentY);
-          cx += doc.getTextWidth(sep);
-        }
-        if (part.url) {
-          doc.setTextColor(...this.C.accent);
-          doc.textWithLink(part.text, cx, this.currentY, { url: part.url });
-          doc.setTextColor(...this.C.gray);
-        } else {
-          doc.text(part.text, cx, this.currentY);
-        }
-        cx += doc.getTextWidth(part.text);
-      });
-      this.currentY += 5;
-    }
+    // ── Contact line (shared renderer: wraps, includes GitHub) ─────────────
+    this._renderContactLine(doc, r, 9);
 
     // ── Accent rule under header ─────────────────────────────────────────────
     this.currentY += 1.5;
@@ -1559,36 +1682,51 @@ class PDFGenerator {
     this._checkPageBreak(doc, 40);
 
     // Row 1: Job title (left) + date range (right)
-    const dateStr = job.date_range || [job.start, job.end || "Present"].filter(Boolean).join(" – ");
-    doc.setFont(this._activeFont, "bold");
-    doc.setFontSize(10.5);
-    doc.setTextColor(...this.C.dark);
-    doc.text(job.title || job.job_title || "", m, this.currentY);
+    const rawDate = job.date_range || (job.start ? [job.start, job.end || "Present"].join(" - ") : "");
+    const dateStr = this._fmtDate(rawDate);
+    // Position title and company can each be hidden per profile; whichever exists leads row 1
+    const titleTxt = job.title || job.job_title || "";
+    const company  = job.company || "";
+    const row1 = titleTxt || company;
+    const row2 = titleTxt ? company : "";
 
     doc.setFont(this._activeFont, "normal");
     doc.setFontSize(9);
-    doc.setTextColor(...this.C.gray);
-    const dw = doc.getTextWidth(dateStr);
-    doc.text(dateStr, this.pageWidth - m - dw, this.currentY);
-    this.currentY += this.LH.base + 0.5;
+    const dw = dateStr ? doc.getTextWidth(dateStr) : 0;
+    if (row1 || dateStr) {
+      doc.setFont(this._activeFont, "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(...this.C.dark);
+      if (row1) {
+        const t1 = doc.splitTextToSize(row1, cw - dw - 4)[0];
+        doc.text(t1, m, this.currentY);
+      }
+      if (dateStr) {
+        doc.setFont(this._activeFont, "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(...this.C.gray);
+        doc.text(dateStr, m + this.contentWidth - dw, this.currentY);
+      }
+      this.currentY += this.LH.base + 0.5;
+    }
 
     // Row 2: Company (left) + promotion note or location (right)
-    const company  = job.company || "";
-    // Priority: show promotion_note if it exists, otherwise show location
     const displayText = job.promotion_note || job.location || "";
-    doc.setFont(this._activeFont, "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(...this.C.bodyMuted);
-    doc.text(company, m, this.currentY);
-
-    if (displayText) {
+    if (row2 || displayText) {
       doc.setFont(this._activeFont, "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...this.C.gray);
-      const lw = doc.getTextWidth(displayText);
-      doc.text(displayText, this.pageWidth - m - lw, this.currentY);
+      doc.setFontSize(10);
+      doc.setTextColor(...this.C.bodyMuted);
+      if (row2) doc.text(row2, m, this.currentY);
+
+      if (displayText) {
+        doc.setFont(this._activeFont, "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(...this.C.gray);
+        const lw = doc.getTextWidth(displayText);
+        doc.text(displayText, m + this.contentWidth - lw, this.currentY);
+      }
+      this.currentY += this.LH.base + 0.5;
     }
-    this.currentY += this.LH.base + 0.5;
 
     // Bullets
     const bullets = job.highlights || job.bullets || [];
@@ -1627,8 +1765,11 @@ class PDFGenerator {
     const cw = this.contentWidth;
     this._checkPageBreak(doc, 14);
 
-    const year = edu.year || edu.end || "";
-    const degree = edu.degree || edu.degree_name || "";
+    const year = this._fmtDate(edu.year || edu.date || edu.end || "");
+    const institution = edu.school || edu.institution || "";
+    const degreeRaw = edu.degree || edu.degree_name || "";
+    // Degree can be hidden per profile; the university then leads the entry
+    const degree = degreeRaw || institution;
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...this.C.body);
@@ -1648,12 +1789,11 @@ class PDFGenerator {
       doc.setFontSize(9.5);
       doc.setTextColor(...this.C.gray);
       const yw = doc.getTextWidth(year);
-      doc.text(year, this.pageWidth - m - yw, this.currentY);
+      doc.text(year, m + this.contentWidth - yw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
 
-    const institution = edu.school || edu.institution || "";
-    const subParts = [institution, edu.location].filter(Boolean).join("  ·  ");
+    const subParts = [degreeRaw ? institution : "", edu.location].filter(Boolean).join("  ·  ");
     if (subParts) {
       doc.setFont(this._activeFont, "bold");
       doc.setFontSize(9.5);
@@ -1696,38 +1836,69 @@ class PDFGenerator {
     const cw = this.contentWidth;
     this._checkPageBreak(doc, 14);
 
-    // Name · Issuer on one line, date at right
-    const name   = cert.name || cert.cert_name || "";
-    const issuer = cert.issuer || "";
-    const date   = cert.date || "";
-    const url    = typeof cert.url === "string" && /^https?:\/\//i.test(cert.url.trim()) ? cert.url.trim() : "";
+    // Name · Issuer on one line (issuer wraps below when too long), date at right, link underneath
+    const name   = String(cert.name || cert.cert_name || "").trim();
+    const issuer = String(cert.issuer || cert.provider || cert.organization || "").trim();
+    const date   = this._fmtDate(cert.date || cert.issued_date || cert.year || "");
+    const rawUrl = String(cert.url || cert.link || cert.credential_url || "").trim();
+    const url    = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : "";
+    const lead   = name || issuer;
+    const tail   = name ? issuer : "";
+
+    doc.setFont(this._activeFont, "normal");
+    doc.setFontSize(9);
+    const dw = date ? doc.getTextWidth(date) : 0;
+    const avail = cw - (dw ? dw + 4 : 0);
+
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...this.C.body);
-    if (url) {
-      // Clickable certification name when the profile gave a link
-      doc.textWithLink(name, m, this.currentY, { url });
-    } else {
-      doc.text(name, m, this.currentY);
+    const leadLine = lead ? doc.splitTextToSize(lead, avail)[0] : "";
+    if (leadLine) {
+      if (url) doc.textWithLink(leadLine, m, this.currentY, { url });
+      else doc.text(leadLine, m, this.currentY);
     }
+    const nw = leadLine ? doc.getTextWidth(leadLine) : 0;
 
-    if (issuer) {
-      const nw  = doc.getTextWidth(name);
+    let issuerOnNextLine = false;
+    if (tail) {
       const sep = "  \u00B7  ";
       doc.setFont(this._activeFont, "normal");
       doc.setFontSize(9.5);
       doc.setTextColor(...this.C.bodyMuted);
-      doc.text(sep + issuer, m + nw, this.currentY);
+      if (nw + doc.getTextWidth(sep + tail) <= avail) {
+        doc.text(sep + tail, m + nw, this.currentY);
+      } else {
+        issuerOnNextLine = true;
+      }
     }
 
     if (date) {
       doc.setFont(this._activeFont, "normal");
       doc.setFontSize(9);
       doc.setTextColor(...this.C.gray);
-      const dw = doc.getTextWidth(date);
-      doc.text(date, this.pageWidth - m - dw, this.currentY);
+      doc.text(date, m + this.contentWidth - dw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
+
+    if (issuerOnNextLine) {
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(...this.C.bodyMuted);
+      const il = doc.splitTextToSize(tail, cw);
+      doc.text(il, m, this.currentY);
+      this.currentY += il.length * this.LH.sm + 0.5;
+    }
+
+    if (url) {
+      const display = url.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "");
+      doc.setFont(this._activeFont, "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...this.C.accent);
+      const shown = doc.splitTextToSize(display, cw)[0];
+      doc.textWithLink(shown, m, this.currentY, { url });
+      this.currentY += this.LH.sm + 0.5;
+    }
 
     // Value proposition — italic gray
     const vp = cert.value_proposition || cert.description || "";
@@ -1763,7 +1934,7 @@ class PDFGenerator {
       doc.setFontSize(9);
       doc.setTextColor(...this.C.gray);
       const cxw = doc.getTextWidth(context);
-      doc.text(context, this.pageWidth - m - cxw, this.currentY);
+      doc.text(context, m + this.contentWidth - cxw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
 
@@ -1817,7 +1988,7 @@ class PDFGenerator {
       doc.setFontSize(9);
       doc.setTextColor(...this.C.gray);
       const cxw = doc.getTextWidth(context);
-      doc.text(context, this.pageWidth - m - cxw, this.currentY);
+      doc.text(context, m + this.contentWidth - cxw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
 
@@ -1839,7 +2010,7 @@ class PDFGenerator {
     this._checkPageBreak(doc, 18);
 
     const name = role.name || role.role_name || "";
-    const dateStr = role.date || role.date_range || [role.start, role.end || "Present"].filter(Boolean).join(" – ");
+    const dateStr = this._fmtDate(role.date || role.date_range || (role.start ? [role.start, role.end || "Present"].join(" - ") : ""));
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10.5);
     doc.setTextColor(...this.C.body);
@@ -1850,7 +2021,7 @@ class PDFGenerator {
       doc.setFontSize(9);
       doc.setTextColor(...this.C.gray);
       const dw = doc.getTextWidth(dateStr);
-      doc.text(dateStr, this.pageWidth - m - dw, this.currentY);
+      doc.text(dateStr, m + this.contentWidth - dw, this.currentY);
     }
     this.currentY += this.LH.base + 0.5;
 
@@ -1915,36 +2086,7 @@ class PDFGenerator {
     }
 
     // ── Contact line ─────────────────────────────────────────────────────────
-    const contactParts = [];
-    if (resume.location) contactParts.push({ text: resume.location, url: null });
-    if (resume.email)    contactParts.push({ text: resume.email,    url: `mailto:${resume.email}` });
-    if (resume.phone)    contactParts.push({ text: resume.phone,    url: null });
-    if (resume.linkedin) {
-      const li = typeof resume.linkedin === "object"
-        ? resume.linkedin
-        : { display: resume.linkedin, url: resume.linkedin };
-      if (li.display) contactParts.push({ text: li.display, url: li.url });
-    }
-
-    if (contactParts.length) {
-      doc.setFont(this._activeFont, "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(...this.C.gray);
-      const sep = " \u00B7 ";
-      let cx = m;
-      contactParts.forEach((part, i) => {
-        if (i > 0) { doc.text(sep, cx, this.currentY); cx += doc.getTextWidth(sep); }
-        if (part.url) {
-          doc.setTextColor(...this.C.accent);
-          doc.textWithLink(part.text, cx, this.currentY, { url: part.url });
-          doc.setTextColor(...this.C.gray);
-        } else {
-          doc.text(part.text, cx, this.currentY);
-        }
-        cx += doc.getTextWidth(part.text);
-      });
-      this.currentY += 5;
-    }
+    this._renderContactLine(doc, resume, 9);
 
     // ── Accent rule ───────────────────────────────────────────────────────────
     this.currentY += 1.5;

@@ -146,7 +146,7 @@ const SKILL_CATEGORY_LABELS: Record<string, string> = {
   software: "Software",
   statistics_and_ml: "Statistics & ML",
   project_management: "Project Management",
-  languages: "Languages",
+  languages: "Programming Languages",
 };
 
 function humanizeSkillCategory(key: string): string {
@@ -156,18 +156,85 @@ function humanizeSkillCategory(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Normalizes either the new `technical_skills` object or the legacy `skills` array into a unified {category, values}[] list. */
+const SPOKEN_LANGUAGES = new Set([
+  "english", "spanish", "french", "german", "portuguese", "italian", "dutch", "polish", "russian", "ukrainian",
+  "turkish", "arabic", "hindi", "chinese", "mandarin", "cantonese", "japanese", "korean", "vietnamese", "thai",
+  "indonesian", "malay", "swedish", "norwegian", "danish", "finnish", "greek", "czech", "romanian", "hungarian",
+  "hebrew", "bengali", "urdu", "punjabi", "tamil", "telugu", "tagalog", "filipino", "persian", "farsi", "swahili",
+  "serbian", "croatian", "bulgarian", "slovak",
+]);
+
+/** True for human languages ("English", "Spanish (Fluent)") — they never belong in technical skills. Mirrors swiftcv. */
+export function isSpokenLanguage(item: string): boolean {
+  const base = String(item || "")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\b(native|fluent|professional|conversational|basic|proficient|bilingual|intermediate|advanced|working|proficiency|full|limited|elementary)\b/gi, " ")
+    .replace(/[-–:]/g, " ")
+    .trim()
+    .toLowerCase();
+  return SPOKEN_LANGUAGES.has(base);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Any date or range -> "Mon YYYY" / "Mon YYYY - Present"; a resume never shows a day. Mirrors swiftcv _fmtDate. */
+export function formatMonthYear(value: unknown): string {
+  if (value == null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  const named = (w: string) => MONTHS.findIndex((x) => x.toLowerCase() === w.slice(0, 3).toLowerCase());
+  const mon = (n: number, y: string) => (n >= 1 && n <= 12 ? `${MONTHS[n - 1]} ${y}` : y);
+  const one = (raw: string): string => {
+    const t = raw.trim().replace(/[.,]$/, "");
+    if (!t) return "";
+    if (/^(present|current|now|ongoing)$/i.test(t)) return "Present";
+    let m: RegExpMatchArray | null;
+    if ((m = t.match(/^(\d{4})[-/.](\d{1,2})(?:[-/.]\d{1,2})?(?:[T\s].*)?$/))) return mon(+m[2], m[1]);
+    if ((m = t.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) return +m[1] > 12 ? mon(+m[2], m[3]) : mon(+m[1], m[3]);
+    if ((m = t.match(/^(\d{1,2})[-/.](\d{4})$/))) return mon(+m[1], m[2]);
+    if ((m = t.match(/^([A-Za-z]{3,})\.?\s+(?:\d{1,2}(?:st|nd|rd|th)?,?\s+)?(\d{4})$/)) && named(m[1]) >= 0) return `${MONTHS[named(m[1])]} ${m[2]}`;
+    if ((m = t.match(/^\d{1,2}(?:st|nd|rd|th)?\s+([A-Za-z]{3,})\.?,?\s+(\d{4})$/)) && named(m[1]) >= 0) return `${MONTHS[named(m[1])]} ${m[2]}`;
+    return t;
+  };
+  const parts = s.split(/\s+(?:-|–|—|to)\s+|\s*[–—]\s*/i).filter((p) => p.trim() !== "");
+  if (parts.length === 2) return `${one(parts[0])} - ${one(parts[1])}`;
+  return one(s);
+}
+
+/** Spoken languages for the Languages section (root `languages` array or comma string). */
+export function getLanguages(r: ResumeData): string[] {
+  const raw = (r as Record<string, unknown>).languages ?? (r as Record<string, unknown>).spoken_languages;
+  if (!raw) return [];
+  const list = Array.isArray(raw)
+    ? raw.map((l) => {
+        if (!l || typeof l !== "object") return l;
+        const o = l as Record<string, unknown>;
+        const lvl = o.proficiency || o.level;
+        return String(o.language || o.name || "") + (lvl ? ` (${lvl})` : "");
+      })
+    : String(raw).split(",");
+  return list.map((l) => String(l ?? "").trim()).filter(Boolean);
+}
+
+/** Normalizes either the new `technical_skills` object or the legacy `skills` array into a unified {category, values}[] list.
+ *  Spoken languages are removed (they go in the Languages section). */
 export function getSkillGroups(r: ResumeData): { category: string; values: string }[] {
-  if (r.technical_skills && typeof r.technical_skills === "object") {
+  const clean = (v: unknown) => (Array.isArray(v) ? v : String(v ?? "").split(","))
+    .map((x) => String(x).trim())
+    .filter((x) => x && !isSpokenLanguage(x))
+    .join(", ");
+  const skip = (k: string) => /^(spoken_languages|human_languages|spoken languages)$/i.test(k);
+  if (r.technical_skills && typeof r.technical_skills === "object" && !Array.isArray(r.technical_skills)) {
     return Object.entries(r.technical_skills)
-      .filter(([, v]) => v != null && String(v).trim() !== "")
-      .map(([key, v]) => ({ category: humanizeSkillCategory(key), values: String(v) }));
+      .filter(([key]) => !skip(key))
+      .map(([key, v]) => ({ category: humanizeSkillCategory(key), values: clean(v) }))
+      .filter((row) => row.values !== "");
   }
   if (r.skills?.length) {
-    return r.skills.map((row) => {
-      const v = row.values ?? row.skills ?? "";
-      return { category: row.category || "", values: Array.isArray(v) ? v.join(", ") : String(v) };
-    });
+    return r.skills
+      .filter((row) => !skip(row.category || ""))
+      .map((row) => ({ category: row.category || "", values: clean(row.values ?? row.skills ?? "") }))
+      .filter((row) => row.values !== "");
   }
   return [];
 }
