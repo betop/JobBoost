@@ -26,6 +26,10 @@ function "resume/apply_section_preferences" {
     json prefs? {
       description = "Output of resume/resolve_section_preferences; resolved from the profile when null"
     }
+
+    json work_records? {
+      description = "Rows of the work_experience table (company_name, job_title, start_date, end_date, is_current)"
+    }
   }
 
   stack {
@@ -250,6 +254,64 @@ function "resume/apply_section_preferences" {
             }
 
             // ==================== 3. WORK EXPERIENCE ====================
+            // Pre-normalize the work_experience rows for company matching
+            var $work_rows {
+              value = []
+            }
+
+            conditional {
+              if ($input.work_records != null && ($input.work_records|is_array)) {
+                foreach ($input.work_records) {
+                  each as $wr {
+                    conditional {
+                      if ($wr != null && ($wr|is_object)) {
+                        var $wr_name {
+                          value = $wr|get:"company_name":null|first_notnull:""|to_text|trim|to_lower
+                        }
+
+                        var $wr_start {
+                          value = $wr|get:"start_date":null|first_notnull:""|to_text|trim
+                        }
+
+                        var $wr_end {
+                          value = $wr|get:"end_date":null|first_notnull:""|to_text|trim
+                        }
+
+                        var $wr_current {
+                          value = ($wr|get:"is_current":false) == true
+                        }
+
+                        // Numeric sort keys from the ISO dates (2021-03-01 -> 20210301)
+                        var $wr_start_digits {
+                          value = "/[^0-9]/"|regex_replace:"":$wr_start
+                        }
+
+                        var $wr_end_digits {
+                          value = "/[^0-9]/"|regex_replace:"":$wr_end
+                        }
+
+                        var $wr_start_key {
+                          value = $wr_start_digits|first_notnull:"0"|to_int
+                        }
+
+                        var $wr_end_key {
+                          value = $wr_end_digits|first_notnull:"0"|to_int
+                        }
+
+                        conditional {
+                          if ($wr_name != "") {
+                            array.push $work_rows {
+                              value = {name: $wr_name, start: $wr_start, end: $wr_end, start_key: $wr_start_key, end_key: $wr_end_key, is_current: $wr_current}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
             var $src_jobs {
               value = $out|get:"career_breakdowns":null
             }
@@ -274,6 +336,160 @@ function "resume/apply_section_preferences" {
 
                     conditional {
                       if ($job|is_object) {
+                        // Match against the work_experience table BEFORE any field is removed.
+                        // $job_db_range stays null when there is no match (AI date_range is kept).
+                        var $job_db_range {
+                          value = null
+                        }
+
+                        var $job_company {
+                          value = $job|get:"company":null|first_notnull:""|to_text|trim|to_lower
+                        }
+
+                        conditional {
+                          if ($prefs.work_date == true && $job_company != "" && ($work_rows|count) > 0) {
+                            var $wm_found {
+                              value = false
+                            }
+
+                            var $wm_current {
+                              value = false
+                            }
+
+                            var $wm_start {
+                              value = ""
+                            }
+
+                            var $wm_start_key {
+                              value = 0
+                            }
+
+                            var $wm_end {
+                              value = ""
+                            }
+
+                            var $wm_end_key {
+                              value = 0
+                            }
+
+                            foreach ($work_rows) {
+                              each as $wrow {
+                                var $wrow_name {
+                                  value = $wrow|get:"name":""
+                                }
+
+                                var $wrow_same {
+                                  value = $wrow_name == $job_company || ($wrow_name|contains:$job_company) || ($job_company|contains:$wrow_name)
+                                }
+
+                                conditional {
+                                  if ($wrow_same) {
+                                    var.update $wm_found {
+                                      value = true
+                                    }
+
+                                    conditional {
+                                      if (($wrow|get:"is_current":false) == true) {
+                                        var.update $wm_current {
+                                          value = true
+                                        }
+                                      }
+                                    }
+
+                                    var $wrow_start {
+                                      value = $wrow|get:"start":""
+                                    }
+
+                                    var $wrow_start_key {
+                                      value = $wrow|get:"start_key":0
+                                    }
+
+                                    conditional {
+                                      if ($wrow_start != "" && ($wm_start == "" || $wrow_start_key < $wm_start_key)) {
+                                        var.update $wm_start {
+                                          value = $wrow_start
+                                        }
+
+                                        var.update $wm_start_key {
+                                          value = $wrow_start_key
+                                        }
+                                      }
+                                    }
+
+                                    var $wrow_end {
+                                      value = $wrow|get:"end":""
+                                    }
+
+                                    var $wrow_end_key {
+                                      value = $wrow|get:"end_key":0
+                                    }
+
+                                    conditional {
+                                      if ($wrow_end != "" && ($wm_end == "" || $wrow_end_key > $wm_end_key)) {
+                                        var.update $wm_end {
+                                          value = $wrow_end
+                                        }
+
+                                        var.update $wm_end_key {
+                                          value = $wrow_end_key
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+
+                            conditional {
+                              if ($wm_found) {
+                                function.run "resume/format_month_year" {
+                                  input = {value: $wm_start}
+                                } as $wm_start_fmt
+
+                                var $wm_end_label {
+                                  value = "Present"
+                                }
+
+                                conditional {
+                                  if (!$wm_current) {
+                                    function.run "resume/format_month_year" {
+                                      input = {value: $wm_end}
+                                    } as $wm_end_fmt
+
+                                    var.update $wm_end_label {
+                                      value = $wm_end_fmt|first_notnull:""
+                                    }
+                                  }
+                                }
+
+                                var $wm_start_label {
+                                  value = $wm_start_fmt|first_notnull:""
+                                }
+
+                                conditional {
+                                  if ($wm_start_label != "" && $wm_end_label != "") {
+                                    var.update $job_db_range {
+                                      value = $wm_start_label ~ " - " ~ $wm_end_label
+                                    }
+                                  }
+
+                                  elseif ($wm_start_label != "") {
+                                    var.update $job_db_range {
+                                      value = $wm_start_label
+                                    }
+                                  }
+
+                                  elseif ($wm_end_label != "") {
+                                    var.update $job_db_range {
+                                      value = $wm_end_label
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+
                         conditional {
                           if ($prefs.work_position_title == false) {
                             var.update $job_clean {
@@ -310,6 +526,13 @@ function "resume/apply_section_preferences" {
                           if ($prefs.work_date == false) {
                             var.update $job_clean {
                               value = $job_clean|unset:"date_range"|unset:"start"|unset:"end"
+                            }
+                          }
+
+                          elseif ($job_db_range != null) {
+                            // DB dates win: "Present" only when a matched row is_current
+                            var.update $job_clean {
+                              value = $job_clean|set:"date_range":$job_db_range|unset:"start"|unset:"end"
                             }
                           }
 

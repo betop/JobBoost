@@ -1683,7 +1683,7 @@ class PDFGenerator {
     this._checkPageBreak(doc, 40);
 
     // Row 1: Job title (left) + date range (right)
-    const rawDate = job.date_range || (job.start ? [job.start, job.end || "Present"].join(" - ") : "");
+    const rawDate = job.date_range || (job.start ? [job.start, job.end || (job.is_current ? "Present" : "")].filter(Boolean).join(" - ") : "");
     const dateStr = this._fmtDate(rawDate);
     // Position title and company can each be hidden per profile; whichever exists leads row 1
     const titleTxt = job.title || job.job_title || "";
@@ -2011,7 +2011,7 @@ class PDFGenerator {
     this._checkPageBreak(doc, 18);
 
     const name = role.name || role.role_name || "";
-    const dateStr = this._fmtDate(role.date || role.date_range || (role.start ? [role.start, role.end || "Present"].join(" - ") : ""));
+    const dateStr = this._fmtDate(role.date || role.date_range || (role.start ? [role.start, role.end || (role.is_current ? "Present" : "")].filter(Boolean).join(" - ") : ""));
     doc.setFont(this._activeFont, "bold");
     doc.setFontSize(10.5);
     doc.setTextColor(...this.C.body);

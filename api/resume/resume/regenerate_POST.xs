@@ -364,7 +364,7 @@ If multiple roles share the same company name:
 2. There MUST NOT be duplicate company entries — all roles from the same company MUST be merged into ONE single career_breakdowns entry.
 3. The Title MUST be the title of the most recent role held at that company.
 4. The Period MUST cover the entire time at that company, from the first date joined to Present (if still employed) or the final departure date.
-5. End date in the last company MUST always be "Present".
+5. End dates MUST be copied from the candidate profile WORK EXPERIENCE lines. Use "Present" ONLY when the profile line's end date is "Present"; otherwise use the end date given there, even for the most recent company.
 
 If consolidation fails, you MUST regenerate.
 
@@ -1181,7 +1181,7 @@ Remember today's year is 2026.
 
             // Section / item visibility, date normalization, DB-only education location, spoken languages
             function.run "resume/apply_section_preferences" {
-              input = {resume: $resume_final, profile: $prof, education_records: $education, prefs: $section_prefs}
+              input = {resume: $resume_final, profile: $prof, education_records: $education, work_records: $work, prefs: $section_prefs}
             } as $resume_final
 
 

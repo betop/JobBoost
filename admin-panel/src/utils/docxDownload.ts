@@ -297,7 +297,7 @@ function buildBody(d: AnyRec, ctx: Ctx): Paragraph[] {
   if (jobs.length) {
     c.push(sectionHeading("Work Experience", ctx));
     jobs.forEach((job, idx) => {
-      const dateStr = formatMonthYear(job.date_range || (job.start ? `${job.start} - ${job.end || "Present"}` : ""));
+      const dateStr = formatMonthYear(job.date_range || (job.start ? [job.start, job.end || (job.is_current ? "Present" : "")].filter(Boolean).join(" - ") : ""));
       // Position title and company can each be hidden per profile; whichever exists leads row 1
       const titleTxt = str(job.title || job.job_title);
       const row1 = titleTxt || str(job.company);
@@ -424,7 +424,7 @@ function buildBody(d: AnyRec, ctx: Ctx): Paragraph[] {
   if (leadership.length) {
     c.push(sectionHeading("Leadership/Entrepreneurial Experience", ctx));
     leadership.forEach((role, idx) => {
-      const dateStr = formatMonthYear(role.date || role.date_range || (role.start ? `${role.start} - ${role.end || "Present"}` : ""));
+      const dateStr = formatMonthYear(role.date || role.date_range || (role.start ? [role.start, role.end || (role.is_current ? "Present" : "")].filter(Boolean).join(" - ") : ""));
       c.push(new Paragraph({
         spacing: { before: idx > 0 ? 120 : 0, after: 20 }, keepNext: true, tabStops: right(ctx),
         children: [
