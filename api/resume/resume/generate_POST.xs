@@ -1998,7 +1998,7 @@ Regenerate if violated.
                   catch {
                     // Second attempt: remove last character (common extra trailing brace issue)
                     var $trimmed_response {
-                      value = $clean_response|regex_replace:".$":""|trim
+                      value = ("/.$/s"|regex_replace:"":$clean_response)|trim
                     }
                   
                     try_catch {

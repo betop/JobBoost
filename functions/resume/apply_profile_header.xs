@@ -94,16 +94,38 @@ function "resume/apply_profile_header" {
                 // display = url without scheme / www. / query / trailing slash / linkedin.com/ prefix
                 var $li_display {
                   value = $li_raw
-                    |regex_replace:"(?i)^https?://":""
-                    |regex_replace:"(?i)^www[.]":""
-                    |regex_replace:"[?#].*$":""
-                    |regex_replace:"/+$":""
-                    |regex_replace:"(?i)^linkedin[.]com/":""
-                    |trim
+                }
+
+                var.update $li_display {
+                  value = "/^https?:\\/\\//i"|regex_replace:"":$li_display
+                }
+
+                var.update $li_display {
+                  value = "/^www\\./i"|regex_replace:"":$li_display
+                }
+
+                var.update $li_display {
+                  value = "/[?#].*$/"|regex_replace:"":$li_display
+                }
+
+                var.update $li_display {
+                  value = "/\\/+$/"|regex_replace:"":$li_display
+                }
+
+                var.update $li_display {
+                  value = "/^linkedin\\.com\\//i"|regex_replace:"":$li_display
+                }
+
+                var.update $li_display {
+                  value = $li_display|trim
+                }
+
+                var $li_no_lead_slash {
+                  value = "/^\\/+/"|regex_replace:"":$li_raw
                 }
 
                 var $li_url {
-                  value = (($li_raw|to_lower)|substr:0:4) == "http" ? $li_raw : ("https://" ~ ($li_raw|regex_replace:"^/+":""))
+                  value = (($li_raw|to_lower)|substr:0:4) == "http" ? $li_raw : ("https://" ~ $li_no_lead_slash)
                 }
 
                 conditional {
