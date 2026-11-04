@@ -1305,13 +1305,16 @@ Remember today's year is 2026.
                           }
                         }
 
+                        var $mc_name {
+                          value = $mc.name|first_notnull:""|to_text|trim
+                        }
+
+                        var $mc_issuer {
+                          value = $mc.issuer|first_notnull:""|to_text|trim
+                        }
+
                         array.push $manual_certs {
-                          value = {
-                            name  : $mc.name|first_notnull:""
-                            issuer: $mc.issuer|first_notnull:""
-                            date  : $mc_date
-                            url   : $mc_url
-                          }
+                          value = {}|set:"name":$mc_name|set:"issuer":$mc_issuer|set:"date":$mc_date|set:"url":$mc_url
                         }
                       }
                     }

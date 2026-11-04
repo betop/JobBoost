@@ -2422,13 +2422,16 @@ Regenerate if violated.
                                   }
                                 }
 
+                                var $mc_name {
+                                  value = $mc.name|first_notnull:""|to_text|trim
+                                }
+
+                                var $mc_issuer {
+                                  value = $mc.issuer|first_notnull:""|to_text|trim
+                                }
+
                                 array.push $manual_certs {
-                                  value = {
-                                    name  : $mc.name|first_notnull:""
-                                    issuer: $mc.issuer|first_notnull:""
-                                    date  : $mc_date
-                                    url   : $mc_url
-                                  }
+                                  value = {}|set:"name":$mc_name|set:"issuer":$mc_issuer|set:"date":$mc_date|set:"url":$mc_url
                                 }
                               }
                             }
@@ -2546,23 +2549,55 @@ Regenerate if violated.
       
         // Raw provider cost priced PER AI CALL (extraction + generation): the Haiku 5.5 price tier is
         // chosen by each request's own prompt size, so the two calls are never priced on their summed tokens.
+        var $ext_cost_input_tokens {
+          value = $extraction_input_tokens|first_notnull:0
+        }
+
+        var $ext_cost_output_tokens {
+          value = $extraction_output_tokens|first_notnull:0
+        }
+
+        var $ext_cost_cache_creation_tokens {
+          value = $extraction_cache_creation_tokens|first_notnull:0
+        }
+
+        var $ext_cost_cache_read_tokens {
+          value = $extraction_cache_read_tokens|first_notnull:0
+        }
+
+        var $main_cost_input_tokens {
+          value = $main_usage|get:"input_tokens"|first_notnull:0
+        }
+
+        var $main_cost_output_tokens {
+          value = $main_usage|get:"output_tokens"|first_notnull:0
+        }
+
+        var $main_cost_cache_creation_tokens {
+          value = $main_usage|get:"cache_creation_input_tokens"|first_notnull:0
+        }
+
+        var $main_cost_cache_read_tokens {
+          value = $main_usage|get:"cache_read_input_tokens"|first_notnull:0
+        }
+
         function.run "ai/claude_haiku_cost" {
           input = {
             model                : $ai_model_id
-            input_tokens         : $extraction_input_tokens|first_notnull:0
-            output_tokens        : $extraction_output_tokens|first_notnull:0
-            cache_creation_tokens: $extraction_cache_creation_tokens|first_notnull:0
-            cache_read_tokens    : $extraction_cache_read_tokens|first_notnull:0
+            input_tokens         : $ext_cost_input_tokens
+            output_tokens        : $ext_cost_output_tokens
+            cache_creation_tokens: $ext_cost_cache_creation_tokens
+            cache_read_tokens    : $ext_cost_cache_read_tokens
           }
         } as $extraction_raw_cost
 
         function.run "ai/claude_haiku_cost" {
           input = {
             model                : $ai_model_id
-            input_tokens         : $main_usage|get:"input_tokens"|first_notnull:0
-            output_tokens        : $main_usage|get:"output_tokens"|first_notnull:0
-            cache_creation_tokens: $main_usage|get:"cache_creation_input_tokens"|first_notnull:0
-            cache_read_tokens    : $main_usage|get:"cache_read_input_tokens"|first_notnull:0
+            input_tokens         : $main_cost_input_tokens
+            output_tokens        : $main_cost_output_tokens
+            cache_creation_tokens: $main_cost_cache_creation_tokens
+            cache_read_tokens    : $main_cost_cache_read_tokens
           }
         } as $main_raw_cost
 
