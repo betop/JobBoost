@@ -19,11 +19,8 @@ import JobCategoryInput from "@/components/JobCategoryInput";
 import ResumeAutofill from "@/components/ResumeAutofill";
 import TemplatePicker from "@/components/TemplatePicker";
 import ResumeTemplatePreview from "@/components/ResumeTemplatePreview";
+import ResumeSectionsEditor from "@/components/ResumeSectionsEditor";
 import {
-  RESUME_SECTION_GROUPS,
-  BULLET_COUNT_FIELDS,
-  BULLET_MIN,
-  BULLET_MAX,
   clampBullets,
   resolveResumeSections,
   type ResumeSectionKey,
@@ -108,14 +105,6 @@ type Tab = "info" | "template";
 const toMonth = (v?: string) => (v ? v.slice(0, 7) : "");
 
 const checkboxClass = "h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-40";
-
-function RecommendedBadge() {
-  return (
-    <span className="ml-2 inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
-      Recommended
-    </span>
-  );
-}
 
 function defaultValuesFor(profile?: Profile): ProfileFormData {
   const sections = resolveResumeSections(profile);
@@ -547,113 +536,25 @@ export default function ProfileForm({ mode, profile, submitting, onSubmit, onCan
           />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(380px,46%)] gap-6 items-start">
-        <div>
-          <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-1">Resume Sections</h2>
-              <p className="text-sm text-gray-500">Choose which sections and items appear on this profile&apos;s resumes. Items marked <RecommendedBadge /> are checked by default.</p>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setValue("resume_sections", resolveResumeSections(null), { shouldDirty: true })}
-            >
-              Reset to defaults
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-4">
-            {RESUME_SECTION_GROUPS.map((group) => {
-              const sectionOn = group.key ? sections?.[group.key] ?? false : true;
-              return (
-                <div key={group.label} className={`border rounded-lg p-4 ${sectionOn ? "border-gray-200" : "border-gray-100 bg-gray-50"}`}>
-                  {group.key ? (
-                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sectionOn}
-                        onChange={(e) => setSection(group.key as ResumeSectionKey, e.target.checked)}
-                        className={checkboxClass}
-                      />
-                      {group.label}
-                      {group.recommended && <RecommendedBadge />}
-                    </label>
-                  ) : (
-                    <p className="text-sm font-semibold text-gray-900">{group.label}</p>
-                  )}
-                  {group.description && <p className="text-xs text-gray-500 mt-1 ml-6">{group.description}</p>}
-                  {group.items.length > 0 && (
-                    <div className="mt-3 ml-6 flex flex-col gap-2">
-                      {group.items.map((item) => (
-                        <label
-                          key={item.key}
-                          className={`flex items-start gap-2 text-sm select-none ${sectionOn ? "text-gray-700 cursor-pointer" : "text-gray-400 cursor-not-allowed"}`}
-                        >
-                          <input
-                            type="checkbox"
-                            disabled={!sectionOn}
-                            checked={sections?.[item.key] ?? false}
-                            onChange={(e) => setSection(item.key, e.target.checked)}
-                            className={`${checkboxClass} mt-0.5`}
-                          />
-                          <span>
-                            {item.label}
-                            {item.recommended && <RecommendedBadge />}
-                            {item.hint && <span className="block text-xs text-gray-400">{item.hint}</span>}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  {group.key === "work_experience" && (
-                    <div className="mt-4 ml-6">
-                      <p className="text-xs font-medium text-gray-700 mb-2">Bullets per position</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {BULLET_COUNT_FIELDS.map((f) => (
-                          <label key={f.key} className="text-xs text-gray-600" title={f.hint}>
-                            <span className="block mb-1">{f.label}</span>
-                            <input
-                              type="number"
-                              min={BULLET_MIN}
-                              max={BULLET_MAX}
-                              disabled={!sectionOn || !sections?.work_bullets}
-                              value={(sections?.[f.key] as number | undefined) ?? f.default}
-                              onChange={(e) =>
-                                setValue(`resume_sections.${f.key}`, clampBullets(e.target.value, f.default), { shouldDirty: true })
-                              }
-                              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-2">Internships are included only when total work experience is 5 years or less.</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            <div className="border border-gray-200 rounded-lg p-4">
-              <Controller
-                name="include_achievements"
-                control={control}
-                render={({ field }) => (
-                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 cursor-pointer select-none">
-                    <input type="checkbox" checked={field.value ?? false} onChange={(e) => field.onChange(e.target.checked)} className={checkboxClass} />
-                    Awards &amp; recognition
-                  </label>
-                )}
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(400px,44%)] items-start">
+          <Controller
+            name="include_achievements"
+            control={control}
+            render={({ field }) => (
+              <ResumeSectionsEditor
+                sections={sections}
+                onToggle={setSection}
+                onBulletCount={(key, value) => setValue(`resume_sections.${key}`, clampBullets(value, value), { shouldDirty: true })}
+                onReset={() => setValue("resume_sections", resolveResumeSections(null), { shouldDirty: true })}
+                includeAchievements={field.value ?? false}
+                onIncludeAchievements={field.onChange}
               />
-              <p className="text-xs text-gray-500 mt-1 ml-6">Only used by the legacy generation API.</p>
-            </div>
-          </div>
-        </div>
+            )}
+          />
 
-        <div className="xl:sticky xl:top-32">
-          <ResumeTemplatePreview templateId={templateId} sections={sections} />
-        </div>
+          <div className="xl:sticky xl:top-32">
+            <ResumeTemplatePreview templateId={templateId} sections={sections} />
+          </div>
         </div>
       </div>
     </form>

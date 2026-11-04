@@ -20,6 +20,8 @@ const BULLETS = [
   "Automated blue-green deployments with Terraform and GitHub Actions, enabling 15 releases per week.",
   "Designed a feature-flag service adopted by 9 product squads, shortening rollout cycles 50%.",
   "Instrumented services with OpenTelemetry, reducing mean time to resolution 35%.",
+  "Partnered with product and design to ship a one-click reorder flow, lifting repeat purchases 12%.",
+  "Hardened authentication with OAuth 2.0 and short-lived tokens, closing 14 audit findings.",
 ];
 
 const SAMPLE = {
