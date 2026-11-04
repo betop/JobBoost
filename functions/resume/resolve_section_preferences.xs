@@ -144,4 +144,5 @@ function "resume/resolve_section_preferences" {
   }
 
   response = $prefs
+  guid = "AOsuwTI-k2zZ49q37vG9liFu5AM"
 }

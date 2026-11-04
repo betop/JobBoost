@@ -235,4 +235,5 @@ function "resume/format_month_year" {
   }
 
   response = $result
+  guid = "ZPVwWckKSYVkfO9n2HeNn2Qph0I"
 }

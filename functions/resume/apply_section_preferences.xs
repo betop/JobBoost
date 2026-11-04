@@ -1001,4 +1001,5 @@ function "resume/apply_section_preferences" {
   }
 
   response = $result
+  guid = "iccj4_wErOlK-489_1AVYhVzcL0"
 }
