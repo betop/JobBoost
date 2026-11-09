@@ -45,6 +45,32 @@ export interface DepositResponse {
   status: string;
 }
 
+export type DepositStatus = "pending" | "confirmed" | "failed" | "expired";
+
+export interface CryptoDeposit {
+  id: string;
+  created_at: string | number;
+  admin_id: string;
+  admin_name?: string | null;
+  admin_email?: string | null;
+  provider?: string | null;
+  currency?: string | null;
+  amount_usd: number;
+  amount_crypto?: number | null;
+  status: DepositStatus | string;
+  confirmed_at?: string | number | null;
+  /** Only set while the deposit is pending */
+  payment_url?: string | null;
+}
+
+export interface DepositsResponse {
+  items: CryptoDeposit[];
+  page: number;
+  per_page: number;
+  total: number;
+  total_confirmed_usd?: number | null;
+}
+
 export interface ModelUsageRate {
   model: string;
   label: string;
@@ -154,6 +180,17 @@ export const creditsService = {
     per_page?: number;
   }): Promise<CreditTransactionsResponse> => {
     const response = await api.get("/dashboard/credits/transactions", { params });
+    return response.data;
+  },
+
+  // admin: own deposits only (admin_id is ignored server-side). super_admin: all, or one user via admin_id.
+  getDeposits: async (params?: {
+    admin_id?: string;
+    status?: DepositStatus;
+    page?: number;
+    per_page?: number;
+  }): Promise<DepositsResponse> => {
+    const response = await api.get("/dashboard/credits/deposits", { params });
     return response.data;
   },
 

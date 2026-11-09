@@ -18,6 +18,7 @@ import Modal from "@/components/Modal";
 import DataTable, { type Column } from "@/components/DataTable";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { userService } from "@/services/userService";
+import DepositHistory from "@/components/DepositHistory";
 
 function formatCurrency(num: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -512,6 +513,7 @@ export default function CreditsPage() {
     try {
       const result = await creditsService.deposit(amount);
       setDepositResult(result);
+      queryClient.invalidateQueries({ queryKey: ["credits-deposits"] });
       if (result.payment_url) {
         window.open(result.payment_url, "_blank", "noreferrer");
       }
@@ -742,6 +744,8 @@ export default function CreditsPage() {
           defaultPageSize={10}
         />
 
+        <DepositHistory isSuperAdmin admins={adminsData?.items ?? []} />
+
         <Modal
           isOpen={!!rateTarget}
           onClose={() => setRateTarget(null)}
@@ -888,6 +892,8 @@ export default function CreditsPage() {
       </div>
 
       <UsageSection />
+
+      <DepositHistory isSuperAdmin={false} />
 
       <Modal isOpen={depositModalOpen} onClose={closeDepositModal} title="Deposit crypto" size="sm">
         <div className="p-6 space-y-4">
