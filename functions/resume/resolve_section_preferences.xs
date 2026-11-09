@@ -53,10 +53,6 @@ function "resume/resolve_section_preferences" {
       }
     }
 
-    var $count_keys {
-      value = ["bullets_current", "bullets_former", "bullets_internship"]
-    }
-
     try_catch {
       try {
         var $p {
@@ -120,7 +116,7 @@ function "resume/resolve_section_preferences" {
                 foreach ($pref_keys) {
                   each as $key {
                     var $is_count_key {
-                      value = $count_keys|contains:$key
+                      value = $key == "bullets_current" || $key == "bullets_former" || $key == "bullets_internship"
                     }
 
                     var $override {

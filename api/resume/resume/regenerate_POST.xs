@@ -948,6 +948,75 @@ Remember today's year is 2026.
       }
     }
 
+    // Schema example bullet arrays follow the configured counts (the model copies the example length)
+    var $bullet_placeholder {
+      value = "\"[Action verb + process + result, metric]\""
+    }
+
+    var $bullets_current_n {
+      value = $bullets_current_text|to_int
+    }
+
+    var $bullets_former_n {
+      value = $bullets_former_text|to_int
+    }
+
+    var $bullets_current_items {
+      value = []
+    }
+
+    for ($bullets_current_n) {
+      each as $bci {
+        var.update $bullets_current_items {
+          value = $bullets_current_items|push:$bullet_placeholder
+        }
+      }
+    }
+
+    var $bullets_former_items {
+      value = []
+    }
+
+    for ($bullets_former_n) {
+      each as $bfi {
+        var.update $bullets_former_items {
+          value = $bullets_former_items|push:$bullet_placeholder
+        }
+      }
+    }
+
+    var $bullets_current_joined {
+      value = $bullets_current_items|join:","
+    }
+
+    var $bullets_former_joined {
+      value = $bullets_former_items|join:","
+    }
+
+    var $schema_current_bullets_old {
+      value = "\"title\":\"[Current Position]\",\"date_range\":\"[Mon YYYY - Present]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]"
+    }
+
+    var $schema_current_bullets_new {
+      value = "\"title\":\"[Current Position]\",\"date_range\":\"[Mon YYYY - Present]\",\"location\":\"[City, State]\",\"bullets\":[" ~ $bullets_current_joined ~ "]"
+    }
+
+    var $schema_former_bullets_old {
+      value = "\"title\":\"[Former Position]\",\"date_range\":\"[Mon YYYY - Mon YYYY]\",\"location\":\"[City, State]\",\"bullets\":[\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\",\"[Action verb + process + result, metric]\"]"
+    }
+
+    var $schema_former_bullets_new {
+      value = "\"title\":\"[Former Position]\",\"date_range\":\"[Mon YYYY - Mon YYYY]\",\"location\":\"[City, State]\",\"bullets\":[" ~ $bullets_former_joined ~ "]"
+    }
+
+    var.update $resume_schema {
+      value = $resume_schema|replace:$schema_current_bullets_old:$schema_current_bullets_new
+    }
+
+    var.update $resume_schema {
+      value = $resume_schema|replace:$schema_former_bullets_old:$schema_former_bullets_new
+    }
+
     // Section / format rules (spoken languages, date format, education location, summary)
     var $section_rules_text {
       value = "\n\n========================================================\nSECTION AND FORMAT RULES (OVERRIDE)\n========================================================\n\n- technical_skills MUST NOT contain spoken/human languages (e.g. English, Spanish, French). Programming languages belong under programming.\n- Every date anywhere in the resume MUST be 'Mon YYYY' (e.g. Jun 2025) or 'Present'. Never include a day and never use numeric formats like 01-01-2025.\n- Education location MUST be copied from the candidate profile EDUCATION line; if none is given there, leave location empty. Never guess a university's city."
