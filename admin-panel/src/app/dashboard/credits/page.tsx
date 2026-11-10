@@ -400,6 +400,13 @@ export default function CreditsPage() {
     enabled: !isSuperAdmin,
   });
 
+  // Own underpaid deposits (admins only): surfaced at the top so users know to send the rest
+  const { data: partialDeposits } = useQuery({
+    queryKey: ["credits-deposits", "me", "partially_paid", "banner"],
+    queryFn: () => creditsService.getDeposits({ status: "partially_paid", per_page: 5 }),
+    enabled: !isSuperAdmin,
+  });
+
   const { data: adminsData, isLoading: adminsLoading } = useQuery({
     queryKey: ["credits-admins"],
     queryFn: () => creditsService.listAdmins(),
@@ -836,6 +843,19 @@ export default function CreditsPage() {
         <h1 className="text-3xl font-bold">Credits</h1>
       </div>
 
+      {(partialDeposits?.items.length ?? 0) > 0 && (
+        <div className="bg-orange-50 border border-orange-200 text-orange-900 rounded-lg px-4 py-3 text-sm">
+          <p className="font-medium">
+            {partialDeposits!.items.length === 1 ? "A deposit was underpaid" : `${partialDeposits!.items.length} deposits were underpaid`}: your money arrived, but less than the
+            required amount.
+          </p>
+          <p className="mt-1">
+            Send the remaining amount shown in{" "}
+            <a href="#deposit-history" className="font-medium underline">Deposit history</a> to the same address, and the credit
+            is added automatically.
+          </p>
+        </div>
+      )}
       {!balanceLoading && balance && (balance.free_generations_remaining ?? 0) > 0 && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-3 text-sm">
           You have {balance.free_generations_remaining} free resume generation

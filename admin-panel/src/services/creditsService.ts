@@ -45,7 +45,7 @@ export interface DepositResponse {
   status: string;
 }
 
-export type DepositStatus = "pending" | "confirmed" | "failed" | "expired";
+export type DepositStatus = "pending" | "partially_paid" | "confirmed" | "failed" | "expired";
 
 export interface CryptoDeposit {
   id: string;
@@ -56,7 +56,14 @@ export interface CryptoDeposit {
   provider?: string | null;
   currency?: string | null;
   amount_usd: number;
+  /** Crypto amount required by the payment */
   amount_crypto?: number | null;
+  /** Crypto received so far (including top-ups) */
+  crypto_received?: number | null;
+  /** Only while partially_paid: crypto still to send */
+  crypto_remaining?: number | null;
+  /** Only while partially_paid: address to send the remaining amount to */
+  pay_address?: string | null;
   status: DepositStatus | string;
   confirmed_at?: string | number | null;
   /** Only set while the deposit is pending */

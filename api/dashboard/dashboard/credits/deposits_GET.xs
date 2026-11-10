@@ -1,8 +1,10 @@
 // Paginated list of crypto top-up deposits (crypto_deposit) with optional filters.
 // admin: sees only their own deposits (admin_id input is ignored).
 // super_admin: pass admin_id to filter one user, or omit it to see all.
-// Never returns raw_webhook_payload, pay_address or external_invoice_id.
+// Never returns raw_webhook_payload or external_invoice_id.
 // payment_url is only returned while the deposit is still pending.
+// partially_paid deposits also return pay_address and crypto_remaining
+// (amount_crypto - crypto_received, min 0) so the user can top up the same address.
 query "dashboard/credits/deposits" verb=GET {
   api_group = "dashboard"
   auth = "users"
@@ -13,7 +15,7 @@ query "dashboard/credits/deposits" verb=GET {
     }
 
     text status? filters=trim {
-      description = "pending | confirmed | failed | expired"
+      description = "pending | partially_paid | confirmed | failed | expired"
     }
 
     int page?=1
@@ -194,6 +196,42 @@ query "dashboard/credits/deposits" verb=GET {
           }
         }
 
+        var $d_crypto_remaining {
+          value = null
+        }
+
+        var $d_pay_address {
+          value = null
+        }
+
+        conditional {
+          if ($d.status == "partially_paid") {
+            var.update $d_pay_address {
+              value = $d.pay_address
+            }
+
+            conditional {
+              if ($d.amount_crypto != null) {
+                var $d_amount_crypto_dec {
+                  value = $d.amount_crypto|to_decimal
+                }
+
+                var $d_received_dec {
+                  value = $d.crypto_received|first_notnull:0|to_decimal
+                }
+
+                var $d_remaining_raw {
+                  value = $d_amount_crypto_dec - $d_received_dec
+                }
+
+                var.update $d_crypto_remaining {
+                  value = $d_remaining_raw|max:0
+                }
+              }
+            }
+          }
+        }
+
         var $item {
           value = {}
             |set:"id":$d.id
@@ -205,6 +243,9 @@ query "dashboard/credits/deposits" verb=GET {
             |set:"currency":$d.currency
             |set:"amount_usd":$d.amount_usd
             |set:"amount_crypto":$d.amount_crypto
+            |set:"crypto_received":$d.crypto_received
+            |set:"crypto_remaining":$d_crypto_remaining
+            |set:"pay_address":$d_pay_address
             |set:"status":$d.status
             |set:"confirmed_at":$d.confirmed_at
             |set:"payment_url":$d_payment_url

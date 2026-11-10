@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, ExternalLink } from "lucide-react";
 import { creditsService, type CryptoDeposit, type DepositStatus } from "@/services/creditsService";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { cn } from "@/utils/cn";
@@ -18,6 +18,7 @@ const PER_PAGE = 20;
 const STATUS_STYLES: Record<string, string> = {
   confirmed: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
   pending: "bg-amber-50 text-amber-800 ring-amber-600/20",
+  partially_paid: "bg-orange-50 text-orange-800 ring-orange-600/20",
   failed: "bg-red-50 text-red-700 ring-red-600/20",
   expired: "bg-gray-100 text-gray-600 ring-gray-500/20",
 };
@@ -26,6 +27,7 @@ const STATUS_OPTIONS: { value: "" | DepositStatus; label: string }[] = [
   { value: "", label: "All statuses" },
   { value: "confirmed", label: "Confirmed" },
   { value: "pending", label: "Pending" },
+  { value: "partially_paid", label: "Partially paid" },
   { value: "failed", label: "Failed" },
   { value: "expired", label: "Expired" },
 ];
@@ -45,8 +47,70 @@ function StatusBadge({ status }: { status: string }) {
   const s = (status || "").toLowerCase();
   return (
     <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ring-1 ring-inset", STATUS_STYLES[s] ?? STATUS_STYLES.expired)}>
-      {s || "unknown"}
+      {s ? s.replace(/_/g, " ") : "unknown"}
     </span>
+  );
+}
+
+const crypto = (n: number | null | undefined) =>
+  n == null ? "—" : String(Number(Number(n).toFixed(8)));
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
+      }}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-orange-200 bg-white px-2 py-1 text-xs font-medium text-orange-800 hover:bg-orange-50"
+      aria-label={`Copy ${label}`}
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+/** Explains a partially paid deposit and how to complete it */
+function PartialPaymentNotice({ d, own }: { d: CryptoDeposit; own: boolean }) {
+  const coin = (d.currency || "").toUpperCase();
+  return (
+    <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />
+        <div className="min-w-0 space-y-2">
+          <p>
+            {own ? "We received your payment, but it was less than required: " : "Underpaid: "}
+            <span className="font-semibold tabular-nums">{crypto(d.crypto_received)} {coin}</span> of{" "}
+            <span className="font-semibold tabular-nums">{crypto(d.amount_crypto)} {coin}</span>.{" "}
+            {own
+              ? `Your ${usd(d.amount_usd)} credit is added as soon as the rest arrives.`
+              : `Credit of ${usd(d.amount_usd)} is added when the rest arrives.`}
+          </p>
+          {d.crypto_remaining != null && Number(d.crypto_remaining) > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span>{own ? "Send" : "Remaining"}</span>
+              <span className="rounded bg-white px-2 py-0.5 font-mono font-semibold tabular-nums ring-1 ring-orange-200">{crypto(d.crypto_remaining)} {coin}</span>
+              {own && <CopyButton text={crypto(d.crypto_remaining)} label="amount" />}
+            </div>
+          )}
+          {d.pay_address && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span>{own ? "to the same address:" : "Address:"}</span>
+              <span className="break-all rounded bg-white px-2 py-0.5 font-mono text-xs ring-1 ring-orange-200">{d.pay_address}</span>
+              {own && <CopyButton text={d.pay_address} label="address" />}
+            </div>
+          )}
+          {own && (
+            <p className="text-xs text-orange-800">
+              Use the same coin and network ({coin || "as before"}). Network fees are deducted from what you send, so send slightly more to be safe.
+              If you need help, contact your admin with this deposit&apos;s date and amount.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -82,7 +146,7 @@ export default function DepositHistory({
   const selectClass = "px-3 py-2 border border-gray-300 rounded-md text-sm bg-white";
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div id="deposit-history" className="bg-white rounded-lg border border-gray-200 scroll-mt-6">
       <div className="flex flex-wrap items-end justify-between gap-4 p-6 pb-4">
         <div>
           <h2 className="text-lg font-semibold">Deposit history</h2>
@@ -145,7 +209,7 @@ export default function DepositHistory({
             ) : items.length === 0 ? (
               <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-500">No deposits yet.</td></tr>
             ) : (
-              items.map((d) => (
+              items.flatMap((d) => [
                 <tr key={d.id} className="hover:bg-gray-50">
                   <td className="px-6 py-3 whitespace-nowrap text-gray-700">{fmtWhen(d.created_at)}</td>
                   {showUser && (
@@ -179,8 +243,15 @@ export default function DepositHistory({
                     </div>
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-gray-700">{d.status === "confirmed" ? fmtWhen(d.confirmed_at) : "—"}</td>
-                </tr>
-              ))
+                </tr>,
+                d.status === "partially_paid" ? (
+                  <tr key={`${d.id}-partial`} className="bg-white">
+                    <td colSpan={showUser ? 6 : 5} className="px-6 pb-4 pt-0">
+                      <PartialPaymentNotice d={d} own={!isSuperAdmin} />
+                    </td>
+                  </tr>
+                ) : null,
+              ])
             )}
           </tbody>
         </table>
