@@ -480,7 +480,7 @@ No explanations needed, just answer the question based on the provided informati
     //   }
     // }
   
-    // Haiku 5.5 rejects the temperature parameter (set_conditional below); Haiku 4.5 keeps 0.5
+    // No temperature: Haiku 5.5 / Sonnet 5.5 run with adaptive thinking, which rejects non-default temperature
     try_catch {
       try {
         api.request {
@@ -488,9 +488,8 @@ No explanations needed, just answer the question based on the provided informati
           method = "POST"
           params = {}
             |set:"model":$ai_model_id
-            |set:"thinking":({}|set:"type":"disabled")
-            |set:"max_tokens":600
-            |set_conditional:"temperature":0.5:($ai_model_id != "claude-haiku-5-5")
+            |set:"max_tokens":4000
+            |set:"output_config":({}|set:"effort":"low")
             |set:"system":([]
               |push:({}
                 |set:"type":"text"

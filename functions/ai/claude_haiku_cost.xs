@@ -1,4 +1,5 @@
-// Single source of truth for the raw provider cost (USD) of one Claude Haiku call (any model).
+// Single source of truth for the raw provider cost (USD) of one Claude call, for any Claude model
+// (Haiku 5.5, Sonnet 5.5, and the historical Haiku 4.5 / 3.5); the name is historical.
 // Prices per 1M tokens live in ai/claude_haiku_rates (per model; cache writes at the 1-hour rate,
 // Haiku 5.5 tiered at 100K prompt tokens). The formula is identical for every model:
 //   input*input_price + output*output_price + cache_write*cache_write_price + cache_read*cache_read_price
@@ -6,11 +7,11 @@
 // and are simply summed. The price rate (multiplier) is applied by credits/credit_charge_usage.
 // Used by resume generation, regeneration, the SwiftCV chat assistant.
 function "ai/claude_haiku_cost" {
-  description = "Raw USD cost of a Claude Haiku call from its model and token usage"
+  description = "Raw USD cost of a Claude call (any Claude model) from its model and token usage"
 
   input {
     text model? {
-      description = "Anthropic model id; empty = claude-haiku-4-5"
+      description = "Anthropic model id (any Claude model); empty = claude-haiku-4-5 (historical logs)"
     }
 
     int input_tokens?=0 {

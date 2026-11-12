@@ -155,7 +155,7 @@ query profiles verb=GET {
             allowed_languages     : $p.allowed_languages
             resume_sections       : $p.resume_sections
             spoken_languages      : $p.spoken_languages
-            ai_model              : $p.ai_model|first_notnull:"claude-haiku-4-5"
+            ai_model              : ($p.ai_model == "claude-sonnet-5-5") ? "claude-sonnet-5-5" : "claude-haiku-5-5"
             default_compensation  : $p.default_compensation
             billing_admin_id      : $p.billing_admin_id
             billing_admin_name    : $p.billing_admin_id != null ? ($admin_names|get:($p.billing_admin_id|to_text)) : null

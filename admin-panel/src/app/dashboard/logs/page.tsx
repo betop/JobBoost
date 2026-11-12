@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { AI_MODELS, aiModelLabel } from "@/utils/aiModels";
+import { LOGGED_MODELS, aiModelBadgeClass, aiModelLabel } from "@/utils/aiModels";
 import { toZonedTime, format } from "date-fns-tz";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
@@ -1386,7 +1386,7 @@ export default function LogsPage() {
 
         <CheckboxDropdown
           label="AI model"
-          options={AI_MODELS.map((m) => ({ value: m.id, label: m.label }))}
+          options={LOGGED_MODELS.map((m) => ({ value: m.id, label: m.label }))}
           selected={(filters.ai_model ?? []) as string[]}
           disabled={logsLoading}
           onChange={(next) => {
@@ -1755,7 +1755,7 @@ export default function LogsPage() {
                       <td className="px-4 py-3 text-xs whitespace-nowrap">
                         <span
                           className={`px-2 py-1 rounded-full font-semibold ${
-                            log.ai_model === "claude-haiku-5-5" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                            aiModelBadgeClass(log.ai_model || "claude-haiku-4-5")
                           }`}
                         >
                           {aiModelLabel(log.ai_model)}

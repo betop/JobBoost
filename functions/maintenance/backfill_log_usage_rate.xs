@@ -96,8 +96,10 @@ function "maintenance/backfill_log_usage_rate" {
                         var.update $source { value = "ledger" }
                       }
                       elseif ($charged > 0 && $lg.input_tokens != null) {
+                        // Price on the ledger row's model (empty = Haiku 4.5, the only model before selection)
                         function.run "ai/claude_haiku_cost" {
                           input = {
+                            model                : $tx.ai_model
                             input_tokens         : $lg.input_tokens|first_notnull:0
                             output_tokens        : $lg.output_tokens|first_notnull:0
                             cache_creation_tokens: $lg.cache_creation_input_tokens|first_notnull:0

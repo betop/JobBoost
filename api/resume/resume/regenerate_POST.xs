@@ -1057,8 +1057,8 @@ Remember today's year is 2026.
           method = "POST"
           params = {}
             |set:"model":$ai_model_id
-            |set:"thinking":({}|set:"type":"disabled")
-            |set:"max_tokens":6000
+            |set:"max_tokens":32000
+            |set:"output_config":({}|set:"effort":"max")
             |set:"system":([]
               |push:({}
                 |set:"type":"text"

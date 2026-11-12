@@ -1,6 +1,6 @@
 "use client";
 
-import { AI_MODELS, DEFAULT_AI_MODEL } from "@/utils/aiModels";
+import { AI_MODELS, COMING_SOON_MODELS, resolveAiModel } from "@/utils/aiModels";
 import { cn } from "@/utils/cn";
 
 interface AiModelSelectProps {
@@ -8,9 +8,10 @@ interface AiModelSelectProps {
   onChange: (model: string) => void;
 }
 
-// Radio cards for choosing the Claude model of a profile ("Recommended" / "Lower price" tags).
+// Radio cards for choosing the model of a profile ("Best speed & cost" / "Balanced" tags),
+// followed by disabled "Coming soon" cards for models that are not available yet.
 export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
-  const selected = value || DEFAULT_AI_MODEL;
+  const selected = resolveAiModel(value);
   return (
     <div role="radiogroup" aria-label="AI model" className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {AI_MODELS.map((m) => {
@@ -36,7 +37,7 @@ export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
               <span
                 className={cn(
                   "ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                  m.tagTone === "recommended" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                  m.tagTone === "speed_cost" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
                 )}
               >
                 {m.tag}
@@ -46,6 +47,24 @@ export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
           </label>
         );
       })}
+      {COMING_SOON_MODELS.map((m) => (
+        <div
+          key={m.id}
+          aria-disabled="true"
+          title="Coming soon"
+          className="flex flex-col gap-1 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 opacity-60 cursor-not-allowed"
+        >
+          <span className="flex items-center gap-2">
+            <input type="radio" name="ai_model" value={m.id} disabled className="h-4 w-4 border-gray-300" />
+            <span className="text-sm font-semibold text-gray-700">{m.label}</span>
+            <span className="text-[11px] text-gray-500">{m.provider}</span>
+            <span className="ml-auto rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+              Coming soon
+            </span>
+          </span>
+          <span className="text-xs text-gray-500 pl-6">{m.description}</span>
+        </div>
+      ))}
     </div>
   );
 }

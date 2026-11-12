@@ -430,8 +430,8 @@ query "resume/generate" verb=POST {
                       method = "POST"
                       params = {}
                         |set:"model":$ai_model_id
-                        |set:"thinking":({}|set:"type":"disabled")
-                        |set:"max_tokens":1500
+                        |set:"max_tokens":4000
+                        |set:"output_config":({}|set:"effort":"low")
                         |set:"messages":([]
                           |push:({}
                             |set:"role":"user"
@@ -2185,8 +2185,8 @@ Regenerate if violated.
                   method = "POST"
                   params = {}
                     |set:"model":$ai_model_id
-                    |set:"thinking":({}|set:"type":"disabled")
-                    |set:"max_tokens":6000
+                    |set:"max_tokens":32000
+                    |set:"output_config":({}|set:"effort":"max")
                     |set:"system":([]
                       |push:({}
                         |set:"type":"text"
