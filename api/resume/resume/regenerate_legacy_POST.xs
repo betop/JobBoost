@@ -315,6 +315,7 @@ query "resume/regenerate_legacy" verb=POST {
       value = ""
     }
   
+    // output_config.effort is omitted for legacy Claude Haiku 4.5, which rejects it (no thinking param, so 4.5 runs without thinking)
     try_catch {
       try {
         api.request {
@@ -323,7 +324,7 @@ query "resume/regenerate_legacy" verb=POST {
           params = {}
             |set:"model":$ai_model_id
             |set:"max_tokens":32000
-            |set:"output_config":({}|set:"effort":"max")
+            |set_conditional:"output_config":({}|set:"effort":"max"):($ai_model_id != "claude-haiku-4-5")
             |set:"system":$system_prompt
             |set:"messages":([]
               |push:({}

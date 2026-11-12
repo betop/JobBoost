@@ -423,6 +423,7 @@ query "resume/generate" verb=POST {
                 //   }
                 // }
               
+                // output_config.effort is omitted for legacy Claude Haiku 4.5, which rejects it (no thinking param, so 4.5 runs without thinking)
                 try_catch {
                   try {
                     api.request {
@@ -431,7 +432,7 @@ query "resume/generate" verb=POST {
                       params = {}
                         |set:"model":$ai_model_id
                         |set:"max_tokens":4000
-                        |set:"output_config":({}|set:"effort":"low")
+                        |set_conditional:"output_config":({}|set:"effort":"low"):($ai_model_id != "claude-haiku-4-5")
                         |set:"messages":([]
                           |push:({}
                             |set:"role":"user"
@@ -2178,6 +2179,7 @@ Regenerate if violated.
               value = ""
             }
           
+            // output_config.effort is omitted for legacy Claude Haiku 4.5, which rejects it (no thinking param, so 4.5 runs without thinking)
             try_catch {
               try {
                 api.request {
@@ -2186,7 +2188,7 @@ Regenerate if violated.
                   params = {}
                     |set:"model":$ai_model_id
                     |set:"max_tokens":32000
-                    |set:"output_config":({}|set:"effort":"max")
+                    |set_conditional:"output_config":({}|set:"effort":"max"):($ai_model_id != "claude-haiku-4-5")
                     |set:"system":([]
                       |push:({}
                         |set:"type":"text"

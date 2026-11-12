@@ -481,6 +481,7 @@ No explanations needed, just answer the question based on the provided informati
     // }
   
     // No temperature: Haiku 5.5 / Sonnet 5.5 run with adaptive thinking, which rejects non-default temperature
+    // output_config.effort is omitted for legacy Claude Haiku 4.5, which rejects it (no thinking param, so 4.5 runs without thinking)
     try_catch {
       try {
         api.request {
@@ -489,7 +490,7 @@ No explanations needed, just answer the question based on the provided informati
           params = {}
             |set:"model":$ai_model_id
             |set:"max_tokens":4000
-            |set:"output_config":({}|set:"effort":"low")
+            |set_conditional:"output_config":({}|set:"effort":"low"):($ai_model_id != "claude-haiku-4-5")
             |set:"system":([]
               |push:({}
                 |set:"type":"text"

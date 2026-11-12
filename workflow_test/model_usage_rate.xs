@@ -38,13 +38,14 @@ workflow_test "model_usage_rate" {
     expect.to_equal ($rs55.usage_rate) { value = 1.5 }
     expect.to_equal ($rs55.usage_rate) { value = $rs55.default_usage_rate }
 
-    // Selectable models list: exactly Haiku 5.5 and Sonnet 5.5 (Haiku 4.5 no longer listed)
-    expect.to_equal ($rnone.models|count) { value = 2 }
+    // Selectable models list: Haiku 5.5, Sonnet 5.5 and Haiku 4.5 (legacy, built-in 1.3, no override)
+    expect.to_equal ($rnone.models|count) { value = 3 }
     expect.to_equal ($rnone.model_rates|get:"claude-haiku-5-5") { value = 2.5 }
     expect.to_equal ($rnone.model_rates|get:"claude-sonnet-5-5") { value = 1.5 }
-    expect.to_be_null ($rnone.model_rates|get:"claude-haiku-4-5")
+    expect.to_equal ($rnone.model_rates|get:"claude-haiku-4-5") { value = 1.3 }
     expect.to_be_true (($rnone.models|filter:($$.model == "claude-haiku-5-5")|first).is_set)
     expect.to_be_false (($rnone.models|filter:($$.model == "claude-sonnet-5-5")|first).is_set)
+    expect.to_be_false (($rnone.models|filter:($$.model == "claude-haiku-4-5")|first).is_set)
     expect.to_equal (($rnone.models|filter:($$.model == "claude-sonnet-5-5")|first).label) { value = "Claude Sonnet 5.5" }
 
     // A personal admin rate beats the model rate

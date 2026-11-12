@@ -41,7 +41,7 @@ table profile {
     }
 
     text default_compensation?
-    // Selected Claude model (ai/resolve_model): claude-haiku-5-5 (default) or claude-sonnet-5-5
+    // Selected Claude model (ai/resolve_model): claude-haiku-5-5 (default), claude-sonnet-5-5 or claude-haiku-4-5 (legacy)
     text ai_model?="claude-haiku-5-5"
   }
 
