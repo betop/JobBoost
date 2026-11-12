@@ -62,7 +62,6 @@ export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
               Coming soon
             </span>
           </span>
-          <span className="text-xs text-gray-500 pl-6">{m.description}</span>
         </div>
       ))}
     </div>

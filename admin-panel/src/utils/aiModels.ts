@@ -22,7 +22,7 @@ export const AI_MODELS: AiModelOption[] = [
     label: "Claude Haiku 5.5",
     tag: "Best speed & cost",
     tagTone: "speed_cost",
-    description: "Fastest and cheapest: about 12 s and $0.002 per resume.",
+    description: "Default model for tailored resumes and cover letters.",
     price: { input: 0.1, output: 0.5 },
   },
   {
@@ -30,7 +30,7 @@ export const AI_MODELS: AiModelOption[] = [
     label: "Claude Sonnet 5.5",
     tag: "Balanced",
     tagTone: "balanced",
-    description: "Higher resume quality at a higher price: about 20 s and $0.04 per resume.",
+    description: "Higher-quality tailored resumes and cover letters.",
     price: { input: 2, output: 10 },
   },
   {
@@ -38,7 +38,7 @@ export const AI_MODELS: AiModelOption[] = [
     label: "Claude Haiku 4.5",
     tag: "Legacy",
     tagTone: "legacy",
-    description: "Previous default, kept for profiles that still need it. Runs without effort/thinking.",
+    description: "Previous default, kept for profiles that still need it.",
     price: { input: 1, output: 5 },
   },
 ];
@@ -68,14 +68,13 @@ export interface ComingSoonModel {
   id: string;
   label: string;
   provider: string;
-  description: string;
   price: { input: number; output: number };
 }
 
 export const COMING_SOON_MODELS: ComingSoonModel[] = [
-  { id: "gpt-6-1-terra", label: "GPT-6.1 Terra", provider: "OpenAI", description: "About 28 s and $0.02 per resume.", price: { input: 1, output: 5 } },
-  { id: "gpt-6-luna", label: "GPT-6 Luna", provider: "OpenAI", description: "About 20 s and $0.002 per resume.", price: { input: 0.1, output: 0.5 } },
-  { id: "gpt-6-sol", label: "GPT-6 Sol", provider: "OpenAI", description: "About 20 s and $0.04 per resume.", price: { input: 2, output: 10 } },
-  { id: "gpt-5-6-luna", label: "GPT-5.6 Luna", provider: "OpenAI", description: "About 20 s and $0.005 per resume.", price: { input: 0.2, output: 1.2 } },
-  { id: "gpt-5-6-terra", label: "GPT-5.6 Terra", provider: "OpenAI", description: "About 20 s and $0.05 per resume.", price: { input: 2, output: 12 } },
+  { id: "gpt-6-1-terra", label: "GPT-6.1 Terra", provider: "OpenAI", price: { input: 1, output: 5 } },
+  { id: "gpt-6-luna", label: "GPT-6 Luna", provider: "OpenAI", price: { input: 0.1, output: 0.5 } },
+  { id: "gpt-6-sol", label: "GPT-6 Sol", provider: "OpenAI", price: { input: 2, output: 10 } },
+  { id: "gpt-5-6-luna", label: "GPT-5.6 Luna", provider: "OpenAI", price: { input: 0.2, output: 1.2 } },
+  { id: "gpt-5-6-terra", label: "GPT-5.6 Terra", provider: "OpenAI", price: { input: 2, output: 12 } },
 ];
