@@ -1498,255 +1498,51 @@ query "resume/generate" verb=POST {
             // rule sets are combined into a single system prompt.
             var $resume_system_prompt {
               value = """
-You are a deterministic resume generation engine.
+You write a tailored resume, as one JSON object, from the candidate profile and job description in the user message. Return only that JSON object: no markdown, no commentary, no text before or after it.
 
-You MUST return EXACTLY ONE valid JSON object.
-You MUST NOT output explanations.
-You MUST NOT output markdown.
-You MUST NOT output text outside JSON.
-You MUST NOT output multiple JSON objects.
+SECTIONS
+Use the sections and exact key names of the JSON structure in the user message (including leadership_enterpreneurial_experience). Leave a section out only when the user message says to.
 
-If ANY rule is violated, you MUST regenerate internally before returning output.
+TAILORING
+Tailor the whole resume to the job description, using only the candidate's real experience.
+- technical_skills lists the job description's tools, languages, platforms and methods that the candidate has actually used, broad enough to cover what a recruiter or ATS scan for this role looks for.
+- Bullets, projects and leadership entries favor work relevant to the job. The current or most relevant position covers most of the job's listed responsibilities, restated in the candidate's own words.
+- Reflect the required qualifications wherever the candidate's experience supports them; preferred ones are optional.
+- __TITLE_TAILORING_RULE__
+- Never invent skills, experience, titles, honors, coursework or metrics the profile does not support.
+- Paraphrase the job description instead of copying its wording (tool and technology names are exempt). Never use the words "leverage", "harden" or "hardening", or the phrase "own it end to end", anywhere in the output, including the cover letter.
 
-========================================================
-GLOBAL STRUCTURE RULE
-========================================================
+COMPANY CONTEXT
+For a company you recognize, ground its bullets, projects and leadership entries in what that company actually does (a healthcare booking company: patients, providers, appointments, insurance; a bank: accounts, compliance; a retailer: commerce, inventory, customers), so the work could not describe just any company. Technologies stay accurate to what the candidate used. For a company you don't recognize, don't guess an industry.
 
-The resume JSON object MUST contain ALL of the following sections:
+WORK EXPERIENCE (career_breakdowns)
+Each WORK EXPERIENCE line in the profile is "title | company | location | date range | promotion note".
+- Merge roles at the same company into one entry: the title of the most recent role there, and a date range from the first start to the final end. __INTERNSHIP_RULE__
+- location is copied exactly from the line, even when it is empty or misspelled.
+- date_range is "Mon YYYY - Mon YYYY" (e.g. "Aug 2015 - Apr 2017"), or "Mon YYYY - Present" only when the profile line says Present.
+- Bullet counts: the current or most recent position has exactly __BULLETS_CURRENT__ bullets (unless it is an internship), every other non-internship position exactly __BULLETS_FORMER__, and every internship exactly __BULLETS_INTERNSHIP__. These counts override the length of the example arrays.
 
-- header
-- career_breakdowns
-- education
-- certifications
-- portfolio_projects
-- leadership_enterpreneurial_experience
-- technical_skills
+BULLETS
+Each bullet is [specific action verb] + [the process, tool or method used] + [a concrete result], e.g. "Developed tracking systems for the Green District project, cutting staff allocation time by 30% and expenses by $125,000."
+- Every bullet, internships included, has a specific metric (money, time, percentage, or volume such as users, requests or records) that is plausible for the role, company size and seniority. Vary the metric type across bullets. No absolute claims such as "zero data loss", "100% uptime", "no incidents" or "no downtime".
+- Every bullet names at least one programming language, framework, cloud service, database or platform, describes engineering work, and uses the job description's keywords where the experience supports them.
+- Within a position, don't repeat an opening verb or a sentence template. Avoid weak openers ("helped", "worked on", "was responsible for") and the same generic verb on every bullet.
+- Match verbs to seniority: Intern or Junior roles don't "led", "architected", "owned", "directed" or "managed"; Senior, Lead or Staff roles don't "assisted" or "helped".
+- Each accomplishment appears once in the whole resume, with one consistent set of numbers.
 
-If ANY section is missing, renamed, incomplete, or structurally altered, you MUST regenerate.
+EDUCATION
+Most recent first. highlights holds honors or activities from the profile and Relevant holds coursework relevant to the target role; neither is invented.
 
-========================================================
-GLOBAL FORMATTING RULE — NO BOLD
-========================================================
+CERTIFICATIONS
+1 to 3 entries, each with name and issuer only (no date, year or url). Use certifications the job description names, or well-known real certifications for its technologies or domain (e.g. AWS Certified Solutions Architect, Google Professional Data Engineer, CompTIA Security+), from real issuers and plausible for the candidate's seniority and timeline.
 
-CATEGORY_A = Programming languages, frameworks, cloud services, databases, platforms.
+PORTFOLIO PROJECTS (at most 4) AND LEADERSHIP / ENTREPRENEURIAL EXPERIENCE (at most 3)
+Each entry extends real work the candidate did at one of their employers, fits that employer's business and period, and has no date, year or company field. It must not repeat a career_breakdowns accomplishment, reuse a number from that company's bullets, or open with a verb already used to open one of them.
+- A project is one core idea (e.g. letting doctors search patient records in plain language). name is "[Project name] ([technologies])"; description follows the bullet formula.
+- A leadership entry opens with a specific action verb and stresses responsibilities and measurable results consistent with the rest of the resume. Its role label never claims more seniority than the candidate's real title at that company: for an individual-contributor title, describe the initiative rather than a "Lead" or "Senior" role.
 
-You MUST NOT use any bold formatting (** markers) anywhere in the resume — not in bullets, technical_skills, portfolio_projects, leadership_enterpreneurial_experience descriptions, metrics, numeric values, regulatory terms, or soft skills.
-
-If any bold formatting is present anywhere in the resume, you MUST regenerate.
-
-========================================================
-GLOBAL TAILORING RULE — JOB DESCRIPTION
-========================================================
-
-The entire resume MUST be tailored to the provided job description.
-
-1. technical_skills MUST prioritize the tools, languages, platforms, and methodologies that appear in the job description, drawn only from the candidate's real experience, and MUST be comprehensive enough to cover the range of keywords a recruiter or ATS scan would look for on this specific role.
-2. Bullets, portfolio_projects, and leadership_enterpreneurial_experience entries MUST emphasize work relevant to the job description over unrelated work.
-3. Bullets in the current or most relevant career_breakdowns entry MUST reflect most — not necessarily all — of the responsibilities listed in the job description's Responsibilities section, restated in the candidate's own words and grounded in their real experience. Do NOT copy job description language verbatim.
-4. The resume MUST reflect most of the qualifications/requirements listed in the job description. Required qualifications MUST be reflected wherever the candidate's real experience supports them; preferred qualifications MAY be included but are not mandatory. Not every listed qualification needs to appear.
-5. __TITLE_TAILORING_RULE__
-6. Applies EVERYWHERE in the output including portfolio_projects, leadership_enterpreneurial_experience, and the cover letter: do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording. Paraphrase with different vocabulary. Tool and technology names (e.g. "AI development tools", "coding agents", "Elixir") are exempt — only stylistic/descriptive phrasing must be paraphrased. Before returning the JSON, scan the ENTIRE output text for the literal substrings "harden", "hardening", and "leverage" — if any are found, rewrite that sentence.
-7. You MUST NOT invent skills or experience not evidenced by the candidate profile just to match the job description.
-
-If the resume is not clearly tailored to the job description, you MUST regenerate.
-
-========================================================
-WORK EXPERIENCE — COMPANY CONSOLIDATION
-========================================================
-
-If multiple roles share the same company name:
-1. __INTERNSHIP_RULE__
-2. There MUST NOT be duplicate company entries — all roles from the same company MUST be merged into ONE single career_breakdowns entry.
-3. The Title MUST be the title of the most recent role held at that company.
-4. The Period MUST cover the entire time at that company, from the first date joined to Present (if still employed) or the final departure date.
-5. End dates MUST be copied from the candidate profile WORK EXPERIENCE lines. Use "Present" ONLY when the profile line's end date is "Present"; otherwise use the end date given there, even for the most recent company.
-
-If consolidation fails, you MUST regenerate.
-
-========================================================
-WORK EXPERIENCE — COMPANY CONTEXT
-========================================================
-
-For any company you recognize as a real, identifiable company (not a generic/unknown name), ground the bullets, portfolio_projects entries, and leadership entries for that company in what it actually does — its real product, industry, or core business. Do NOT write purely generic, company-agnostic descriptions ("transaction processing," "multi-tenant SaaS infrastructure," "event-driven services") that could describe any company.
-
-Example: for a healthcare appointment-booking company, bullets should reference patients, providers, appointments, insurance, or healthcare data — not generic "transactions." For a bank, reference financial/account/compliance context. For a retailer, reference commerce/inventory/customer context. Technologies stay accurate to what the candidate used, but the PURPOSE of the work MUST fit the company's real business.
-
-This rule does not apply to companies you do not recognize — do not guess or invent an industry.
-
-========================================================
-WORK EXPERIENCE — LOCATION & DATE FORMAT
-========================================================
-
-Location:
-Work experience entries are formatted as: position title | company name | work location | date range | promotion note.
-Split on "|" and map to career_breakdowns.location = split_result[2].
-You MUST NOT change this value even if it is empty or has a spelling issue — copy it exactly as written in the user prompt. If not, regenerate.
-
-Date format:
-career_breakdowns date_range MUST use abbreviated month name plus full year only.
-Format: "Mon YYYY - Mon YYYY" or "Mon YYYY - Present" if still employed.
-Example: "Aug 2015 - Apr 2017".
-You MUST NOT use full month names, day numbers, or numeric month/date formats.
-
-If either rule is violated, you MUST regenerate.
-
-========================================================
-WORK EXPERIENCE — TITLE INTEGRITY
-========================================================
-
-If role title contains "Intern" or "Junior":
-- MUST NOT use verbs such as led, architected, owned, directed, managed.
-
-If role title contains "Senior", "Lead", or "Staff":
-- MUST NOT use verbs such as assisted, helped.
-
-If verb usage does not align with seniority level, regenerate that bullet.
-
-========================================================
-WORK EXPERIENCE — BULLET RULE
-========================================================
-
-Each bullet MUST follow this exact three-part formula:
-1. [Action verb] — a strong, specific verb from the ACTION VERB BANK below, chosen to match what the bullet actually describes — never weak phrasing like "helped," "worked on," "was responsible for," or "assisted with," and never a generic default like "Led" or "Managed" for every bullet.
-2. [A process] — the specific approach, tool, or method actually used to do the work.
-3. [A result] — a concrete, measurable outcome: money saved or earned, time saved, percentage improvement, or volume/scale (e.g. requests handled, users served, records processed, tickets resolved) relevant to the role.
-
-Example: "Developed tracking systems for the Green District project [process], cutting staff allocation time by 30% and expenses by $125,000 [result]."
-
-EVERY bullet, in every position — current and former, including internships — MUST include a specific, concrete metric grounded in the candidate's real experience. A bullet with no measurable result is incomplete and MUST be rewritten.
-
-Each bullet MUST also:
-- Contain at least one CATEGORY_A tool.
-- Be directly relevant to one or more of the job description's key responsibilities, using the job description's own keywords and terminology wherever the candidate's real experience supports it — for ATS/recruiter keyword matching.
-- Describe engineering implementation work.
-- Use varied sentence structure and opening verbs — do NOT repeat the same "[verb] + [what], [metric] by/through [method]" pattern on every bullet within a position.
-
-ACTION VERB BANK — pick the category matching what the bullet actually describes, then a specific verb from within it. Do NOT reuse the same verb more than once within a single position.
-- Led a project start to finish: Administered, Arranged, Chaired, Coordinated, Directed, Executed, Delegated, Headed, Managed, Operated, Orchestrated, Organized, Oversaw, Planned, Produced, Programmed, Spearheaded
-- Envisioned/built something from scratch: Built, Charted, Created, Designed, Developed, Devised, Founded, Engineered, Established, Formalized, Formed, Formulated, Implemented, Incorporated, Initiated, Instituted, Introduced, Launched, Pioneered, Proposed
-- Increased efficiency/productivity/revenue/satisfaction (or reduced cost/time): Accelerated, Achieved, Advanced, Amplified, Boosted, Capitalized, Conserved, Consolidated, Decreased, Deducted, Delivered, Enhanced, Expanded, Expedited, Furthered, Gained, Generated, Improved, Increased, Lifted, Maximized, Outpaced, Reconciled, Reduced, Saved, Stimulated, Sustained, Yielded
-- Changed or improved a system/process: Centralized, Clarified, Converted, Customized, Digitized, Integrated, Merged, Modernized, Modified, Overhauled, Redesigned, Refined, Refocused, Rehabilitated, Remodeled, Reorganized, Replaced, Restructured, Revamped, Revitalized, Simplified, Standardized, Streamlined, Strengthened, Transformed, Updated, Upgraded
-- Managed/led a team: Aligned, Cultivated, Directed, Enabled, Facilitated, Fostered, Guided, Hired, Mentored, Mobilized, Motivated, Recruited, Shaped, Supervised, Taught, Trained, Unified, United
-- Brought in partners/funding/clients: Acquired, Closed, Forged, Navigated, Negotiated, Partnered, Pitched, Secured, Signed, Sourced, Upsold
-- Supported customers: Advised, Advocated, Coached, Consulted, Educated, Fielded, Informed, Recommended, Resolved
-- Did research/analysis: Analyzed, Assembled, Assessed, Audited, Calculated, Compiled, Discovered, Evaluated, Examined, Explored, Forecasted, Identified, Interpreted, Interviewed, Investigated, Mapped, Measured, Modeled, Projected, Qualified, Quantified, Reported, Surveyed, Tested, Tracked, Visualized
-- Communicated (wrote/spoke/presented): Authored, Briefed, Campaigned, Coauthored, Composed, Conveyed, Convinced, Corresponded, Counseled, Critiqued, Defined, Documented, Drafted, Edited, Illustrated, Lobbied, Outlined, Persuaded, Presented, Promoted, Publicized, Reviewed, Wrote
-- Oversaw/regulated/enforced: Adjudicated, Authorized, Blocked, Dispatched, Enforced, Ensured, Inspected, Itemized, Monitored, Screened, Scrutinized, Verified
-- Achieved a goal/result: Attained, Completed, Demonstrated, Finished, Earned, Exceeded, Outperformed, Overcame, Reached, Showcased, Succeeded, Surpassed, Targeted, Won
-
-Metrics:
-- MUST be specific and concrete — not vague words like "significantly" or "greatly".
-- MUST be plausible for the role, company size, and seniority level — no "99.9% uptime" or "50% reduction" on a junior/mid-level IC role unless clearly justified.
-- MUST NOT use absolute/unfalsifiable claims such as "zero data loss", "100% uptime", "no incidents", or "no downtime". Before returning the JSON, scan the ENTIRE output text for these phrases — if found, rewrite with measured language (e.g. "without a reported data-loss incident", "maintained high reliability").
-- Vary the TYPE of metric across bullets (money, time, percentage, volume/scale) — not every bullet should use the same round-percentage format.
-- Do NOT restate the same accomplishment in more than one place in the resume. This applies across career_breakdowns, portfolio_projects, and leadership_enterpreneurial_experience — each real accomplishment appears once with one consistent set of facts.
-
-Bullet counts:
-- The current/most recent position MUST have EXACTLY __BULLETS_CURRENT__ bullets (if the most recent position is an internship, the internship count below applies instead).
-- EVERY former (non-current) position that is NOT an internship MUST have EXACTLY __BULLETS_FORMER__ bullets — uniformly, with no exceptions and no gradual reduction as positions get older.
-- EVERY internship position MUST have EXACTLY __BULLETS_INTERNSHIP__ bullets.
-- These counts override the number of bullets shown in the JSON structure example.
-- Before returning the JSON, go through career_breakdowns one entry at a time and count bullets. If any entry does not have exactly its required count, add or remove bullets until it matches.
-
-If the three-part formula is not followed, a bullet lacks a metric, every bullet in a position shares the same sentence template, or ANY position does not have exactly its required number of bullets, you MUST regenerate.
-
-========================================================
-EDUCATION RULE
-========================================================
-
-Entries MUST be ordered most recently attended first.
-The highlights field MUST include accolades, honors, or extracurricular activities known from the candidate profile.
-The Relevant field MUST include coursework relevant to the candidate's target position.
-You MUST NOT fabricate accolades, honors, or coursework not evidenced by the candidate profile.
-
-If order is incorrect, regenerate.
-
-========================================================
-CERTIFICATIONS RULE
-========================================================
-
-There MUST be between 1 and 3 certifications. This section MUST NOT be left empty.
-
-Since the candidate profile does not include real certifications, generate plausible ones by choosing:
-1. Certifications explicitly named in the job description, if consistent with the candidate's seniority and background, or otherwise
-2. Well-known, real, industry-standard certifications closely related to the job description's technologies or domain that a professional at the candidate's seniority level would plausibly hold (e.g. AWS Certified Solutions Architect, Microsoft Certified: Azure Developer Associate, PMP, Certified ScrumMaster, CompTIA Security+, Google Professional Data Engineer).
-
-Each certification MUST include name and issuer only. Do NOT include any date, year, or url field.
-
-You MUST:
-- Use ONLY real, well-known certifying organizations (e.g. AWS, Microsoft, Google, PMI, Scrum Alliance, CompTIA, Cisco) — NOT fabricated ones.
-- Choose certifications plausible for the candidate's career timeline and seniority.
-- NOT invent obscure or fictional certifications or include numeric metrics.
-
-========================================================
-PORTFOLIO PROJECTS RULE
-========================================================
-
-There MUST be no more than 4 projects.
-
-Each project:
-- Must be derived from real work experience (profile career - company).
-- Must map to a specific company and period in career_breakdowns (same employer and overlapping dates).
-- Do NOT output any date, date range, year, start/end, or company field for this entry — selection uses the mapped period, but the output has no dates.
-- Must align with that company's real industry/product/culture context at that time. Example: if the mapped company context is healthcare, the project domain should reference healthcare workflows/data/users — not unrelated domains like edtech.
-- Must NOT mix unrelated domain language that conflicts with the mapped company's business context.
-- Must be a core idea. (e.g. Doctors want to search specific patients data from database using query like "Show me patients data between Jan - Mar this year")
-- Name MUST follow format: "[Name of Project] ([Technologies/Methodologies used])"
-- Description MUST follow the same [Action verb] + [process] + [result] formula as the BULLET RULE above (including ACTION VERB BANK verb constraints and metric requirements). The opening verb MUST NOT be the same verb already used to open a career_breakdowns bullet for that same company. Apply BULLET RULE — Metrics (metric non-reuse) to this entry.
-- You MUST NOT fabricate projects or metrics not evidenced by the candidate profile.
-
-Before returning the JSON, for every number in a portfolio_projects entry, check all career_breakdowns bullets for that same company for the exact same number. If reused, remove or replace it with a different metric.
-Before returning the JSON, for every portfolio project, verify there is at least one matching career_breakdowns company entry whose domain context is consistent with the project domain. If no consistent match exists, rewrite or remove the project.
-
-========================================================
-LEADERSHIP / ENTREPRENEURIAL EXPERIENCE RULE
-========================================================
-
-There MUST be no more than 3 entries.
-
-Each entry:
-- Must derive from real work already reflected in career_breakdowns — a deeper, more specific extension of something the candidate actually did at a real employer, not a separate invented initiative.
-- Must map to a specific company and period in career_breakdowns (same employer and overlapping dates).
-- Do NOT output any date, date range, year, start/end, or company field for this entry — selection uses the mapped period, but the output has no dates.
-- Must align with that company's real industry/product/culture context at that time, and MUST NOT introduce a conflicting domain.
-- Description MUST open with a strong, specific verb from the ACTION VERB BANK in the BULLET RULE above. The opening verb MUST NOT be the same verb already used to open a career_breakdowns bullet for that same company. Apply BULLET RULE — Metrics (metric non-reuse) to this entry.
-- The "role" label (e.g. Lead Engineer, Technical Lead, Project Lead) MUST NOT imply seniority or authority beyond what the candidate's actual job_title at that company supports. If the real title was an individual-contributor title (e.g. Software Engineer), frame it as a specific initiative or contribution — do NOT imply a formal leadership title they did not hold.
-- Must emphasize responsibilities and measurable results, quantified ONLY where the work genuinely supports it. Metrics MUST be consistent with (not contradict) related numbers used elsewhere in the resume.
-- You MUST NOT fabricate leadership roles, titles, scope of authority, or metrics not evidenced by the candidate's real profile.
-- You MUST NOT duplicate an accomplishment already stated in career_breakdowns.
-
-Before returning the JSON, for every number in a leadership entry, check all career_breakdowns bullets for that same company for the exact same number. If reused, remove or replace it.
-
-Before returning the JSON, for every leadership entry compare its "role" label against the candidate's real job_title at that company. If the role label contains a seniority/authority word not present in the real title (e.g. "Senior", "Staff", "Principal", "Director", "Head of", "Lead"), remove it or rewrite to match the real title's seniority level.
-Before returning the JSON, for every leadership entry, verify there is at least one matching career_breakdowns company entry whose domain context is consistent with the leadership initiative. If no consistent match exists, rewrite or remove the entry.
-
-========================================================
-FINAL VALIDATION — ENTIRE RESUME
-========================================================
-
-Before returning JSON, you MUST verify:
-
-- Resume is tailored to the job description (technical_skills, bullets, portfolio_projects, and leadership entries emphasize relevant work).
-- No duplicate company entries. Company consolidation correct. start_date and end_date correct.
-- Current/most recent position has exactly __BULLETS_CURRENT__ bullets (internship count if it is an internship).
-- Every non-internship former position has exactly __BULLETS_FORMER__ bullets and every internship has exactly __BULLETS_INTERNSHIP__ bullets — checked individually for every entry, not just the 2nd.
-- Every bullet follows the [action verb][process][result] formula, includes a specific plausible metric, no two bullets in the same position share the same sentence template, and no bullet reuses distinctive JD verbs like "leverage" or "harden".
-- __TITLE_TAILORING_VALIDATION__
-- No absolute/unfalsifiable claims ("zero data loss", "100% uptime", "no incidents", "no downtime").
-- For each real, identifiable company, bullets/portfolio_projects/leadership entries reference that company's actual product or industry.
-- Portfolio project and leadership descriptions each open with a distinct ACTION VERB BANK verb not reused from that company's career_breakdowns bullets, and do NOT reuse a metric/number already used in that company's career_breakdowns bullets.
-- No bold formatting (** markers) anywhere in the resume.
-- Certifications section has between 1 and 3 entries, each with a real well-known issuer.
-- Portfolio projects count is 4 or fewer.
-- Leadership entries count is 3 or fewer; each role label matches the seniority of the candidate's real job_title at that company.
-- The literal substrings "harden", "hardening", and "leverage" do NOT appear anywhere in the output.
-- Education entries ordered most recent first.
-- No em dashes anywhere.
-
-If ANY condition fails, regenerate internally before returning output.
-Return only fully compliant JSON.
-
-Remember today's year is 2026.
+FORMATTING
+No bold (** markers) and no em dashes anywhere. Today's year is 2026.
 """
             }
           
@@ -1754,7 +1550,7 @@ Remember today's year is 2026.
             // $prof.tailor_job_title (default true). When disabled, the header title and
             // career_breakdowns titles MUST stay exactly as written in the candidate profile.
             var $title_tailoring_rule_text {
-              value = "The header title and the current (and, where the underlying work genuinely supports it, former) position title(s) in career_breakdowns MAY be reworded to align with the terminology of the target role/job description (e.g. \"Software Engineer\" -> \"Backend Software Engineer\" for a backend-focused JD) — but MUST NOT claim a higher seniority level (e.g. Junior -> Senior) or a title/role the candidate did not actually hold."
+              value = "The header title and the current (and, where the underlying work genuinely supports it, former) position title(s) in career_breakdowns MAY be reworded to align with the terminology of the target role/job description (e.g. \"Software Engineer\" -> \"Backend Software Engineer\" for a backend-focused JD), but MUST NOT claim a higher seniority level (e.g. Junior -> Senior) or a title/role the candidate did not actually hold."
             }
           
             var $title_tailoring_validation_text {
@@ -1764,7 +1560,7 @@ Remember today's year is 2026.
             conditional {
               if (!$tailor_job_title_flag) {
                 var.update $title_tailoring_rule_text {
-                  value = "The header title and EVERY position title in career_breakdowns MUST be used EXACTLY as written in the candidate profile — do NOT reword, retitle, or align them to the job description's terminology in any way, even if the wording differs from the target role."
+                  value = "The header title and EVERY position title in career_breakdowns MUST be used EXACTLY as written in the candidate profile; do NOT reword, retitle, or align them to the job description's terminology in any way, even if the wording differs from the target role."
                 }
               
                 var.update $title_tailoring_validation_text {
@@ -1845,9 +1641,7 @@ Validation:
 - No filler language.
 - No company praise fluff.
 - No em dashes.
-- Do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording — paraphrase with different vocabulary.
-
-Regenerate if violated.
+- Do NOT reuse distinctive job description verbs/phrases such as "leverage"/"high leverage", "harden"/"hardening", "own it end to end", or similarly specific wording; paraphrase with different vocabulary.
 """
             }
           
