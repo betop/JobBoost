@@ -1967,7 +1967,26 @@ Validation:
             var $result_schema {
               value = $input.skip_cover_letter == true ? "{\n  \"resume\": " ~ $resume_schema ~ "\n}" : "{\n  \"resume\": " ~ $resume_schema ~ ",\n  \"cover_letter\": \"<full tailored cover letter as HTML>\"\n}"
             }
-          
+
+            // Structured-output JSON schema (output_config.format) matching $result_schema above
+            var $include_cover_letter_flag {
+              value = $input.skip_cover_letter != true
+            }
+
+            function.run "resume/output_schema" {
+              input = {
+                include_cover_letter: $include_cover_letter_flag
+                summary             : $include_summary_flag
+                headline            : $include_headline_flag
+                work_experience     : $include_work_experience_flag
+                education           : $include_education_flag
+                certifications      : $include_certifications_flag
+                portfolio_projects  : $include_key_projects_flag
+                leadership          : $include_leadership_flag
+                technical_skills    : $include_technical_skills_flag
+              }
+            } as $output_schema
+
             var $response_text {
               value = ""
             }
@@ -1987,6 +2006,7 @@ Validation:
                     |set:"model":$ai_model_id
                     |set:"thinking":({}|set:"type":"disabled")
                     |set:"max_tokens":6000
+                    |set:"output_config":({}|set:"format":({}|set:"type":"json_schema"|set:"schema":$output_schema))
                     |set:"system":([]
                       |push:({}
                         |set:"type":"text"
@@ -2021,7 +2041,16 @@ Validation:
                 var.update $main_usage {
                   value = $ai_resp.response.result.usage|first_notnull:{}
                 }
-              
+
+                // Why the reply ended (end_turn / max_tokens / refusal); used for the error message if parsing fails
+                var $ai_result {
+                  value = $ai_resp.response.result|first_notnull:{}
+                }
+
+                var $stop_reason {
+                  value = $ai_result|get:"stop_reason":""
+                }
+
                 var.update $response_text {
                   value = ($ai_resp.response.result.content|filter:($$.type == "text"))|first|get:"text"
                 }
@@ -2061,28 +2090,95 @@ Validation:
                   }
                 
                   catch {
-                    // Second attempt: remove last character (common extra trailing brace issue)
-                    var $trimmed_response {
-                      value = ("/.$/s"|regex_replace:"":$clean_response)|trim
+                    // Second attempt: drop a stray ")" between a closing quote and ] } or , (e.g. ...rates.")]})
+                    var $paren_fixed_response {
+                      value = "/\"[)](?=[ \t\r\n]*[]},])/"|regex_replace:"\"":$clean_response
                     }
-                  
+
                     try_catch {
                       try {
                         var.update $parsed_response {
-                          value = $trimmed_response|json_decode
+                          value = $paren_fixed_response|json_decode
                         }
                       }
-                    
+
                       catch {
-                        // JSON is truly invalid — $parsed_response stays null, handled below
-                        debug.log {
-                          value = "JSON parse failed after second attempt: " ~ $error
+                        // Third attempt: remove last character (common extra trailing brace issue)
+                        var $trimmed_response {
+                          value = ("/.$/s"|regex_replace:"":$clean_response)|trim
+                        }
+
+                        try_catch {
+                          try {
+                            var.update $parsed_response {
+                              value = $trimmed_response|json_decode
+                            }
+                          }
+
+                          catch {
+                            // Fourth attempt: append the missing final closing brace
+                            var $brace_appended_response {
+                              value = $clean_response ~ "}"
+                            }
+
+                            try_catch {
+                              try {
+                                var.update $parsed_response {
+                                  value = $brace_appended_response|json_decode
+                                }
+                              }
+
+                              catch {
+                                // JSON is truly invalid; $parsed_response stays null, handled below
+                                debug.log {
+                                  value = "JSON parse failed after all repair attempts (stop_reason: " ~ $stop_reason ~ "): " ~ $error
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     }
                   }
                 }
-              
+
+                // Shape fix: move a cover_letter nested inside resume up to the top level
+                conditional {
+                  if ($parsed_response != null && ($parsed_response|is_object)) {
+                    var $top_cover_letter {
+                      value = $parsed_response|get:"cover_letter":null
+                    }
+
+                    var $parsed_resume_obj {
+                      value = $parsed_response|get:"resume":null
+                    }
+
+                    var $nested_cover_letter {
+                      value = null
+                    }
+
+                    conditional {
+                      if ($parsed_resume_obj != null && ($parsed_resume_obj|is_object)) {
+                        var.update $nested_cover_letter {
+                          value = $parsed_resume_obj|get:"cover_letter":null
+                        }
+                      }
+                    }
+
+                    conditional {
+                      if ($top_cover_letter == null && $nested_cover_letter != null) {
+                        var $resume_without_cover_letter {
+                          value = $parsed_resume_obj|unset:"cover_letter"
+                        }
+
+                        var.update $parsed_response {
+                          value = $parsed_response|set:"resume":$resume_without_cover_letter|set:"cover_letter":$nested_cover_letter
+                        }
+                      }
+                    }
+                  }
+                }
+
                 // ==================== PARSE AI RESPONSE ====================
                 // Status codes: 1=match, 0=mismatch, 2=unfit, 3=not_job_description, 6=ai_error
                 // Only status=match gets resume/cover_letter content.
@@ -2098,8 +2194,26 @@ Validation:
                     var.update $error_msg {
                       value = "AI processing error: received an invalid response. Please try again."
                     }
+
+                    conditional {
+                      if ($stop_reason == "max_tokens") {
+                        var.update $error_msg {
+                          value = "AI processing error: the response was cut off (too long). Please try again."
+                        }
+                      }
+
+                      elseif ($stop_reason == "refusal") {
+                        var.update $error_msg {
+                          value = "AI processing error: the AI declined this job description. Please try again or use another job."
+                        }
+                      }
+                    }
+
+                    debug.log {
+                      value = "Resume JSON parse failed; stop_reason: " ~ $stop_reason
+                    }
                   }
-                
+
                   else {
                     var.update $match_status {
                       value = 1

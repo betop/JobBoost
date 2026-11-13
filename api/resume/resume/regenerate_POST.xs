@@ -852,7 +852,31 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
     var $error_msg {
       value = ""
     }
-  
+
+    // Structured-output JSON schema (output_config.format). This endpoint asks for the bare resume
+    // object ($resume_schema, no {resume: ...} wrapper, no cover letter), so use the resume sub-schema.
+    function.run "resume/output_schema" {
+      input = {
+        include_cover_letter: false
+        summary             : $include_summary_flag
+        headline            : $include_headline_flag
+        work_experience     : $include_work_experience_flag
+        education           : $include_education_flag
+        certifications      : $include_certifications_flag
+        portfolio_projects  : $include_key_projects_flag
+        leadership          : $include_leadership_flag
+        technical_skills    : $include_technical_skills_flag
+      }
+    } as $full_output_schema
+
+    var $full_output_schema_props {
+      value = $full_output_schema|get:"properties":{}
+    }
+
+    var $output_schema {
+      value = $full_output_schema_props|get:"resume":null
+    }
+
     // Future (effort / Claude Sonnet 5.5; tried and rolled back on 2026-11-13):
     // Sonnet 5.5 rejects thinking "disabled", and Haiku 5.5 rejects it above effort "high". To use effort,
     // replace the thinking line with an effort setting that is left out for Haiku 4.5 (it rejects effort):
@@ -868,6 +892,7 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
             |set:"model":$ai_model_id
             |set:"thinking":({}|set:"type":"disabled")
             |set:"max_tokens":6000
+            |set:"output_config":({}|set:"format":({}|set:"type":"json_schema"|set:"schema":$output_schema))
             |set:"system":([]
               |push:({}
                 |set:"type":"text"
@@ -902,7 +927,16 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
         var.update $main_usage {
           value = $ai_resp.response.result.usage|first_notnull:{}
         }
-      
+
+        // Why the reply ended (end_turn / max_tokens / refusal); used for the error message if parsing fails
+        var $ai_result {
+          value = $ai_resp.response.result|first_notnull:{}
+        }
+
+        var $stop_reason {
+          value = $ai_result|get:"stop_reason":""
+        }
+
         var.update $response_text {
           value = ($ai_resp.response.result.content|filter:($$.type == "text"))|first|get:"text"
         }
@@ -943,22 +977,52 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
           }
         
           catch {
-            // Second attempt: remove last character (common extra trailing brace issue)
-            var $trimmed_response {
-              value = ("/.$/s"|regex_replace:"":$clean_response)|trim
+            // Second attempt: drop a stray ")" between a closing quote and ] } or , (e.g. ...rates.")]})
+            var $paren_fixed_response {
+              value = "/\"[)](?=[ \t\r\n]*[]},])/"|regex_replace:"\"":$clean_response
             }
-          
+
             try_catch {
               try {
                 var.update $parsed_response {
-                  value = $trimmed_response|json_decode
+                  value = $paren_fixed_response|json_decode
                 }
               }
-            
+
               catch {
-                // JSON is truly invalid — $parsed_response stays null, handled below
-                debug.log {
-                  value = "JSON parse failed after second attempt: " ~ $error
+                // Third attempt: remove last character (common extra trailing brace issue)
+                var $trimmed_response {
+                  value = ("/.$/s"|regex_replace:"":$clean_response)|trim
+                }
+
+                try_catch {
+                  try {
+                    var.update $parsed_response {
+                      value = $trimmed_response|json_decode
+                    }
+                  }
+
+                  catch {
+                    // Fourth attempt: append the missing final closing brace
+                    var $brace_appended_response {
+                      value = $clean_response ~ "}"
+                    }
+
+                    try_catch {
+                      try {
+                        var.update $parsed_response {
+                          value = $brace_appended_response|json_decode
+                        }
+                      }
+
+                      catch {
+                        // JSON is truly invalid; $parsed_response stays null, handled below
+                        debug.log {
+                          value = "JSON parse failed after all repair attempts (stop_reason: " ~ $stop_reason ~ "): " ~ $error
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -979,6 +1043,24 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
           
             var.update $error_msg {
               value = "AI processing error: received an invalid response. Please try again."
+            }
+
+            conditional {
+              if ($stop_reason == "max_tokens") {
+                var.update $error_msg {
+                  value = "AI processing error: the response was cut off (too long). Please try again."
+                }
+              }
+
+              elseif ($stop_reason == "refusal") {
+                var.update $error_msg {
+                  value = "AI processing error: the AI declined this job description. Please try again or use another job."
+                }
+              }
+            }
+
+            debug.log {
+              value = "Resume JSON parse failed; stop_reason: " ~ $stop_reason
             }
           }
         
