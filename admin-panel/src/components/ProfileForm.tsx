@@ -11,7 +11,6 @@ import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 import BillingAdminSelect from "@/components/BillingAdminSelect";
 import AiModelSelect from "@/components/AiModelSelect";
-import { DEFAULT_AI_MODEL, resolveAiModel } from "@/utils/aiModels";
 import CertificationFields from "@/components/CertificationFields";
 import Input from "@/components/Input";
 import MultiSelect from "@/components/MultiSelect";
@@ -82,7 +81,7 @@ const profileSchema = z.object({
   tailor_job_title: z.boolean().optional().default(true),
   allowed_languages: z.string().optional().default("English"),
   spoken_languages: z.string().optional().default(""),
-  ai_model: z.string().optional().default(DEFAULT_AI_MODEL),
+  ai_model: z.string().optional().default("claude-haiku-4-5"),
   certifications: z.array(z.object({ name: z.string().optional(), issuer: z.string().optional(), date: z.string().optional(), url: z.string().optional() })).optional().default([]),
   default_compensation: z.string().optional(),
   resume_sections: z.record(z.string(), z.union([z.boolean(), z.number()])),
@@ -129,7 +128,7 @@ function defaultValuesFor(profile?: Profile): ProfileFormData {
       tailor_job_title: true,
       allowed_languages: "English",
       spoken_languages: "",
-      ai_model: DEFAULT_AI_MODEL,
+      ai_model: "claude-haiku-4-5",
       certifications: [],
       default_compensation: "",
       resume_sections: sections,
@@ -151,7 +150,7 @@ function defaultValuesFor(profile?: Profile): ProfileFormData {
     tailor_job_title: profile.tailor_job_title ?? true,
     allowed_languages: profile.allowed_languages ?? "English",
     spoken_languages: profile.spoken_languages ?? "",
-    ai_model: resolveAiModel(profile.ai_model),
+    ai_model: profile.ai_model ?? "claude-haiku-4-5",
     certifications: (profile.certifications ?? []).map((c) => ({ name: c.name, issuer: c.issuer ?? "", date: c.date ?? "", url: c.url ?? "" })),
     default_compensation: profile.default_compensation ?? "",
     resume_sections: sections,

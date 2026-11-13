@@ -1,10 +1,7 @@
 // Returns the usage multiplier applied to raw AI provider cost, and the low-balance threshold.
 // Precedence: per-admin users.usage_rate (> 0, is_custom=true)
-// > billing_setting.model_rates[model] (> 0) > built-in model default (claude-haiku-5-5 = 5;
-// claude-haiku-4-5 = 1.3, the selectable legacy model)
-// > billing_setting.usage_rate (> 0) > 1.5.
-// claude-sonnet-5-5 has no built-in default, so it bills at the global usage_rate unless the
-// super admin sets a model rate for it.
+// > billing_setting.model_rates[model] (> 0) > built-in model default (claude-haiku-4-5 = 1.3,
+// claude-haiku-5-5 = 5) > billing_setting.usage_rate (> 0) > 1.5.
 // Also returns model_rates (model id -> effective non-admin rate for every selectable model)
 // and models (same with labels) for the settings screen.
 function "credits/get_usage_rate" {
@@ -51,14 +48,15 @@ function "credits/get_usage_rate" {
     }
 
     // Selectable models (keep in sync with ai/resolve_model)
+    // Future: Claude Sonnet 5.5 ("claude-sonnet-5-5") can be added to this list when it is re-enabled.
+    // It is priced in ai/claude_haiku_rates; its calls need the effort setup noted in resume/generate.
     var $allowed_models {
-      value = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"]
+      value = ["claude-haiku-4-5", "claude-haiku-5-5"]
     }
 
-    // Built-in per-model rates used when the super admin has not set one (is_set = false).
-    // Haiku 4.5 (legacy) is 1.3; Sonnet 5.5 deliberately has none (global rate).
+    // Built-in per-model rates used when the super admin has not set one (is_set = false)
     var $builtin_model_rates {
-      value = {"claude-haiku-5-5": 5, "claude-haiku-4-5": 1.3}
+      value = {"claude-haiku-4-5": 1.3, "claude-haiku-5-5": 5}
     }
 
     var $model_rates {

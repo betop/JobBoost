@@ -55,8 +55,10 @@ query "dashboard/credits/settings" verb=PUT {
     }
 
     // Selectable models (keep in sync with ai/resolve_model)
+    // Future: Claude Sonnet 5.5 ("claude-sonnet-5-5") can be added to this list when it is re-enabled.
+    // It is priced in ai/claude_haiku_rates; its calls need the effort setup noted in resume/generate.
     var $allowed_models {
-      value = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"]
+      value = ["claude-haiku-4-5", "claude-haiku-5-5"]
     }
 
     conditional {

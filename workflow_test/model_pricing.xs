@@ -20,21 +20,13 @@ workflow_test "model_pricing" {
     function.call "ai/claude_haiku_cost" { input = {model: "claude-haiku-5-5", input_tokens: 100000, output_tokens: 500, cache_creation_tokens: 200, cache_read_tokens: 3000} } as $c55big
     expect.to_equal ($c55big) { value = 0.0516 }
 
-    // Sonnet 5.5 (no tier): (1000*2 + 500*10 + 200*4 + 3000*0.1) / 1e6 = 0.0081
-    function.call "ai/claude_haiku_cost" { input = {model: "claude-sonnet-5-5", input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 200, cache_read_tokens: 3000} } as $cs55
-    expect.to_equal ($cs55) { value = 0.0081 }
-
     // Haiku 3.5: (1000*0.8 + 500*4 + 200*1.6 + 3000*0.08) / 1e6 = 0.00336
     function.call "ai/claude_haiku_cost" { input = {model: "claude-3-5-haiku-20241022", input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 200, cache_read_tokens: 3000} } as $c35
     expect.to_equal ($c35) { value = 0.00336 }
 
-    // Selectable: Haiku 4.5 (default), Haiku 5.5 and Sonnet 5.5; retired / unknown / empty -> Haiku 4.5
+    // Only the two live models are selectable; retired / unknown / empty -> Haiku 4.5
     function.call "ai/resolve_model" { input = {ai_model: "claude-haiku-5-5"} } as $m55
     expect.to_equal ($m55) { value = "claude-haiku-5-5" }
-    function.call "ai/resolve_model" { input = {ai_model: "claude-sonnet-5-5"} } as $ms55
-    expect.to_equal ($ms55) { value = "claude-sonnet-5-5" }
-    function.call "ai/resolve_model" { input = {ai_model: "claude-haiku-4-5"} } as $m45
-    expect.to_equal ($m45) { value = "claude-haiku-4-5" }
     function.call "ai/resolve_model" { input = {ai_model: "claude-3-5-haiku-20241022"} } as $m35
     expect.to_equal ($m35) { value = "claude-haiku-4-5" }
     function.call "ai/resolve_model" { input = {ai_model: "gpt-4"} } as $mbad

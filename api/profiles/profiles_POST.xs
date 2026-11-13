@@ -34,7 +34,7 @@ query profiles verb=POST {
       description = "Resume template id; defaults to 11"
     }
     text ai_model? {
-      description = "Claude model used to generate for this profile (claude-haiku-4-5 | claude-haiku-5-5 | claude-sonnet-5-5); default Haiku 4.5"
+      description = "Claude model used to generate for this profile (claude-haiku-4-5 | claude-haiku-5-5); default Haiku 4.5"
     }
     text default_compensation?
     uuid billing_admin_id?

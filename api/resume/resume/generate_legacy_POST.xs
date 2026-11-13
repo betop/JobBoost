@@ -332,7 +332,6 @@ query "resume/generate_legacy" verb=POST {
             //   }
             // }
           
-            // output_config.effort is omitted for legacy Claude Haiku 4.5, which rejects it (no thinking param, so 4.5 runs without thinking)
             try_catch {
               try {
                 api.request {
@@ -340,8 +339,8 @@ query "resume/generate_legacy" verb=POST {
                   method = "POST"
                   params = {}
                     |set:"model":$ai_model_id
-                    |set:"max_tokens":4000
-                    |set_conditional:"output_config":({}|set:"effort":"low"):($ai_model_id != "claude-haiku-4-5")
+                    |set:"thinking":({}|set:"type":"disabled")
+                    |set:"max_tokens":1500
                     |set:"messages":([]
                       |push:({}
                         |set:"role":"user"
@@ -1326,7 +1325,6 @@ query "resume/generate_legacy" verb=POST {
           value = ""
         }
       
-        // output_config.effort is omitted for legacy Claude Haiku 4.5, which rejects it (no thinking param, so 4.5 runs without thinking)
         try_catch {
           try {
             api.request {
@@ -1334,8 +1332,8 @@ query "resume/generate_legacy" verb=POST {
               method = "POST"
               params = {}
                 |set:"model":$ai_model_id
-                |set:"max_tokens":64000
-                |set_conditional:"output_config":({}|set:"effort":"max"):($ai_model_id != "claude-haiku-4-5")
+                |set:"thinking":({}|set:"type":"disabled")
+                |set:"max_tokens":6000
                 |set:"system":$system_prompt
                 |set:"messages":([]
                   |push:({}
@@ -1347,7 +1345,7 @@ query "resume/generate_legacy" verb=POST {
                 |push:"Content-Type: application/json"
                 |push:$claude_auth
                 |push:"anthropic-version: 2023-06-01"
-              timeout = 600
+              timeout = 300
             } as $ai_resp
 
             // Capture usage immediately so it is billed even if parsing below throws
