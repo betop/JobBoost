@@ -853,7 +853,12 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
       value = ""
     }
   
-    // output_config.effort is omitted for legacy Claude Haiku 4.5, which rejects it (no thinking param, so 4.5 runs without thinking)
+    // Future (effort / Claude Sonnet 5.5; tried and rolled back on 2026-11-13):
+    // Sonnet 5.5 rejects thinking "disabled", and Haiku 5.5 rejects it above effort "high". To use effort,
+    // replace the thinking line with an effort setting that is left out for Haiku 4.5 (it rejects effort):
+    //   |set_conditional:"output_config":({}|set:"effort":"max"):($ai_model_id != "claude-haiku-4-5")
+    // and raise max_tokens, since thinking counts toward it. At "max" with the current prompt,
+    // Haiku 5.5 used all 32000 tokens thinking and returned no resume, so test lower effort first.
     try_catch {
       try {
         api.request {
@@ -861,8 +866,8 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
           method = "POST"
           params = {}
             |set:"model":$ai_model_id
-            |set:"max_tokens":64000
-            |set_conditional:"output_config":({}|set:"effort":"max"):($ai_model_id != "claude-haiku-4-5")
+            |set:"thinking":({}|set:"type":"disabled")
+            |set:"max_tokens":6000
             |set:"system":([]
               |push:({}
                 |set:"type":"text"
@@ -890,7 +895,7 @@ No bold (** markers) and no em dashes anywhere. Today's year is 2026.
             |push:"Content-Type: application/json"
             |push:$claude_auth
             |push:"anthropic-version: 2023-06-01"
-          timeout = 600
+          timeout = 300
         } as $ai_resp
 
         // Capture usage immediately so it is billed even if parsing below throws

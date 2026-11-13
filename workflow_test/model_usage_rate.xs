@@ -33,20 +33,10 @@ workflow_test "model_usage_rate" {
     expect.to_equal ($runk.usage_rate) { value = 1.5 }
     function.call "credits/get_usage_rate" { input = {} } as $rnone
     expect.to_equal ($rnone.usage_rate) { value = 1.5 }
-    // Sonnet 5.5 has no built-in rate: it bills at the global usage_rate
-    function.call "credits/get_usage_rate" { input = {model: "claude-sonnet-5-5"} } as $rs55
-    expect.to_equal ($rs55.usage_rate) { value = 1.5 }
-    expect.to_equal ($rs55.usage_rate) { value = $rs55.default_usage_rate }
-
-    // Selectable models list: Haiku 5.5, Sonnet 5.5 and Haiku 4.5 (legacy, built-in 1.3, no override)
-    expect.to_equal ($rnone.models|count) { value = 3 }
     expect.to_equal ($rnone.model_rates|get:"claude-haiku-5-5") { value = 2.5 }
-    expect.to_equal ($rnone.model_rates|get:"claude-sonnet-5-5") { value = 1.5 }
     expect.to_equal ($rnone.model_rates|get:"claude-haiku-4-5") { value = 1.3 }
-    expect.to_be_true (($rnone.models|filter:($$.model == "claude-haiku-5-5")|first).is_set)
-    expect.to_be_false (($rnone.models|filter:($$.model == "claude-sonnet-5-5")|first).is_set)
     expect.to_be_false (($rnone.models|filter:($$.model == "claude-haiku-4-5")|first).is_set)
-    expect.to_equal (($rnone.models|filter:($$.model == "claude-sonnet-5-5")|first).label) { value = "Claude Sonnet 5.5" }
+    expect.to_be_true (($rnone.models|filter:($$.model == "claude-haiku-5-5")|first).is_set)
 
     // A personal admin rate beats the model rate
     db.add users { data = {full_name: "MUR", email: "mur" ~ $sfx ~ "@t.invalid", type: "admin", credit_balance: 15, created_by: $nil, usage_rate: 2} } as $adm
@@ -64,7 +54,7 @@ workflow_test "model_usage_rate" {
     expect.to_equal ($ch2.raw_cost_usd) { value = 0.001 }
     expect.to_equal ($ch2.charged) { value = 0.002 }
 
-    // No stored model rates: built-in defaults (Haiku 4.5 = 1.3, Haiku 5.5 = 5); Sonnet 5.5 = global rate
+    // No stored model rates: built-in defaults (Haiku 4.5 = 1.3, Haiku 5.5 = 5)
     db.query billing_setting {
       sort = {billing_setting.created_at: "asc"}
       return = {type: "single"}
@@ -78,8 +68,6 @@ workflow_test "model_usage_rate" {
     expect.to_equal ($d55.usage_rate) { value = 5 }
     function.call "credits/get_usage_rate" { input = {model: "claude-haiku-4-5"} } as $d45
     expect.to_equal ($d45.usage_rate) { value = 1.3 }
-    function.call "credits/get_usage_rate" { input = {model: "claude-sonnet-5-5"} } as $ds55
-    expect.to_equal ($ds55.usage_rate) { value = $ds55.default_usage_rate }
 
     // Restore the live billing_setting row
     conditional {
