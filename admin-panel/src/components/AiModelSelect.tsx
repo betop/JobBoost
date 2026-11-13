@@ -8,7 +8,7 @@ interface AiModelSelectProps {
   onChange: (model: string) => void;
 }
 
-// Radio cards for choosing the model of a profile ("Best speed & cost" / "Balanced" / "Legacy" tags),
+// Radio cards for choosing the model of a profile ("Default" / "Best speed & cost" / "Balanced" tags),
 // followed by disabled "Coming soon" cards for models that are not available yet.
 export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
   const selected = resolveAiModel(value);
@@ -37,7 +37,7 @@ export default function AiModelSelect({ value, onChange }: AiModelSelectProps) {
               <span
                 className={cn(
                   "ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                  m.tagTone === "speed_cost" ? "bg-green-100 text-green-700" : m.tagTone === "balanced" ? "bg-purple-100 text-purple-700" : "bg-gray-200 text-gray-700"
+                  m.tagTone === "default" ? "bg-blue-100 text-blue-700" : m.tagTone === "speed_cost" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
                 )}
               >
                 {m.tag}

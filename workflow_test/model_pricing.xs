@@ -28,7 +28,7 @@ workflow_test "model_pricing" {
     function.call "ai/claude_haiku_cost" { input = {model: "claude-3-5-haiku-20241022", input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 200, cache_read_tokens: 3000} } as $c35
     expect.to_equal ($c35) { value = 0.00336 }
 
-    // Selectable: Haiku 5.5, Sonnet 5.5 and Haiku 4.5 (legacy); retired / unknown / empty -> Haiku 5.5
+    // Selectable: Haiku 4.5 (default), Haiku 5.5 and Sonnet 5.5; retired / unknown / empty -> Haiku 4.5
     function.call "ai/resolve_model" { input = {ai_model: "claude-haiku-5-5"} } as $m55
     expect.to_equal ($m55) { value = "claude-haiku-5-5" }
     function.call "ai/resolve_model" { input = {ai_model: "claude-sonnet-5-5"} } as $ms55
@@ -36,11 +36,11 @@ workflow_test "model_pricing" {
     function.call "ai/resolve_model" { input = {ai_model: "claude-haiku-4-5"} } as $m45
     expect.to_equal ($m45) { value = "claude-haiku-4-5" }
     function.call "ai/resolve_model" { input = {ai_model: "claude-3-5-haiku-20241022"} } as $m35
-    expect.to_equal ($m35) { value = "claude-haiku-5-5" }
+    expect.to_equal ($m35) { value = "claude-haiku-4-5" }
     function.call "ai/resolve_model" { input = {ai_model: "gpt-4"} } as $mbad
-    expect.to_equal ($mbad) { value = "claude-haiku-5-5" }
+    expect.to_equal ($mbad) { value = "claude-haiku-4-5" }
     function.call "ai/resolve_model" { input = {} } as $mnone
-    expect.to_equal ($mnone) { value = "claude-haiku-5-5" }
+    expect.to_equal ($mnone) { value = "claude-haiku-4-5" }
 
     // Charge = raw cost x price rate; a personal rate on the billing admin wins over the global one
     db.add users { data = {full_name: "MPA", email: "mpa" ~ $sfx ~ "@t.invalid", type: "admin", credit_balance: 15, created_by: $nil, usage_rate: 2} } as $adm

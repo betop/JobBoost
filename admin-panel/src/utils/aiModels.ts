@@ -1,5 +1,5 @@
 // Claude models a profile can generate with. Haiku 5.5 / Sonnet 5.5 run at effort "max" for resume
-// generation; Haiku 4.5 is a legacy option that does not support effort.
+// generation; Haiku 4.5 (the default) does not support effort.
 // Keep ids in sync with the backend allow-list (functions/ai/resolve_model.xs) and prices with
 // functions/ai/claude_haiku_rates.xs. Profiles still storing a retired id resolve to DEFAULT_AI_MODEL.
 export type AiModelId = "claude-haiku-5-5" | "claude-sonnet-5-5" | "claude-haiku-4-5";
@@ -8,21 +8,29 @@ export interface AiModelOption {
   id: AiModelId;
   label: string;
   tag: string;
-  tagTone: "speed_cost" | "balanced" | "legacy";
+  tagTone: "default" | "speed_cost" | "balanced";
   description: string;
   // USD per 1M tokens (Haiku 5.5: prompts up to 100K tokens; larger prompts cost more)
   price: { input: number; output: number };
 }
 
-export const DEFAULT_AI_MODEL: AiModelId = "claude-haiku-5-5";
+export const DEFAULT_AI_MODEL: AiModelId = "claude-haiku-4-5";
 
 export const AI_MODELS: AiModelOption[] = [
+  {
+    id: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
+    tag: "Default",
+    tagTone: "default",
+    description: "Default model for tailored resumes and cover letters.",
+    price: { input: 1, output: 5 },
+  },
   {
     id: "claude-haiku-5-5",
     label: "Claude Haiku 5.5",
     tag: "Best speed & cost",
     tagTone: "speed_cost",
-    description: "Default model for tailored resumes and cover letters.",
+    description: "Newer Haiku model for tailored resumes and cover letters.",
     price: { input: 0.1, output: 0.5 },
   },
   {
@@ -32,14 +40,6 @@ export const AI_MODELS: AiModelOption[] = [
     tagTone: "balanced",
     description: "Higher-quality tailored resumes and cover letters.",
     price: { input: 2, output: 10 },
-  },
-  {
-    id: "claude-haiku-4-5",
-    label: "Claude Haiku 4.5",
-    tag: "Legacy",
-    tagTone: "legacy",
-    description: "Previous default, kept for profiles that still need it.",
-    price: { input: 1, output: 5 },
   },
 ];
 
