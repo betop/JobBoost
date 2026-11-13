@@ -323,7 +323,7 @@ query "resume/regenerate_legacy" verb=POST {
           method = "POST"
           params = {}
             |set:"model":$ai_model_id
-            |set:"max_tokens":32000
+            |set:"max_tokens":64000
             |set_conditional:"output_config":({}|set:"effort":"max"):($ai_model_id != "claude-haiku-4-5")
             |set:"system":$system_prompt
             |set:"messages":([]
@@ -336,7 +336,7 @@ query "resume/regenerate_legacy" verb=POST {
             |push:"Content-Type: application/json"
             |push:$claude_auth
             |push:"anthropic-version: 2023-06-01"
-          timeout = 300
+          timeout = 600
         } as $ai_resp
 
         // Capture usage immediately so it is billed even if parsing below throws
