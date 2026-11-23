@@ -13,8 +13,17 @@
 // (fallback order_id / invoice). Counted only for a pending/partially_paid deposit, same
 // pay_currency, and funds received (finished/confirmed/sending/partially_paid with
 // actually_paid > 0). Counted child ids live in raw_webhook_payload.topups
-// ([{payment_id, actually_paid}]) so a top-up is never counted twice. Any other repeated
-// deposit is "repeated_deposit_skipped" (never auto-credited).
+// ([{payment_id, actually_paid}]) so a top-up is never counted twice.
+// Cross-currency child (user paid another coin to the same address, e.g. usdtbsc for a
+// usdterc20 deposit): crypto amounts can't be compared, so the deposit is credited in full
+// (outcome "confirmed_cross_currency", same credit/re-read/payout path as a finished
+// payment) only when the deposit is pending/partially_paid, the re-fetched child is
+// "finished" with actually_paid > 0, its price_currency (if present) is "usd" and
+// actually_paid_at_fiat >= 99.5% of amount_usd. Details are stored under
+// raw_webhook_payload.cross_currency_payment; the payout uses the child's outcome coin/amount.
+// A waiting/confirming cross-currency child is "topup_waiting"; any other is
+// "repeated_deposit_skipped". Any other repeated deposit is "repeated_deposit_skipped"
+// (never auto-credited, manual review).
 // Never throws: errors are returned as outcome "error" with error_detail {stage, err}.
 // error_detail is null on every non-error path.
 // After a deposit is credited it auto-withdraws to the owner's wallet via
@@ -352,6 +361,10 @@ function "credits/process_nowpayments_payment" {
           value = false
         }
 
+        var $confirmed_outcome {
+          value = "confirmed"
+        }
+
         var.update $stage {
           value = "evaluate"
         }
@@ -394,8 +407,84 @@ function "credits/process_nowpayments_payment" {
               value = $actually_paid > 0 && ($funds_statuses|in:$payment_status_normalized)
             }
 
+            // Cross-currency child: judged by its fiat value, not by crypto amounts
+            var $cross_currency {
+              value = $pay_currency_normalized != "" && $pay_currency_normalized != $deposit_currency_normalized
+            }
+
+            var $child_paid_fiat {
+              value = $payment.actually_paid_at_fiat|first_notnull:0|to_decimal
+            }
+
+            var $child_price_currency {
+              value = ($payment.price_currency|to_text|first_notnull:"")|to_lower
+            }
+
+            var $fiat_threshold {
+              value = ($deposit.amount_usd|first_notnull:0|to_decimal) * 0.995
+            }
+
+            var $cross_currency_paid {
+              value = $deposit_open && $cross_currency && $payment_status_normalized == "finished" && $actually_paid > 0 && $fiat_threshold > 0 && $child_paid_fiat >= $fiat_threshold && ($child_price_currency == "" || $child_price_currency == "usd")
+            }
+
             conditional {
-              if (!$deposit_open || !$currency_match || !$amount_crypto_known) {
+              if ($cross_currency_paid) {
+                var $cross_checked_at {
+                  value = now
+                }
+
+                var $cross_entry {
+                  value = {}
+                    |set:"payment_id":$own_payment_id
+                    |set:"pay_currency":$payment.pay_currency
+                    |set:"actually_paid":$actually_paid
+                    |set:"actually_paid_at_fiat":$child_paid_fiat
+                    |set:"payment_status":$payment.payment_status
+                    |set:"outcome_currency":$payment.outcome_currency
+                    |set:"outcome_amount":$payment.outcome_amount
+                    |set:"checked_at":$cross_checked_at
+                }
+
+                var $cross_payload {
+                  value = $existing_raw
+                    |set:"payment_id":$parent_payment_id
+                    |set:"topups":$existing_topups
+                    |set:"cross_currency_payment":$cross_entry
+                }
+
+                var.update $do_credit {
+                  value = true
+                }
+
+                var.update $credit_note {
+                  value = "Deposit confirmed via NOWPayments (paid in a different currency: " ~ $pay_currency_normalized ~ ")"
+                }
+
+                var.update $confirm_payload {
+                  value = $cross_payload
+                }
+
+                var.update $confirm_crypto_received {
+                  value = $actually_paid
+                }
+
+                var.update $payout_use_outcome {
+                  value = true
+                }
+
+                var.update $confirmed_outcome {
+                  value = "confirmed_cross_currency"
+                }
+              }
+
+              elseif ($deposit_open && $cross_currency && ($waiting_statuses|in:$payment_status_normalized)) {
+                var.update $outcome {
+                  value = "topup_waiting"
+                }
+              }
+
+              elseif (!$deposit_open || !$currency_match || !$amount_crypto_known) {
                 // Re-deposit to an old address: needs manual review, never auto-credit
                 var.update $outcome {
                   value = "repeated_deposit_skipped"
@@ -756,7 +845,7 @@ function "credits/process_nowpayments_payment" {
                 }
 
                 var.update $outcome {
-                  value = "confirmed"
+                  value = $confirmed_outcome
                 }
 
                 // Auto-withdraw to the owner's wallet. Credit is already saved: a payout
@@ -772,7 +861,8 @@ function "credits/process_nowpayments_payment" {
                     }
 
                     // Normal payment: pay out exactly what was settled to custody, in the
-                    // settled coin. Completed top-up: deposit amount in usdtbsc (best effort).
+                    // settled coin (also a cross-currency child). Completed top-up: deposit amount in
+                    // usdtbsc (best effort).
                     conditional {
                       if ($payout_use_outcome && $outcome_currency_normalized != "" && $payment.outcome_amount != null && ($payment.outcome_amount|to_decimal) > 0) {
                         var.update $payout_amount {
